@@ -1,6 +1,6 @@
 {
-  "version": "2.2.0",
-  "notes": "تحسينات في الأداء وإضافة القائمة الجانبية وإدارة الفصول الدراسية",
-  "download_url": "https://github.com/moon15mm/DarbStu/releases/latest",
-  "release_date": "2026-04-04"
+  "version": "2.7.0",
+  "notes": "تحديث هيكل البرنامج — نظام تحديث تلقائي جديد وتحسينات شاملة",
+  "download_url": "https://github.com/moon15mm/DarbStu/archive/refs/heads/main.zip",
+  "release_date": "2026-04-12"
 }
