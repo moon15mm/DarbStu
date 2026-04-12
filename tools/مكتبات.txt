@@ -1,0 +1,14 @@
+pip install requests
+pip install qrcode
+pip install Pillow
+pip install fastapi
+pip install uvicorn
+pip install pandas
+pip install openpyxl
+pip install ttkthemes
+pip install tkinterweb
+pip install tkcalendar
+pip install matplotlib
+pip install arabic_reshaper
+pip install python-bidi
+pip install pyngrok

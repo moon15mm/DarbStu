@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rm 'c:/Users/maher/Desktop/برامج الغياب والتأخر/DarbStu/DarbStu/2DarbStu.py')",
+      "Bash(rm 'c:/Users/maher/Desktop/برامج الغياب والتأخر/DarbStu/DarbStu/DarbStu.py')",
+      "Bash(rm 'c:/Users/maher/Desktop/برامج الغياب والتأخر/DarbStu/DarbStu/DarbStu_v2.py')",
+      "Bash(rm 'c:/Users/maher/Desktop/برامج الغياب والتأخر/DarbStu/DarbStu/DarbStu_v2_sidebar.py')",
+      "Bash(rm 'c:/Users/maher/Desktop/برامج الغياب والتأخر/DarbStu/DarbStu/server.js')",
+      "Bash(python -c \"import pyinstaller; print\\('ok'\\)\")",
+      "Bash(where node:*)",
+      "Bash(where npm:*)",
+      "Bash(python3 -c ':*)",
+      "Bash(python -c ':*)",
+      "Bash(python split_project.py)"
+    ]
+  }
+}

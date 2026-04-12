@@ -1,0 +1,21 @@
+# بيانات المستخدم — لا تُرفع على GitHub
+data/
+my-whatsapp-server/
+*.db
+*.db-wal
+*.db-shm
+
+# ملفات البناء
+__pycache__/
+*.pyc
+*.pyo
+build/
+dist/
+Output/
+*.egg-info/
+
+# ملفات مؤقتة
+*.backup
+*.new
+*.log
+.env

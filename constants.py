@@ -1,0 +1,117 @@
+# -*- coding: utf-8 -*-
+"""
+constants.py — كل الثوابت والمتغيرات العامة المشتركة
+"""
+import os, sys, datetime, socket, threading
+
+# ── Lazy imports globals ──────────────────────────────────────────
+HtmlFrame         = None
+DateEntry         = None
+Figure            = None
+FigureCanvasTkAgg = None
+matplotlib        = None
+arabic_reshaper   = None
+get_display       = None
+
+def _ensure_matplotlib():
+    global matplotlib, Figure, FigureCanvasTkAgg, arabic_reshaper, get_display
+    if matplotlib is not None:
+        return
+    import matplotlib as _mpl
+    from matplotlib.figure import Figure as _Fig
+    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg as _FCA
+    _mpl.rcParams['font.family'] = ['Tahoma', 'Arial', 'DejaVu Sans']
+    _mpl.rcParams['axes.unicode_minus'] = False
+    matplotlib = _mpl; Figure = _Fig; FigureCanvasTkAgg = _FCA
+    try:
+        import arabic_reshaper as _ar
+        from bidi.algorithm import get_display as _gd
+        arabic_reshaper = _ar; get_display = _gd
+    except ImportError:
+        pass
+
+def _ensure_tkinterweb():
+    global HtmlFrame
+    if HtmlFrame is not None:
+        return
+    from tkinterweb import HtmlFrame as _HF
+    HtmlFrame = _HF
+
+def _ensure_tkcalendar():
+    global DateEntry
+    if DateEntry is not None:
+        return
+    from tkcalendar import DateEntry as _DE
+    DateEntry = _DE
+
+PORT           = int(os.environ.get('ABSENTEE_PORT', '8000'))
+STATIC_DOMAIN  = 'https://darbte.uk'
+CLOUDFLARE_DOMAIN = 'darbte.uk'
+MY_STATIC_DOMAIN  = 'darbte.uk'
+ngrok = None
+
+APP_TITLE           = 'تسجيل غياب الطلاب'
+APP_VERSION         = '2.6.1'
+UPDATE_URL          = 'https://raw.githubusercontent.com/moon15mm/DarbStu/main/version.json'
+UPDATE_DOWNLOAD_URL = 'https://github.com/moon15mm/DarbStu/archive/refs/heads/main.zip'
+DB_PATH             = 'absences.db'
+DATA_DIR            = 'data'
+STUDENTS_JSON       = os.path.join(DATA_DIR, 'students.json')
+USERS_JSON          = os.path.join(DATA_DIR, 'users.json')
+TARDINESS_JSON      = os.path.join(DATA_DIR, 'tardiness.db')
+BACKUP_DIR          = os.path.join(DATA_DIR, 'backups')
+TEACHERS_JSON       = os.path.join(DATA_DIR, 'teachers.json')
+CONFIG_JSON         = os.path.join(DATA_DIR, 'config.json')
+HOST                = '127.0.0.1'
+TZ_OFFSET           = datetime.timedelta(hours=3)
+STUDENTS_STORE      = None
+BASE_DIR            = os.path.dirname(os.path.abspath(__file__))
+WHATS_PATH          = os.path.join(BASE_DIR, 'my-whatsapp-server')
+
+ROLES = {
+    'admin':   {'label': 'مدير',   'tabs': 'all',    'color': '#7c3aed'},
+    'deputy':  {'label': 'وكيل',   'tabs': 'most',   'color': '#1d4ed8'},
+    'teacher': {'label': 'معلم',   'tabs': 'limited','color': '#065f46'},
+    'guard':   {'label': 'حارس',   'tabs': 'view',   'color': '#92400e'},
+}
+
+ROLE_TABS = {
+    'admin':   None,
+    'deputy':  ['لوحة القيادة','روابط الفصول','السجلات','إدارة الغياب',
+                'التأخر','الأعذار','التقارير / الطباعة','إرسال رسائل الغياب',
+                'جدولة الروابط','المراقبة الحية','إدارة الطلاب','إضافة طالب','إدارة الواتساب'],
+    'teacher': ['لوحة القيادة','روابط الفصول','المراقبة الحية'],
+    'guard':   ['لوحة القيادة','التأخر','المراقبة الحية'],
+}
+
+CURRENT_USER = {'username': '', 'role': 'admin', 'label': 'مدير'}
+
+def ensure_dirs():
+    os.makedirs(DATA_DIR, exist_ok=True)
+
+def local_ip():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.settimeout(0)
+        s.connect(("10.255.255.255", 1)); ip = s.getsockname()[0]
+    except Exception: ip = "127.0.0.1"
+    finally:
+        try: s.close()
+        except: pass
+    return ip
+
+def now_riyadh_date():
+    utc_now = datetime.datetime.now(datetime.timezone.utc)
+    ry_now = utc_now.astimezone(datetime.timezone(TZ_OFFSET))
+    return ry_now.date().isoformat()
+
+def navbar_html(base_url: str) -> str:
+    return f'''\n<div style="background-color: #007bff; padding: 12px; text-align: center;">
+        <a href="{base_url}/mobile"
+           style="color: white; text-decoration: none; font-weight: bold; font-size: 18px; display: inline-block; padding: 8px 16px; border-radius: 6px; background-color: #0056b3;">
+            🏠 الصفحة الرئيسية
+        </a>
+    </div>
+    '''
+
+def debug_on() -> bool:
+    return os.environ.get("ABSENTEE_DEBUG", "0") == "1"
