@@ -9,34 +9,12 @@ from whatsapp_service import get_wa_servers, start_whatsapp_server
 
 class WhatsappTabMixin:
     """Mixin: WhatsappTabMixin"""
+    # ══════════════════════════════════════════════════════════
     def _build_whatsapp_bot_section(self, parent_frame):
-        """قسم إدارة بوت الواتساب — مع تمرير عمودي لدعم الشاشات الصغيرة."""
+        """قسم إدارة بوت الواتساب."""
 
-        # ─── إطار خارجي مع Canvas قابل للتمرير ──────────────
-        outer_lf = ttk.LabelFrame(parent_frame, text=" 🤖 بوت واتساب الأعذار ")
-        outer_lf.pack(fill="x", padx=5, pady=(6, 6))
-
-        canvas = tk.Canvas(outer_lf, highlightthickness=0, height=235)
-        vsb    = ttk.Scrollbar(outer_lf, orient="vertical", command=canvas.yview)
-        canvas.configure(yscrollcommand=vsb.set)
-        vsb.pack(side="right", fill="y")
-        canvas.pack(side="left", fill="both", expand=True)
-
-        wa_lf  = ttk.Frame(canvas, padding=(8, 6))
-        win_id = canvas.create_window((0, 0), window=wa_lf, anchor="nw")
-
-        def _sync_width(e):
-            canvas.itemconfig(win_id, width=e.width)
-        canvas.bind("<Configure>", _sync_width)
-
-        def _sync_scroll(e):
-            canvas.configure(scrollregion=canvas.bbox("all"))
-        wa_lf.bind("<Configure>", _sync_scroll)
-
-        def _mw(e):
-            canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
-        for _w in (canvas, wa_lf, outer_lf):
-            _w.bind("<MouseWheel>", _mw)
+        wa_lf = ttk.LabelFrame(parent_frame, text=" 🤖 بوت واتساب الأعذار ", padding=8)
+        wa_lf.pack(fill="x", padx=5, pady=(6, 6))
 
         # ─── صف الحالة ──────────────────────────────────────
         wa_top = ttk.Frame(wa_lf); wa_top.pack(fill="x", pady=(0, 4))
@@ -62,9 +40,7 @@ class WhatsappTabMixin:
                 messagebox.showerror("خطأ", "تعذّر التشغيل:\n" + str(e))
 
         def _check_once():
-            """فحص واحد عند الضغط فقط — لا جدولة."""
             self._wa_status_text.config(text="⏳ جارٍ الفحص...")
-            wa_lf.update_idletasks()
             try:
                 import urllib.request, json as _j
                 r    = urllib.request.urlopen("http://localhost:3000/status", timeout=2)
@@ -90,7 +66,7 @@ class WhatsappTabMixin:
         ttk.Button(btn_row, text="🔍 فحص الحالة",
                    command=_check_once).pack(side="right", padx=(0, 4))
 
-        # ─── حالة البوت (تشغيل / إيقاف) ─────────────────────
+        # ─── حالة البوت ─────────────────────────────────────
         bot_row = ttk.Frame(wa_lf); bot_row.pack(fill="x", pady=(0, 4))
         ttk.Label(bot_row, text="حالة البوت:", font=("Tahoma", 9, "bold")).pack(side="right", padx=(0, 6))
         self._bot_toggle_var = tk.BooleanVar(value=True)
@@ -116,7 +92,7 @@ class WhatsappTabMixin:
             except Exception:
                 pass
 
-        # ─── قسم الكلمات المفتاحية ───────────────────────────
+        # ─── الكلمات المفتاحية ───────────────────────────────
         ttk.Separator(wa_lf, orient="horizontal").pack(fill="x", pady=(4, 6))
 
         kw_hdr = ttk.Frame(wa_lf); kw_hdr.pack(fill="x", pady=(0, 2))
@@ -131,10 +107,9 @@ class WhatsappTabMixin:
             text="أدخل الكلمات مفصولة بفاصلة — مثال: عذر، مريض، سفر، ok",
             font=("Tahoma", 8), foreground="#666").pack(anchor="e", pady=(0, 2))
 
-        self._kw_text = tk.Text(wa_lf, height=4, font=("Tahoma", 10),
+        self._kw_text = tk.Text(wa_lf, height=3, font=("Tahoma", 10),
                                  wrap="word", relief="solid", bd=1)
         self._kw_text.pack(fill="x", pady=(0, 4))
-        self._kw_text.bind("<MouseWheel>", _mw)
         self._kw_text.insert("1.0",
             "عذر، معذور، مريض، مرض، علاج، مستشفى، وفاة، سفر، ظروف، إجازة، اجازة، excuse، ok، اوك، نعم، موافق، 1")
 
@@ -149,7 +124,7 @@ class WhatsappTabMixin:
                 self._kw_text.insert("1.0", "، ".join(kws))
                 self._bot_toggle_var.set(enabled)
             except Exception:
-                pass  # الخادم غير متصل
+                pass
 
         def _save_keywords():
             raw = self._kw_text.get("1.0", "end").strip()
@@ -172,7 +147,6 @@ class WhatsappTabMixin:
             except Exception as e:
                 messagebox.showerror("خطأ", "تعذّر حفظ الكلمات.\nتأكد من تشغيل الخادم أولاً.\n" + str(e))
 
-        # تأجيل network calls لما بعد ظهور التبويب
         parent_frame.after(600, _load_keywords)
 
 
@@ -199,8 +173,14 @@ class WhatsappTabMixin:
 
         def _on_inner_conf(e):
             scroll_canvas.configure(scrollregion=scroll_canvas.bbox("all"))
-            scroll_canvas.itemconfig(inner_win, width=scroll_canvas.winfo_width())
         inner.bind("<Configure>", _on_inner_conf)
+        _wt_last_w = [0]
+        def _on_canvas_conf(e):
+            w = scroll_canvas.winfo_width()
+            if w == _wt_last_w[0]: return
+            _wt_last_w[0] = w
+            scroll_canvas.itemconfig(inner_win, width=w)
+        scroll_canvas.bind("<Configure>", _on_canvas_conf)
 
         PAD = dict(padx=18, pady=8)
 

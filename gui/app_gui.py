@@ -100,6 +100,7 @@ from pdf_generator import (generate_session_pdf, generate_behavioral_contract_pd
 from whatsapp_service import (send_whatsapp_message, send_whatsapp_pdf,
                                check_whatsapp_server_status, get_wa_servers,
                                start_whatsapp_server)
+from api.mobile_routes import send_tardiness_link_to_all
 from pdf_generator import (generate_session_pdf, generate_behavioral_contract_pdf,
                             _render_pdf_page_as_png, _render_page_pillow,
                             parse_results_pdf)
@@ -115,6 +116,7 @@ from alerts_service import (log_message_status, query_today_messages,
                              load_schedule, save_schedule,
                              query_permissions, insert_permission,
                              update_permission_status, delete_permission,
+                             send_permission_request,
                              PERMISSION_REASONS, PERM_APPROVED, PERM_WAITING,
                              build_absent_groups, get_absence_by_day_of_week,
                              get_week_comparison)
@@ -279,8 +281,14 @@ class AppGUI(
 
         def _on_sidebar_configure(e):
             sidebar_canvas.configure(scrollregion=sidebar_canvas.bbox("all"))
-            sidebar_canvas.itemconfig(sidebar_win, width=sidebar_canvas.winfo_width())
         sidebar.bind("<Configure>", _on_sidebar_configure)
+        _sb_last_w = [0]
+        def _on_sidebar_canvas_conf(e):
+            w = sidebar_canvas.winfo_width()
+            if w == _sb_last_w[0]: return
+            _sb_last_w[0] = w
+            sidebar_canvas.itemconfig(sidebar_win, width=w)
+        sidebar_canvas.bind("<Configure>", _on_sidebar_canvas_conf)
 
         # ── بناء عناصر القائمة ──
         for group_title, group_tabs in sidebar_groups:
@@ -544,50 +552,74 @@ class AppGUI(
         self._dash_tick_id = self.root.after(30000, self._dashboard_tick)
 
     def update_dashboard_metrics(self):
+        """Fetch all dashboard data in a background thread, then update UI on main thread."""
         date_str = self.dash_date_var.get().strip() or now_riyadh_date()
-        try:
-            metrics = compute_today_metrics(date_str)
-        except Exception as e:
-            messagebox.showerror("خطأ", str(e)); return
 
+        def do_fetch():
+            try:
+                metrics = compute_today_metrics(date_str)
+            except Exception as e:
+                self.root.after(0, lambda: messagebox.showerror("خطأ", str(e)))
+                return
+            try:
+                tard_today = len(query_tardiness(date_filter=date_str))
+            except Exception:
+                tard_today = 0
+            try:
+                wk = get_week_comparison()
+            except Exception:
+                wk = None
+            try:
+                top_absent = get_top_absent_students(date_str[:7], limit=8)
+            except Exception:
+                top_absent = []
+            try:
+                dow_data = get_absence_by_day_of_week()
+            except Exception:
+                dow_data = {}
+            self.root.after(0, lambda: self._update_dashboard_ui(
+                date_str, metrics, tard_today, wk, top_absent, dow_data))
+
+        threading.Thread(target=do_fetch, daemon=True).start()
+
+    def _update_dashboard_ui(self, date_str, metrics, tard_today, wk, top_absent, dow_data):
+        """Apply fetched dashboard data to UI widgets (must run on main thread)."""
         t = metrics["totals"]
-        pct_absent = round(t["absent"] / max(t["students"],1) * 100, 1)
+        pct_absent = round(t["absent"] / max(t["students"], 1) * 100, 1)
 
         # ─ بطاقات الإحصاء
         self.lbl_total.config(text=str(t["students"]))
         self.lbl_present.config(text=str(t["present"]))
         self.lbl_absent.config(text=str(t["absent"]))
-        if hasattr(self,"lbl_absent_sub"):
+        if hasattr(self, "lbl_absent_sub"):
             self.lbl_absent_sub.config(text="{}% من الإجمالي".format(pct_absent))
 
         # التأخر اليوم
-        tard_today = len(query_tardiness(date_filter=date_str))
-        if hasattr(self,"lbl_tard"):
+        if hasattr(self, "lbl_tard"):
             self.lbl_tard.config(text=str(tard_today))
 
         # مقارنة الأسبوع
-        try:
-            wk = get_week_comparison()
-            if hasattr(self,"lbl_week"):
-                self.lbl_week.config(text=str(wk["this_total"]))
-            if hasattr(self,"lbl_week_sub"):
-                arrow = "▲" if wk["change"]>0 else ("▼" if wk["change"]<0 else "=")
-                color  = "#EF4444" if wk["change"]>0 else "#10B981"
-                self.lbl_week_sub.config(
-                    text="{} {}% عن الأسبوع الماضي".format(
-                        arrow, abs(wk["pct"])),
-                    foreground=color)
-            if hasattr(self,"dash_week_lbl"):
-                self.dash_week_lbl.config(
-                    text="الأسبوع الماضي: {} غياب".format(wk["last_total"]))
-        except Exception as e:
-            print("[DASH-WEEK]", e)
+        if wk is not None:
+            try:
+                if hasattr(self, "lbl_week"):
+                    self.lbl_week.config(text=str(wk["this_total"]))
+                if hasattr(self, "lbl_week_sub"):
+                    arrow = "▲" if wk["change"] > 0 else ("▼" if wk["change"] < 0 else "=")
+                    color = "#EF4444" if wk["change"] > 0 else "#10B981"
+                    self.lbl_week_sub.config(
+                        text="{} {}% عن الأسبوع الماضي".format(arrow, abs(wk["pct"])),
+                        foreground=color)
+                if hasattr(self, "dash_week_lbl"):
+                    self.dash_week_lbl.config(
+                        text="الأسبوع الماضي: {} غياب".format(wk["last_total"]))
+            except Exception as e:
+                print("[DASH-WEEK]", e)
 
         # ─ جدول الفصول
         for i in self.tree_dash.get_children():
             self.tree_dash.delete(i)
         for r in metrics["by_class"]:
-            pct = round(r["absent"]/max(r["total"],1)*100, 0)
+            pct = round(r["absent"] / max(r["total"], 1) * 100, 0)
             tag = "high" if pct >= 20 else "normal"
             self.tree_dash.insert("", "end", tags=(tag,),
                 values=(r["class_id"], r["class_name"],
@@ -597,72 +629,71 @@ class AppGUI(
                         "{}%".format(int(pct))))
 
         # ─ أكثر الطلاب غياباً
-        if hasattr(self,"tree_top_absent"):
+        if hasattr(self, "tree_top_absent"):
             for i in self.tree_top_absent.get_children():
                 self.tree_top_absent.delete(i)
-            month = date_str[:7]
-            for idx, s in enumerate(get_top_absent_students(month, limit=8)):
-                tag = "top1" if idx==0 else ("top3" if idx<3 else "")
-                self.tree_top_absent.insert("","end", tags=(tag,),
+            for idx, s in enumerate(top_absent):
+                tag = "top1" if idx == 0 else ("top3" if idx < 3 else "")
+                self.tree_top_absent.insert("", "end", tags=(tag,),
                     values=(s["name"], s["class_name"],
                             "{} يوم".format(s["days"]), s["last_date"]))
 
         # ─ رسم الدائرة
         try:
             self.ax_pie.clear()
-            sizes  = [t["present"], t["absent"]]
+            sizes = [t["present"], t["absent"]]
             if sum(sizes) > 0:
                 self.ax_pie.pie(
                     sizes,
                     labels=[ar("الحضور"), ar("الغياب")],
                     autopct="%1.1f%%", startangle=90,
-                    colors=["#10B981","#EF4444"])
+                    colors=["#10B981", "#EF4444"])
             self.ax_pie.set_title(ar("الحضور/الغياب اليوم"), fontsize=9)
             self.canvas_pie.draw_idle()
         except Exception as e:
             print("[DASH-PIE]", e)
 
         # ─ رسم مقارنة الأسبوعين
-        try:
-            self.ax_week.clear()
-            wk = get_week_comparison()
-            day_names_short = ["أحد","إثنين","ثلاث","أربع","خميس"]
-            x = range(5)
-            this_vals = [wk["this_daily"].get(
-                (datetime.date.fromisoformat(wk["this_week_start"]) +
-                 datetime.timedelta(days=i)).isoformat(), 0) for i in range(5)]
-            last_vals = [wk["last_daily"].get(
-                (datetime.date.fromisoformat(wk["last_week_start"]) +
-                 datetime.timedelta(days=i)).isoformat(), 0) for i in range(5)]
-            w_bar = 0.35
-            self.ax_week.bar([i-w_bar/2 for i in x], last_vals,
-                              w_bar, label=ar("الأسبوع الماضي"), color="#93C5FD")
-            self.ax_week.bar([i+w_bar/2 for i in x], this_vals,
-                              w_bar, label=ar("هذا الأسبوع"), color="#3B82F6")
-            self.ax_week.set_xticks(list(x))
-            self.ax_week.set_xticklabels([ar(d) for d in day_names_short], fontsize=7)
-            self.ax_week.legend(fontsize=7)
-            self.ax_week.set_title(ar("مقارنة الأسبوعين"), fontsize=9)
-            self.canvas_week.draw_idle()
-        except Exception as e:
-            print("[DASH-WEEK-CHART]", e)
+        if wk is not None:
+            try:
+                self.ax_week.clear()
+                day_names_short = ["أحد", "إثنين", "ثلاث", "أربع", "خميس"]
+                x = range(5)
+                this_vals = [wk["this_daily"].get(
+                    (datetime.date.fromisoformat(wk["this_week_start"]) +
+                     datetime.timedelta(days=i)).isoformat(), 0) for i in range(5)]
+                last_vals = [wk["last_daily"].get(
+                    (datetime.date.fromisoformat(wk["last_week_start"]) +
+                     datetime.timedelta(days=i)).isoformat(), 0) for i in range(5)]
+                w_bar = 0.35
+                self.ax_week.bar([i - w_bar / 2 for i in x], last_vals,
+                                 w_bar, label=ar("الأسبوع الماضي"), color="#93C5FD")
+                self.ax_week.bar([i + w_bar / 2 for i in x], this_vals,
+                                 w_bar, label=ar("هذا الأسبوع"), color="#3B82F6")
+                self.ax_week.set_xticks(list(x))
+                self.ax_week.set_xticklabels([ar(d) for d in day_names_short], fontsize=7)
+                self.ax_week.legend(fontsize=7)
+                self.ax_week.set_title(ar("مقارنة الأسبوعين"), fontsize=9)
+                self.canvas_week.draw_idle()
+            except Exception as e:
+                print("[DASH-WEEK-CHART]", e)
 
         # ─ رسم أكثر الأيام غياباً
         try:
             self.ax_dow.clear()
-            dow_data = get_absence_by_day_of_week()
-            days_ar   = list(dow_data.keys())
-            vals      = list(dow_data.values())
-            bars = self.ax_dow.bar(
-                [ar(d) for d in days_ar], vals,
-                color=["#EF4444" if v==max(vals) else "#FCA5A5" for v in vals])
-            self.ax_dow.set_title(ar("متوسط الغياب حسب اليوم"), fontsize=9)
-            for bar_r, v in zip(bars, vals):
-                if v > 0:
-                    self.ax_dow.text(bar_r.get_x()+bar_r.get_width()/2,
-                                      bar_r.get_height(),
-                                      "{:.0f}".format(v),
-                                      ha="center", va="bottom", fontsize=7)
+            days_ar = list(dow_data.keys())
+            vals = list(dow_data.values())
+            if vals:
+                bars = self.ax_dow.bar(
+                    [ar(d) for d in days_ar], vals,
+                    color=["#EF4444" if v == max(vals) else "#FCA5A5" for v in vals])
+                self.ax_dow.set_title(ar("متوسط الغياب حسب اليوم"), fontsize=9)
+                for bar_r, v in zip(bars, vals):
+                    if v > 0:
+                        self.ax_dow.text(bar_r.get_x() + bar_r.get_width() / 2,
+                                         bar_r.get_height(),
+                                         "{:.0f}".format(v),
+                                         ha="center", va="bottom", fontsize=7)
             self.canvas_dow.draw_idle()
         except Exception as e:
             print("[DASH-DOW]", e)
@@ -1309,35 +1340,41 @@ class AppGUI(
             messagebox.showinfo("تنبيه", "الرجاء تحديد طالب واحد على الأقل.")
             return
 
-        tpl = self.msg_template_var.get() or get_message_template()
         self.status_label.config(text="جارٍ الإرسال...", foreground="blue")
         self.send_button.config(state="disabled")
-        self.root.update_idletasks()
 
-        s_ok, s_fail = 0, 0
-        for cid, cname, s in selected:
-            student_name = s["name"]
-            phone = s.get("phone", "")
-            body = render_message(student_name, class_name=cname, date_str=date_str)
-            success, msg = safe_send_absence_alert(s["id"], student_name, cname, date_str)
-            status_text = "تم الإرسال" if success else f"فشل: {msg}"
-            if success:
-                s_ok += 1
-            else:
-                s_fail += 1
+        def do_send():
+            s_ok, s_fail = 0, 0
+            for cid, cname, s in selected:
+                student_name = s["name"]
+                phone = s.get("phone", "")
+                body = render_message(student_name, class_name=cname, date_str=date_str)
+                success, msg = safe_send_absence_alert(s["id"], student_name, cname, date_str)
+                status_text = "تم الإرسال" if success else f"فشل: {msg}"
+                if success:
+                    s_ok += 1
+                else:
+                    s_fail += 1
 
-            try:
-                log_message_status(date_str, s["id"], student_name, cid, cname, phone, status_text, body)
-            except Exception as e:
-                print("log_message_status error:", e)
+                try:
+                    log_message_status(date_str, s["id"], student_name, cid, cname, phone, status_text, body)
+                except Exception as e:
+                    print("log_message_status error:", e)
 
-            self.status_label.config(text=f"جاري الإرسال... ✅{s_ok} / ❌{s_fail}", foreground="blue")
-            self.root.update_idletasks()
+                ok_snap, fail_snap = s_ok, s_fail
+                self.root.after(0, lambda ok=ok_snap, fail=fail_snap:
+                    self.status_label.config(
+                        text=f"جاري الإرسال... ✅{ok} / ❌{fail}", foreground="blue"))
 
-        self.send_button.config(state="normal")
-        summary = f"اكتمل: نجح {s_ok}، فشل {s_fail}."
-        self.status_label.config(text=summary, foreground="green" if s_fail == 0 else "red")
-        messagebox.showinfo("نتيجة الإرسال", summary)
+            summary = f"اكتمل: نجح {s_ok}، فشل {s_fail}."
+            self.root.after(0, lambda: (
+                self.send_button.config(state="normal"),
+                self.status_label.config(
+                    text=summary, foreground="green" if s_fail == 0 else "red"),
+                messagebox.showinfo("نتيجة الإرسال", summary)
+            ))
+
+        threading.Thread(target=do_send, daemon=True).start()
     
     def _open_today_messages_report(self):
         date_str = now_riyadh_date()
@@ -1673,36 +1710,11 @@ class AppGUI(
         self._tard_load()
 
     # ══════════════════════════════════════════════════════════
-    # تبويب الأعذار
-    # ══════════════════════════════════════════════════════════
     def _build_whatsapp_bot_section(self, parent_frame):
-        """قسم إدارة بوت الواتساب — مع تمرير عمودي لدعم الشاشات الصغيرة."""
+        """قسم إدارة بوت الواتساب."""
 
-        # ─── إطار خارجي مع Canvas قابل للتمرير ──────────────
-        outer_lf = ttk.LabelFrame(parent_frame, text=" 🤖 بوت واتساب الأعذار ")
-        outer_lf.pack(fill="x", padx=5, pady=(6, 6))
-
-        canvas = tk.Canvas(outer_lf, highlightthickness=0, height=235)
-        vsb    = ttk.Scrollbar(outer_lf, orient="vertical", command=canvas.yview)
-        canvas.configure(yscrollcommand=vsb.set)
-        vsb.pack(side="right", fill="y")
-        canvas.pack(side="left", fill="both", expand=True)
-
-        wa_lf  = ttk.Frame(canvas, padding=(8, 6))
-        win_id = canvas.create_window((0, 0), window=wa_lf, anchor="nw")
-
-        def _sync_width(e):
-            canvas.itemconfig(win_id, width=e.width)
-        canvas.bind("<Configure>", _sync_width)
-
-        def _sync_scroll(e):
-            canvas.configure(scrollregion=canvas.bbox("all"))
-        wa_lf.bind("<Configure>", _sync_scroll)
-
-        def _mw(e):
-            canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
-        for _w in (canvas, wa_lf, outer_lf):
-            _w.bind("<MouseWheel>", _mw)
+        wa_lf = ttk.LabelFrame(parent_frame, text=" 🤖 بوت واتساب الأعذار ", padding=8)
+        wa_lf.pack(fill="x", padx=5, pady=(6, 6))
 
         # ─── صف الحالة ──────────────────────────────────────
         wa_top = ttk.Frame(wa_lf); wa_top.pack(fill="x", pady=(0, 4))
@@ -1728,35 +1740,38 @@ class AppGUI(
                 messagebox.showerror("خطأ", "تعذّر التشغيل:\n" + str(e))
 
         def _check_once():
-            """فحص واحد عند الضغط فقط — لا جدولة."""
             self._wa_status_text.config(text="⏳ جارٍ الفحص...")
-            wa_lf.update_idletasks()
-            try:
-                import urllib.request, json as _j
-                r    = urllib.request.urlopen("http://localhost:3000/status", timeout=2)
-                data = _j.loads(r.read())
-                if data.get("ready"):
-                    self._wa_status_dot.config(fg="#22c55e")
-                    pending = data.get("pending", 0)
-                    self._wa_status_text.config(
-                        text="✅ متصل  |  طلبات معلّقة: {}".format(pending),
-                        foreground="#166534")
-                else:
-                    self._wa_status_dot.config(fg="#f59e0b")
-                    self._wa_status_text.config(
-                        text="⏳ يعمل لكن لم يتصل — امسح QR",
-                        foreground="#92400e")
-            except Exception:
-                self._wa_status_dot.config(fg="#ef4444")
-                self._wa_status_text.config(
-                    text="🔴 الخادم غير متصل", foreground="#991b1b")
+            def do_check():
+                try:
+                    import urllib.request, json as _j
+                    r    = urllib.request.urlopen("http://localhost:3000/status", timeout=2)
+                    data = _j.loads(r.read())
+                    if data.get("ready"):
+                        pending = data.get("pending", 0)
+                        self.root.after(0, lambda: (
+                            self._wa_status_dot.config(fg="#22c55e"),
+                            self._wa_status_text.config(
+                                text="✅ متصل  |  طلبات معلّقة: {}".format(pending),
+                                foreground="#166534")))
+                    else:
+                        self.root.after(0, lambda: (
+                            self._wa_status_dot.config(fg="#f59e0b"),
+                            self._wa_status_text.config(
+                                text="⏳ يعمل لكن لم يتصل — امسح QR",
+                                foreground="#92400e")))
+                except Exception:
+                    self.root.after(0, lambda: (
+                        self._wa_status_dot.config(fg="#ef4444"),
+                        self._wa_status_text.config(
+                            text="🔴 الخادم غير متصل", foreground="#991b1b")))
+            threading.Thread(target=do_check, daemon=True).start()
 
         ttk.Button(btn_row, text="▶ تشغيل خادم الواتساب",
                    command=_start_wa).pack(side="right", padx=(0, 4))
         ttk.Button(btn_row, text="🔍 فحص الحالة",
                    command=_check_once).pack(side="right", padx=(0, 4))
 
-        # ─── حالة البوت (تشغيل / إيقاف) ─────────────────────
+        # ─── حالة البوت ─────────────────────────────────────
         bot_row = ttk.Frame(wa_lf); bot_row.pack(fill="x", pady=(0, 4))
         ttk.Label(bot_row, text="حالة البوت:", font=("Tahoma", 9, "bold")).pack(side="right", padx=(0, 6))
         self._bot_toggle_var = tk.BooleanVar(value=True)
@@ -1768,21 +1783,23 @@ class AppGUI(
         ).pack(side="right")
 
         def _toggle_bot(enabled: bool):
-            try:
-                import urllib.request as _ur
-                data = json.dumps({"enabled": enabled}).encode()
-                req = _ur.Request("http://localhost:3000/bot-toggle",
-                                  data=data, headers={"Content-Type": "application/json"},
-                                  method="POST")
-                _ur.urlopen(req, timeout=3)
-                status = "مفعّل ✅" if enabled else "موقوف ⏸"
-                self._wa_status_text.config(
-                    text=f"البوت {status}",
-                    foreground="#166634" if enabled else "#92400e")
-            except Exception:
-                pass
+            def do_toggle():
+                try:
+                    import urllib.request as _ur
+                    data = json.dumps({"enabled": enabled}).encode()
+                    req = _ur.Request("http://localhost:3000/bot-toggle",
+                                      data=data, headers={"Content-Type": "application/json"},
+                                      method="POST")
+                    _ur.urlopen(req, timeout=3)
+                    status = "مفعّل ✅" if enabled else "موقوف ⏸"
+                    self.root.after(0, lambda: self._wa_status_text.config(
+                        text=f"البوت {status}",
+                        foreground="#166634" if enabled else "#92400e"))
+                except Exception:
+                    pass
+            threading.Thread(target=do_toggle, daemon=True).start()
 
-        # ─── قسم الكلمات المفتاحية ───────────────────────────
+        # ─── الكلمات المفتاحية ───────────────────────────────
         ttk.Separator(wa_lf, orient="horizontal").pack(fill="x", pady=(4, 6))
 
         kw_hdr = ttk.Frame(wa_lf); kw_hdr.pack(fill="x", pady=(0, 2))
@@ -1797,10 +1814,9 @@ class AppGUI(
             text="أدخل الكلمات مفصولة بفاصلة — مثال: عذر، مريض، سفر، ok",
             font=("Tahoma", 8), foreground="#666").pack(anchor="e", pady=(0, 2))
 
-        self._kw_text = tk.Text(wa_lf, height=4, font=("Tahoma", 10),
+        self._kw_text = tk.Text(wa_lf, height=3, font=("Tahoma", 10),
                                  wrap="word", relief="solid", bd=1)
         self._kw_text.pack(fill="x", pady=(0, 4))
-        self._kw_text.bind("<MouseWheel>", _mw)
         self._kw_text.insert("1.0",
             "عذر، معذور، مريض، مرض، علاج، مستشفى، وفاة، سفر، ظروف، إجازة، اجازة، excuse، ok، اوك، نعم، موافق، 1")
 
@@ -1815,7 +1831,7 @@ class AppGUI(
                 self._kw_text.insert("1.0", "، ".join(kws))
                 self._bot_toggle_var.set(enabled)
             except Exception:
-                pass  # الخادم غير متصل
+                pass
 
         def _save_keywords():
             raw = self._kw_text.get("1.0", "end").strip()
@@ -1838,7 +1854,6 @@ class AppGUI(
             except Exception as e:
                 messagebox.showerror("خطأ", "تعذّر حفظ الكلمات.\nتأكد من تشغيل الخادم أولاً.\n" + str(e))
 
-        # تأجيل network calls لما بعد ظهور التبويب
         parent_frame.after(600, _load_keywords)
 
 
@@ -1863,10 +1878,17 @@ class AppGUI(
         inner = tk.Frame(scroll_canvas, bg="white")
         inner_win = scroll_canvas.create_window((0, 0), window=inner, anchor="nw")
 
+        # inner فقط يُحدّث scrollregion — canvas فقط يُحدّث العرض (بلا حلقة)
         def _on_inner_conf(e):
             scroll_canvas.configure(scrollregion=scroll_canvas.bbox("all"))
-            scroll_canvas.itemconfig(inner_win, width=scroll_canvas.winfo_width())
         inner.bind("<Configure>", _on_inner_conf)
+        _wm_last_w = [0]
+        def _on_canvas_conf(e):
+            w = scroll_canvas.winfo_width()
+            if w == _wm_last_w[0]: return
+            _wm_last_w[0] = w
+            scroll_canvas.itemconfig(inner_win, width=w)
+        scroll_canvas.bind("<Configure>", _on_canvas_conf)
 
         PAD = dict(padx=18, pady=8)
 
@@ -1911,40 +1933,45 @@ class AppGUI(
         def _wm_check():
             self._wm_lbl.config(text="⏳ جارٍ الفحص...", fg="#555555")
             self._wm_dot.config(fg="#aaaaaa")
-            inner.update_idletasks()
-            try:
-                import urllib.request as _ur, json as _j
-                servers = get_wa_servers()
-                results = []
-                for srv in servers:
-                    port = srv.get("port", 3000)
-                    try:
-                        r = _ur.urlopen("http://localhost:{}/status".format(port), timeout=2)
-                        data = _j.loads(r.read())
-                        results.append((port, data.get("ready", False), data.get("pending", 0)))
-                    except Exception:
-                        results.append((port, False, 0))
-                ready_count = sum(1 for _, r, _ in results if r)
-                total = len(results)
-                if ready_count == total and total > 0:
-                    self._wm_dot.config(fg="#22c55e")
-                    self._wm_lbl.config(
-                        text="✅ متصل ({}/{} خادم)  |  معلّقة: {}".format(
-                            ready_count, total, sum(p for _, _, p in results)),
-                        fg="#166534")
-                elif ready_count > 0:
-                    self._wm_dot.config(fg="#f59e0b")
-                    self._wm_lbl.config(
-                        text="⚠️ متصل جزئياً ({}/{})".format(ready_count, total),
-                        fg="#92400e")
-                else:
-                    self._wm_dot.config(fg="#ef4444")
-                    self._wm_lbl.config(
-                        text="🔴 الخادم غير متصل — امسح QR أو شغّل الخادم",
-                        fg="#991b1b")
-            except Exception:
-                self._wm_dot.config(fg="#ef4444")
-                self._wm_lbl.config(text="🔴 الخادم غير متصل", fg="#991b1b")
+            def do_check():
+                try:
+                    import urllib.request as _ur, json as _j
+                    servers = get_wa_servers()
+                    results = []
+                    for srv in servers:
+                        port = srv.get("port", 3000)
+                        try:
+                            r = _ur.urlopen("http://localhost:{}/status".format(port), timeout=2)
+                            data = _j.loads(r.read())
+                            results.append((port, data.get("ready", False), data.get("pending", 0)))
+                        except Exception:
+                            results.append((port, False, 0))
+                    ready_count = sum(1 for _, r, _ in results if r)
+                    total = len(results)
+                    if ready_count == total and total > 0:
+                        self.root.after(0, lambda: (
+                            self._wm_dot.config(fg="#22c55e"),
+                            self._wm_lbl.config(
+                                text="✅ متصل ({}/{} خادم)  |  معلّقة: {}".format(
+                                    ready_count, total, sum(p for _, _, p in results)),
+                                fg="#166534")))
+                    elif ready_count > 0:
+                        self.root.after(0, lambda: (
+                            self._wm_dot.config(fg="#f59e0b"),
+                            self._wm_lbl.config(
+                                text="⚠️ متصل جزئياً ({}/{})".format(ready_count, total),
+                                fg="#92400e")))
+                    else:
+                        self.root.after(0, lambda: (
+                            self._wm_dot.config(fg="#ef4444"),
+                            self._wm_lbl.config(
+                                text="🔴 الخادم غير متصل — امسح QR أو شغّل الخادم",
+                                fg="#991b1b")))
+                except Exception:
+                    self.root.after(0, lambda: (
+                        self._wm_dot.config(fg="#ef4444"),
+                        self._wm_lbl.config(text="🔴 الخادم غير متصل", fg="#991b1b")))
+            threading.Thread(target=do_check, daemon=True).start()
 
         tk.Button(btn_row, text="▶  تشغيل الخادم",
                   bg="#1565C0", fg="white", font=("Tahoma", 10, "bold"),
@@ -2075,13 +2102,15 @@ class AppGUI(
             cfg = load_config()
             _set_absence_bot(cfg.get("absence_bot_enabled", True))
             _set_permission_bot(cfg.get("permission_bot_enabled", True))
-            try:
-                import urllib.request as _ur, json as _j
-                r = _ur.urlopen("http://localhost:3000/bot-config", timeout=1)
-                d = _j.loads(r.read())
-                _set_excuse_bot(d.get("bot_enabled", True))
-            except Exception:
-                _set_excuse_bot(True)
+            def do_fetch():
+                try:
+                    import urllib.request as _ur, json as _j
+                    r = _ur.urlopen("http://localhost:3000/bot-config", timeout=1)
+                    d = _j.loads(r.read())
+                    self.root.after(0, lambda: _set_excuse_bot(d.get("bot_enabled", True)))
+                except Exception:
+                    self.root.after(0, lambda: _set_excuse_bot(True))
+            threading.Thread(target=do_fetch, daemon=True).start()
 
         frame.after(400, _load_initial)
 
@@ -2317,8 +2346,9 @@ class AppGUI(
                                 command=canvas.yview)
         self._tabs_inner = ttk.Frame(canvas)
 
-        self._tabs_inner.bind("<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        def _on_tabs_inner_conf(e):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+        self._tabs_inner.bind("<Configure>", _on_tabs_inner_conf)
         canvas.create_window((0,0), window=self._tabs_inner, anchor="nw")
         canvas.configure(yscrollcommand=sb2.set)
         canvas.pack(side="left", fill="both", expand=True)
@@ -2593,8 +2623,12 @@ class AppGUI(
 
         def _on_frame_configure(e):
             _canvas.configure(scrollregion=_canvas.bbox("all"))
+        _set_last_w = [0]
         def _on_canvas_configure(e):
-            _canvas.itemconfig(_canvas_win, width=e.width)
+            w = _canvas.winfo_width()
+            if w == _set_last_w[0]: return
+            _set_last_w[0] = w
+            _canvas.itemconfig(_canvas_win, width=w)
         scroll.bind("<Configure>", _on_frame_configure)
         _canvas.bind("<Configure>", _on_canvas_configure)
 
@@ -2764,6 +2798,10 @@ class AppGUI(
                 self._school_status.config(
                     text=f"✅ تم الحفظ — النوع: {gender_lbl}", foreground="green")
                 frame.after(3000, lambda: self._school_status.config(text=""))
+                # تحديث عنوان النافذة فوراً ليعكس النوع الجديد
+                _role_label = CURRENT_USER.get("label", "")
+                _user_name  = CURRENT_USER.get("name", CURRENT_USER.get("username", ""))
+                self.root.title(f"{get_window_title()} — {_user_name} ({_role_label})")
             except Exception as e:
                 messagebox.showerror("خطأ", f"فشل الحفظ:\n{e}")
 
@@ -5179,8 +5217,17 @@ class AppGUI(
         canvas = tk.Canvas(outer, bg="#f0f4f8", highlightthickness=0)
         scrollbar = ttk.Scrollbar(outer, orient="vertical", command=canvas.yview)
         scroll_frame = tk.Frame(canvas, bg="#f0f4f8")
-        scroll_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.create_window((0,0), window=scroll_frame, anchor="nw")
+        sf_win = canvas.create_window((0,0), window=scroll_frame, anchor="nw")
+        def _on_sf_configure(e):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+        scroll_frame.bind("<Configure>", _on_sf_configure)
+        _sf_last_w = [0]
+        def _on_sf_canvas_conf(e):
+            w = canvas.winfo_width()
+            if w == _sf_last_w[0]: return
+            _sf_last_w[0] = w
+            canvas.itemconfig(sf_win, width=w)
+        canvas.bind("<Configure>", _on_sf_canvas_conf)
         canvas.configure(yscrollcommand=scrollbar.set)
         scrollbar.pack(side="right", fill="y")
         canvas.pack(side="left", fill="both", expand=True)
@@ -5987,9 +6034,14 @@ class AppGUI(
 
         def _on_frame_conf(e):
             canvas.configure(scrollregion=canvas.bbox("all"))
-            canvas.itemconfig(canvas_win, width=canvas.winfo_width())
+        _rp_last_w = [0]
+        def _on_canvas_conf(e):
+            w = canvas.winfo_width()
+            if w == _rp_last_w[0]: return
+            _rp_last_w[0] = w
+            canvas.itemconfig(canvas_win, width=w)
         main.bind("<Configure>", _on_frame_conf)
-        canvas.bind("<Configure>", lambda e: canvas.itemconfig(canvas_win, width=e.width))
+        canvas.bind("<Configure>", _on_canvas_conf)
 
         # ── بيانات الطالب ────────────────────────────────────────
         info_fr = tk.LabelFrame(main, text=" بيانات الطالب ", font=FONT_H,
@@ -7068,7 +7120,9 @@ class AppGUI(
         if hasattr(self, "tree_student_management"): self.load_students_to_management_treeview()
         if hasattr(self, "tree_class_naming"): self.load_class_names_to_treeview()
         if hasattr(self, "msg_canvas"):        self._msg_load_groups()
-        if hasattr(self, "schedule_widgets"):  self.populate_schedule_table()
+        if hasattr(self, "schedule_widgets"):
+            self._schedule_built_day = None   # إجبار إعادة بناء الجدول بعد تغيير البيانات
+            self.populate_schedule_table()
         if hasattr(self, "tree_tard"):         self._tard_load()
         if hasattr(self, "tree_excuses"):      self._exc_load()
         if hasattr(self, "tree_users"):        self._users_load()
@@ -7110,16 +7164,21 @@ class AppGUI(
             if hasattr(self, "_current_tab") and self._current_tab.get() != "المراقبة الحية":
                 self.root.after(10_000, update_browser_content)
                 return
-            try:
-                today = now_riyadh_date()
-                status_data = get_live_monitor_status(today)
-                html_content = generate_monitor_table_html(status_data)
-                now_str = datetime.datetime.now().strftime('%H:%M:%S')
-                final_html = html_content.replace('<p id="last-update"></p>', f'<p id="last-update">\u0622\u062e\u0631 \u062a\u062d\u062f\u064a\u062b: {now_str}</p>')
-                live_monitor_browser.load_html(final_html)
-            except Exception as e:
-                print(f"Error updating live monitor: {e}")
-            self.root.after(60_000, update_browser_content)
+            # جلب البيانات في خيط خلفي — تحديث الواجهة عبر root.after
+            def do_fetch():
+                try:
+                    today = now_riyadh_date()
+                    status_data = get_live_monitor_status(today)
+                    html_content = generate_monitor_table_html(status_data)
+                    now_str = datetime.datetime.now().strftime('%H:%M:%S')
+                    final_html = html_content.replace(
+                        '<p id="last-update"></p>',
+                        f'<p id="last-update">\u0622\u062e\u0631 \u062a\u062d\u062f\u064a\u062b: {now_str}</p>')
+                    self.root.after(0, lambda: live_monitor_browser.load_html(final_html))
+                except Exception as e:
+                    print(f"Error updating live monitor: {e}")
+                self.root.after(0, lambda: self.root.after(60_000, update_browser_content))
+            threading.Thread(target=do_fetch, daemon=True).start()
 
         self._live_monitor_active = True
         self.root.after(500, update_browser_content)
@@ -7504,7 +7563,9 @@ class AppGUI(
         canvas.pack(side="left", fill="both", expand=True)
         self.schedule_table_frame = ttk.Frame(canvas)
         canvas.create_window((0, 0), window=self.schedule_table_frame, anchor="nw")
-        self.schedule_table_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        def _on_sched_conf(e):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+        self.schedule_table_frame.bind("<Configure>", _on_sched_conf)
         
         self.populate_schedule_table()
 
@@ -7592,12 +7653,11 @@ class AppGUI(
                 messagebox.showerror("خطأ", "مجلد الواتساب غير موجود:\n" + WHATS_PATH)
                 return
             try:
-                # يشغّل الخادم مع تعطيل البوت تلقائياً
                 cmd = rf'cmd.exe /k "cd /d {WHATS_PATH} && node server.js"'
                 subprocess.Popen(cmd, creationflags=subprocess.CREATE_NEW_CONSOLE)
                 self._wa_mini_text.config(text="جارٍ التشغيل... انتظر 10 ثوانٍ")
-                # بعد تشغيل الخادم أوقف البوت تلقائياً
-                def _disable_bot_after_start():
+                # بعد 11 ث أوقف البوت في خيط خلفي لتجنب تجميد الواجهة
+                def _disable_bot_bg():
                     try:
                         import urllib.request as _ur
                         data = json.dumps({"enabled": False}).encode()
@@ -7609,26 +7669,33 @@ class AppGUI(
                         print("[WA] البوت مُوقَف تلقائياً عند التشغيل من تبويب التأخر")
                     except Exception:
                         pass
-                pass  # لا جدولة تلقائية
-                frame.after(11000, _disable_bot_after_start)
+                def _start_disable_thread():
+                    threading.Thread(target=_disable_bot_bg, daemon=True).start()
+                frame.after(11000, _start_disable_thread)
             except Exception as e:
                 messagebox.showerror("خطأ", "تعذّر التشغيل:\n" + str(e))
 
         def _mini_check():
-            try:
-                import urllib.request, json as _j
-                r = urllib.request.urlopen("http://localhost:3000/status", timeout=1)
-                data = _j.loads(r.read())
-                if data.get("ready"):
-                    self._wa_mini_dot.config(fg="#22c55e")
-                    self._wa_mini_text.config(text="✅ متصل ويعمل", foreground="#166534")
-                else:
-                    self._wa_mini_dot.config(fg="#f59e0b")
-                    self._wa_mini_text.config(text="⏳ يعمل — امسح QR", foreground="#92400e")
-            except Exception:
-                self._wa_mini_dot.config(fg="#ef4444")
-                self._wa_mini_text.config(text="🔴 غير متصل", foreground="#991b1b")
-            pass  # لا جدولة تلقائية
+            self._wa_mini_dot.config(fg="#aaaaaa")
+            self._wa_mini_text.config(text="⏳ جارٍ الفحص...", foreground="#555555")
+            def _do_check():
+                try:
+                    import urllib.request, json as _j
+                    r = urllib.request.urlopen("http://localhost:3000/status", timeout=2)
+                    data = _j.loads(r.read())
+                    if data.get("ready"):
+                        self.root.after(0, lambda: (
+                            self._wa_mini_dot.config(fg="#22c55e"),
+                            self._wa_mini_text.config(text="✅ متصل ويعمل", foreground="#166534")))
+                    else:
+                        self.root.after(0, lambda: (
+                            self._wa_mini_dot.config(fg="#f59e0b"),
+                            self._wa_mini_text.config(text="⏳ يعمل — امسح QR", foreground="#92400e")))
+                except Exception:
+                    self.root.after(0, lambda: (
+                        self._wa_mini_dot.config(fg="#ef4444"),
+                        self._wa_mini_text.config(text="🔴 غير متصل", foreground="#991b1b")))
+            threading.Thread(target=_do_check, daemon=True).start()
 
         ttk.Button(wa_mini_row, text="▶ تشغيل",
                    command=_mini_start_wa).pack(side="left", padx=4)
@@ -7689,16 +7756,71 @@ class AppGUI(
             send_row, text="", foreground="green", font=("Tahoma",9))
         self.tard_status_lbl.pack(side="right", padx=8)
 
-        # حالة الجدول التلقائي
-        auto_row = ttk.Frame(lf); auto_row.pack(fill="x", pady=(0,8))
-        self.tard_auto_var = tk.BooleanVar(value=True)
+        # ─── الإرسال التلقائي المجدوَل ───────────────────────────
+        sched_lf = ttk.LabelFrame(lf, text=" ⏰ الإرسال التلقائي المجدوَل ", padding=8)
+        sched_lf.pack(fill="x", pady=(0, 8))
+
+        _cfg_now = load_config()
+        self.tard_auto_var = tk.BooleanVar(
+            value=_cfg_now.get("tardiness_auto_send_enabled", True))
         ttk.Checkbutton(
-            auto_row,
-            text="إرسال تلقائي عند بداية الدوام",
+            sched_lf,
+            text="تفعيل الإرسال التلقائي يومياً (الأحد—الخميس)",
             variable=self.tard_auto_var
-        ).pack(side="right")
-        ttk.Label(auto_row, text="(يتم يومياً أيام الأحد—الخميس)",
-                  foreground="#5A6A7E", font=("Tahoma",9)).pack(side="right", padx=6)
+        ).pack(anchor="e")
+
+        time_row = ttk.Frame(sched_lf); time_row.pack(fill="x", pady=(6, 0))
+        ttk.Label(time_row, text="وقت الإرسال:", font=("Tahoma",10,"bold")).pack(side="right", padx=(0,8))
+
+        _saved_time = _cfg_now.get("tardiness_auto_send_time", "07:00")
+        try:
+            _sh, _sm = _saved_time.split(":")
+        except Exception:
+            _sh, _sm = "07", "00"
+
+        self._tard_hour_var   = tk.StringVar(value=_sh)
+        self._tard_minute_var = tk.StringVar(value=_sm)
+
+        # إطار داخلي بترتيب يسار←يمين حتى تظهر الساعة قبل الدقيقة (HH:MM)
+        _time_inner = ttk.Frame(time_row)
+        _time_inner.pack(side="right")
+        ttk.Spinbox(_time_inner, from_=0, to=23, width=4, justify="center",
+                    textvariable=self._tard_hour_var,
+                    format="%02.0f").pack(side="left")
+        ttk.Label(_time_inner, text=":", font=("Tahoma",12,"bold")).pack(side="left", padx=2)
+        ttk.Spinbox(_time_inner, from_=0, to=59, width=4, justify="center",
+                    textvariable=self._tard_minute_var,
+                    format="%02.0f").pack(side="left")
+        ttk.Label(_time_inner, text=" (HH:MM)", foreground="#888",
+                  font=("Tahoma",8)).pack(side="left", padx=(4,0))
+
+        self._tard_sched_status = ttk.Label(sched_lf, text="", foreground="green",
+                                             font=("Tahoma",9))
+        self._tard_sched_status.pack(anchor="e", pady=(4,0))
+
+        def _save_sched():
+            try:
+                h = int(self._tard_hour_var.get())
+                m = int(self._tard_minute_var.get())
+                if not (0 <= h <= 23 and 0 <= m <= 59):
+                    raise ValueError
+            except (ValueError, TypeError):
+                self._tard_sched_status.config(
+                    text="⚠️ وقت غير صحيح — أدخل ساعة (0-23) ودقيقة (0-59)",
+                    foreground="#C62828")
+                return
+            from config_manager import save_config
+            cfg = load_config()
+            cfg["tardiness_auto_send_enabled"] = self.tard_auto_var.get()
+            cfg["tardiness_auto_send_time"]    = f"{h:02d}:{m:02d}"
+            save_config(cfg)
+            status = "مفعّل ✅" if self.tard_auto_var.get() else "موقوف ⏸"
+            self._tard_sched_status.config(
+                text=f"✅ تم الحفظ — الإرسال {status} في {h:02d}:{m:02d}",
+                foreground="#166534")
+
+        ttk.Button(sched_lf, text="💾 حفظ الإعداد",
+                   command=_save_sched).pack(anchor="w", pady=(6,0))
 
         ttk.Separator(lf, orient="horizontal").pack(fill="x", pady=6)
 
@@ -7735,8 +7857,10 @@ class AppGUI(
         del_row = ttk.Frame(lf); del_row.pack(fill="x", pady=(6,0))
         ttk.Button(del_row, text="🗑️ حذف المحدد",
                    command=self._tard_recipient_del).pack(side="right", padx=4)
-        ttk.Button(del_row, text="استيراد من قائمة المعلمين",
+        ttk.Button(del_row, text="👨‍🏫 استيراد من المعلمين",
                    command=self._tard_import_teachers).pack(side="right", padx=4)
+        ttk.Button(del_row, text="👤 استيراد من المستخدمين المسجلين",
+                   command=self._tard_import_users).pack(side="right", padx=4)
 
         self._tard_recipients_load()
 
@@ -7799,6 +7923,122 @@ class AppGUI(
         self._tard_recipients_load()
         messagebox.showinfo("تم",f"تم استيراد {added} معلم من قائمة المعلمين.")
 
+    def _tard_import_users(self):
+        """
+        يعرض نافذة لاستيراد أرقام المستخدمين المسجلين في البرنامج
+        كمستلمين لرابط التأخر.
+        """
+        from database import get_all_users, save_user_phone
+        users = get_all_users()
+        if not users:
+            messagebox.showinfo("تنبيه", "لا يوجد مستخدمون مسجلون."); return
+
+        win = tk.Toplevel(self.root)
+        win.title("استيراد المستخدمين كمستلمين")
+        win.geometry("560x420")
+        win.transient(self.root); win.grab_set()
+
+        ttk.Label(win,
+            text="أدخل رقم جوال لكل مستخدم ثم اختر من تريد استيراده:",
+            font=("Tahoma",10)).pack(pady=(12,4), padx=12, anchor="e")
+
+        # جدول
+        cols = ("sel","name","username","role","phone")
+        tree = ttk.Treeview(win, columns=cols, show="headings", height=10)
+        tree.heading("sel",      text="✔")
+        tree.heading("name",     text="الاسم")
+        tree.heading("username", text="المستخدم")
+        tree.heading("role",     text="الدور")
+        tree.heading("phone",    text="رقم الجوال")
+        tree.column("sel",      width=30,  anchor="center")
+        tree.column("name",     width=140, anchor="center")
+        tree.column("username", width=100, anchor="center")
+        tree.column("role",     width=80,  anchor="center")
+        tree.column("phone",    width=120, anchor="center")
+        sb = ttk.Scrollbar(win, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=sb.set)
+        sb.pack(side="right", fill="y", padx=(0,4))
+        tree.pack(fill="both", expand=True, padx=(12,0), pady=4)
+
+        # تعبئة البيانات
+        for u in users:
+            iid = tree.insert("", "end", values=(
+                "☐",
+                u.get("full_name") or u["username"],
+                u["username"],
+                u.get("role",""),
+                u.get("phone","")
+            ))
+        # تبديل الاختيار بالنقر
+        selected = set()
+        def _toggle(event):
+            row = tree.identify_row(event.y)
+            if not row: return
+            vals = list(tree.item(row,"values"))
+            if row in selected:
+                selected.discard(row)
+                vals[0] = "☐"
+            else:
+                selected.add(row)
+                vals[0] = "☑"
+            tree.item(row, values=vals)
+        tree.bind("<Button-1>", _toggle)
+
+        # حقل تعديل جوال
+        edit_row = ttk.Frame(win); edit_row.pack(fill="x", padx=12, pady=(0,4))
+        ttk.Label(edit_row, text="تعديل جوال المحدد:").pack(side="right", padx=(0,6))
+        phone_edit_var = tk.StringVar()
+        ttk.Entry(edit_row, textvariable=phone_edit_var, width=18,
+                  justify="right").pack(side="right")
+
+        def _apply_phone():
+            sel = tree.selection()
+            if not sel: return
+            row = sel[0]
+            vals = list(tree.item(row,"values"))
+            vals[4] = phone_edit_var.get().strip()
+            tree.item(row, values=vals)
+        ttk.Button(edit_row, text="تطبيق", command=_apply_phone).pack(side="right", padx=4)
+
+        def _on_tree_select(e):
+            sel = tree.selection()
+            if sel:
+                phone_edit_var.set(tree.item(sel[0],"values")[4])
+        tree.bind("<<TreeviewSelect>>", _on_tree_select)
+
+        status_lbl = ttk.Label(win, text="", foreground="green", font=("Tahoma",9))
+        status_lbl.pack(pady=(0,4))
+
+        def _import():
+            recps = get_tardiness_recipients()
+            existing = {r["phone"] for r in recps}
+            added = 0
+            for row in tree.get_children():
+                vals = tree.item(row,"values")
+                if vals[0] == "☑":
+                    phone = str(vals[4]).strip()
+                    name  = str(vals[1])
+                    uname = str(vals[2])
+                    role  = str(vals[3])
+                    if not phone:
+                        continue
+                    # احفظ الجوال في جدول المستخدمين
+                    save_user_phone(uname, phone)
+                    if phone not in existing:
+                        recps.append({"name":name,"phone":phone,"role":role})
+                        existing.add(phone)
+                        added += 1
+            save_tardiness_recipients(recps)
+            self._tard_recipients_load()
+            status_lbl.config(text=f"✅ تم استيراد {added} مستخدم")
+            win.after(1200, win.destroy)
+
+        btn_row = ttk.Frame(win); btn_row.pack(pady=(0,10))
+        ttk.Button(btn_row, text="✅ استيراد المحددين",
+                   command=_import).pack(side="right", padx=6)
+        ttk.Button(btn_row, text="إلغاء",
+                   command=win.destroy).pack(side="right")
+
     def _send_tardiness_now(self):
         """يرسل رابط التأخر الآن لجميع المستلمين."""
         if not hasattr(self,"tard_send_btn"): return
@@ -7838,15 +8078,27 @@ class AppGUI(
                 sent, failed, detail_txt))
 
     def populate_schedule_table(self):
+        selected_day = self.selected_day_var.get()
+        saved_schedule = load_schedule(selected_day)
+        teachers_data = load_teachers()
+        teacher_names = [""] + [t["اسم المعلم"] for t in teachers_data.get("teachers", [])]
+
+        # إذا كان الجدول مبنياً لنفس اليوم → حدّث القيم فقط بدون هدم/إعادة بناء
+        if (self.schedule_widgets and
+                getattr(self, "_schedule_built_day", None) == selected_day):
+            for (class_id, period), combo in self.schedule_widgets.items():
+                teacher = saved_schedule.get((class_id, period), "")
+                combo.set(teacher if teacher in teacher_names else "")
+            return
+
+        # أول مرة أو تغيّر اليوم → أعد البناء
+        self._schedule_built_day = selected_day
         for widget in self.schedule_table_frame.winfo_children():
             widget.destroy()
         self.schedule_widgets.clear()
 
-        selected_day = self.selected_day_var.get()
         classes = sorted(self.store["list"], key=lambda c: c['id'])
-        teachers_data = load_teachers()
-        teacher_names = [""] + [t["اسم المعلم"] for t in teachers_data.get("teachers", [])]
-        saved_schedule = load_schedule(selected_day)
+        max_len = max((len(n) for n in teacher_names), default=15)
 
         header_font = ("Segoe UI", 10, "bold")
         ttk.Label(self.schedule_table_frame, text="الحصة", font=header_font, borderwidth=1, relief="solid", padding=5).grid(row=0, column=0, sticky="nsew")
@@ -7858,11 +8110,7 @@ class AppGUI(
             for col_idx, cls in enumerate(classes, 1):
                 class_id = cls['id']
                 combo = ttk.Combobox(self.schedule_table_frame, values=teacher_names, state="readonly", justify='center', width=15)
-                
-                # Dynamic width adjustment
-                max_len = max(len(name) for name in teacher_names) if teacher_names else 15
                 combo.bind('<Button-1>', lambda e, c=combo, w=max_len: c.config(width=w))
-
                 combo.grid(row=period, column=col_idx, sticky="nsew", padx=1, pady=1)
                 teacher = saved_schedule.get((class_id, period))
                 if teacher in teacher_names:
@@ -7870,11 +8118,16 @@ class AppGUI(
                 self.schedule_widgets[(class_id, period)] = combo
 
     def log_scheduler_message(self, message):
-        now = datetime.datetime.now().strftime("%H:%M:%S")
-        full_message = f"[{now}] {message}\n"
-        self.scheduler_log.config(state="normal")
-        self.scheduler_log.insert("1.0", full_message)
-        self.scheduler_log.config(state="disabled")
+        def _do():
+            now = datetime.datetime.now().strftime("%H:%M:%S")
+            full_message = f"[{now}] {message}\n"
+            try:
+                self.scheduler_log.config(state="normal")
+                self.scheduler_log.insert("1.0", full_message)
+                self.scheduler_log.config(state="disabled")
+            except Exception:
+                pass
+        self.root.after(0, _do)
 
     def on_save_schedule_and_times(self):
         selected_day = self.selected_day_var.get()
@@ -8156,6 +8409,12 @@ class AppGUI(
 # ── ثوابت التقديرات ─────────────────────────────────────────
 # grade analysis functions moved to grade_analysis.py
 from grade_analysis import *
+from grade_analysis import (
+    _ga_placeholder_html, _ga_build_html, _ga_build_print_html,
+    _ga_export_word, _ga_open_header_editor, _ga_parse_file,
+    _ga_parse_excel, _ga_parse_csv, _ga_parse_noor_pdf,
+    _ga_is_subject, _ga_grade, _ga_build_cid_map,
+)
 
 def _build_grade_analysis_tab_impl(self):
     """

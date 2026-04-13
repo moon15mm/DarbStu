@@ -2,7 +2,7 @@
 """
 whatsapp_service.py — خدمة إرسال رسائل الواتساب
 """
-import requests, os, subprocess, sys, time, threading
+import requests, os, subprocess, sys, time, threading, base64
 from constants import BASE_DIR, WHATS_PATH, DATA_DIR
 from config_manager import load_config, render_message
 

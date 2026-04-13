@@ -2,7 +2,7 @@
 """
 api/mobile_routes.py — مسارات الواجهة المتنقلة والفصول الدراسية
 """
-import datetime, json, base64, os, re, io, socket, sqlite3, subprocess
+import datetime, json, base64, os, re, io, socket, sqlite3, subprocess, threading
 from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
@@ -685,37 +685,36 @@ def send_tardiness_link_to_all():
 
 def _schedule_tardiness_sender(root_widget):
     """
-    يجدول إرسال رابط التأخر تلقائياً عند وقت بداية الدوام كل يوم عمل.
+    يجدول إرسال رابط التأخر تلقائياً في الوقت المحدد (من الإعدادات) كل يوم عمل.
     يُستدعى مرة واحدة عند بدء البرنامج.
     """
-    WORK_DAYS = {6, 0, 1, 2, 3}  # الأحد-الخميس (Python: Sun=6,Mon=0...)
+    WORK_DAYS = {6, 0, 1, 2, 3}  # الأحد-الخميس
 
     def check_and_send():
         now = datetime.datetime.now()
-        # أيام العمل فقط
         if now.weekday() not in WORK_DAYS:
             root_widget.after(60_000, check_and_send)
             return
-        cfg        = load_config()
-        start_str  = cfg.get("school_start_time", "07:00")
+        cfg = load_config()
+        # استخدم الوقت المخصص إن كان مفعّلاً، وإلا وقت بداية الدوام
+        if cfg.get("tardiness_auto_send_enabled", True):
+            send_time = cfg.get("tardiness_auto_send_time") or cfg.get("school_start_time", "07:00")
+        else:
+            root_widget.after(60_000, check_and_send)
+            return
         try:
-            h, m   = map(int, start_str.split(":"))
+            h, m   = map(int, send_time.split(":"))
             target  = now.replace(hour=h, minute=m, second=0, microsecond=0)
             diff_s  = (target - now).total_seconds()
-            # نافذة ±90 ثانية
             if -90 <= diff_s <= 90:
-                print(f"[TARDINESS-SCHED] ⏰ حان وقت بداية الدوام ({start_str}) — جارٍ الإرسال...")
-                t = threading.Thread(target=send_tardiness_link_to_all, daemon=True)
-                t.start()
-                # انتظر 5 دقائق قبل الفحص التالي لتجنب الإرسال المتكرر
+                print(f"[TARDINESS-SCHED] ⏰ حان وقت الإرسال ({send_time}) — جارٍ الإرسال...")
+                threading.Thread(target=send_tardiness_link_to_all, daemon=True).start()
                 root_widget.after(300_000, check_and_send)
                 return
         except Exception as e:
             print(f"[TARDINESS-SCHED] خطأ: {e}")
-        # فحص كل دقيقة
         root_widget.after(60_000, check_and_send)
 
-    # ابدأ الفحص بعد 30 ثانية من التشغيل
     root_widget.after(30_000, check_and_send)
 
 

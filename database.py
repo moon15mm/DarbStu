@@ -142,10 +142,12 @@ def init_db():
         allowed_tabs TEXT,
         created_at   TEXT NOT NULL
     )""")
-    # ترقية: أضف allowed_tabs إذا لم يكن موجوداً
+    # ترقية: أضف الأعمدة الناقصة في جدول users
     _u_cols = {r[1] for r in cur.execute("PRAGMA table_info(users)")}
     if "allowed_tabs" not in _u_cols:
         cur.execute("ALTER TABLE users ADD COLUMN allowed_tabs TEXT")
+    if "phone" not in _u_cols:
+        cur.execute("ALTER TABLE users ADD COLUMN phone TEXT DEFAULT ''")
     # مستخدم مدير افتراضي إذا لم يوجد
     cur.execute("SELECT COUNT(*) FROM users")
     if cur.fetchone()[0] == 0:
@@ -767,8 +769,14 @@ def save_user_allowed_tabs(username: str, tabs: list):
 
 def get_all_users():
     con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
-    cur.execute("SELECT id,username,role,full_name,active FROM users ORDER BY role,username")
+    cur.execute("SELECT id,username,role,full_name,active,COALESCE(phone,'') as phone FROM users ORDER BY role,username")
     rows = [dict(r) for r in cur.fetchall()]; con.close(); return rows
+
+def save_user_phone(username: str, phone: str):
+    """يحفظ رقم جوال المستخدم."""
+    con = get_db(); cur = con.cursor()
+    cur.execute("UPDATE users SET phone=? WHERE username=?", (phone.strip(), username))
+    con.commit(); con.close()
 
 def create_user(username, password, role, full_name=""):
     try:

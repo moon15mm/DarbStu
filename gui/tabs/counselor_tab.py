@@ -1294,9 +1294,14 @@ class CounselorTabMixin:
 
         def _on_frame_conf(e):
             canvas.configure(scrollregion=canvas.bbox("all"))
-            canvas.itemconfig(canvas_win, width=canvas.winfo_width())
         main.bind("<Configure>", _on_frame_conf)
-        canvas.bind("<Configure>", lambda e: canvas.itemconfig(canvas_win, width=e.width))
+        _co_last_w = [0]
+        def _on_canvas_conf_detail(e):
+            w = canvas.winfo_width()
+            if w == _co_last_w[0]: return
+            _co_last_w[0] = w
+            canvas.itemconfig(canvas_win, width=w)
+        canvas.bind("<Configure>", _on_canvas_conf_detail)
 
         # ── بيانات الطالب ────────────────────────────────────────
         info_fr = tk.LabelFrame(main, text=" بيانات الطالب ", font=FONT_H,

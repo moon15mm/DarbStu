@@ -6,7 +6,7 @@ from typing import List, Dict, Any, Optional
 import zipfile
 from constants import (CURRENT_USER, BACKUP_DIR, CONFIG_JSON, DATA_DIR,
                         DB_PATH, STUDENTS_JSON, TEACHERS_JSON)
-from config_manager import invalidate_config_cache, load_config
+from config_manager import invalidate_config_cache, load_config, get_window_title
 from database import (authenticate, create_backup, get_backup_list,
                        get_db, load_students, import_students_from_excel_sheet2_format,
                        import_teachers_from_excel)
@@ -207,6 +207,10 @@ class SettingsTabMixin:
                 self._school_status.config(
                     text=f"✅ تم الحفظ — النوع: {gender_lbl}", foreground="green")
                 frame.after(3000, lambda: self._school_status.config(text=""))
+                # تحديث عنوان النافذة فوراً ليعكس النوع الجديد
+                _role_label = CURRENT_USER.get("label", "")
+                _user_name  = CURRENT_USER.get("name", CURRENT_USER.get("username", ""))
+                self.root.title(f"{get_window_title()} — {_user_name} ({_role_label})")
             except Exception as e:
                 messagebox.showerror("خطأ", f"فشل الحفظ:\n{e}")
 
