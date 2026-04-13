@@ -32,7 +32,7 @@ class WhatsappTabMixin:
                 messagebox.showerror("خطأ", "مجلد الواتساب غير موجود:\n" + WHATS_PATH)
                 return
             try:
-                cmd = rf'cmd.exe /k "cd /d {WHATS_PATH} && node server.js"'
+                cmd = rf'cmd.exe /k "cd /d {WHATS_PATH} && npm start"'
                 subprocess.Popen(cmd, creationflags=subprocess.CREATE_NEW_CONSOLE)
                 self._wa_status_text.config(
                     text="⏳ جارٍ التشغيل... اضغط 'فحص الحالة' بعد 15 ثانية")
@@ -40,26 +40,32 @@ class WhatsappTabMixin:
                 messagebox.showerror("خطأ", "تعذّر التشغيل:\n" + str(e))
 
         def _check_once():
+            self._wa_status_dot.config(fg="#aaaaaa")
             self._wa_status_text.config(text="⏳ جارٍ الفحص...")
-            try:
-                import urllib.request, json as _j
-                r    = urllib.request.urlopen("http://localhost:3000/status", timeout=2)
-                data = _j.loads(r.read())
-                if data.get("ready"):
-                    self._wa_status_dot.config(fg="#22c55e")
-                    pending = data.get("pending", 0)
-                    self._wa_status_text.config(
-                        text="✅ متصل  |  طلبات معلّقة: {}".format(pending),
-                        foreground="#166534")
-                else:
-                    self._wa_status_dot.config(fg="#f59e0b")
-                    self._wa_status_text.config(
-                        text="⏳ يعمل لكن لم يتصل — امسح QR",
-                        foreground="#92400e")
-            except Exception:
-                self._wa_status_dot.config(fg="#ef4444")
-                self._wa_status_text.config(
-                    text="🔴 الخادم غير متصل", foreground="#991b1b")
+            def _do():
+                try:
+                    import urllib.request, json as _j
+                    r    = urllib.request.urlopen("http://localhost:3000/status", timeout=2)
+                    data = _j.loads(r.read())
+                    if data.get("ready"):
+                        pending = data.get("pending", 0)
+                        self.root.after(0, lambda: (
+                            self._wa_status_dot.config(fg="#22c55e"),
+                            self._wa_status_text.config(
+                                text="✅ متصل  |  طلبات معلّقة: {}".format(pending),
+                                foreground="#166534")))
+                    else:
+                        self.root.after(0, lambda: (
+                            self._wa_status_dot.config(fg="#f59e0b"),
+                            self._wa_status_text.config(
+                                text="⏳ يعمل لكن لم يتصل — امسح QR",
+                                foreground="#92400e")))
+                except Exception:
+                    self.root.after(0, lambda: (
+                        self._wa_status_dot.config(fg="#ef4444"),
+                        self._wa_status_text.config(
+                            text="🔴 الخادم غير متصل", foreground="#991b1b")))
+            threading.Thread(target=_do, daemon=True).start()
 
         ttk.Button(btn_row, text="▶ تشغيل خادم الواتساب",
                    command=_start_wa).pack(side="right", padx=(0, 4))
@@ -78,19 +84,21 @@ class WhatsappTabMixin:
         ).pack(side="right")
 
         def _toggle_bot(enabled: bool):
-            try:
-                import urllib.request as _ur
-                data = json.dumps({"enabled": enabled}).encode()
-                req = _ur.Request("http://localhost:3000/bot-toggle",
-                                  data=data, headers={"Content-Type": "application/json"},
-                                  method="POST")
-                _ur.urlopen(req, timeout=3)
+            def _do():
+                try:
+                    import urllib.request as _ur
+                    data = json.dumps({"enabled": enabled}).encode()
+                    req = _ur.Request("http://localhost:3000/bot-toggle",
+                                      data=data, headers={"Content-Type": "application/json"},
+                                      method="POST")
+                    _ur.urlopen(req, timeout=3)
+                except Exception:
+                    pass
                 status = "مفعّل ✅" if enabled else "موقوف ⏸"
-                self._wa_status_text.config(
-                    text=f"البوت {status}",
-                    foreground="#166634" if enabled else "#92400e")
-            except Exception:
-                pass
+                color  = "#166634" if enabled else "#92400e"
+                self.root.after(0, lambda: self._wa_status_text.config(
+                    text=f"البوت {status}", foreground=color))
+            threading.Thread(target=_do, daemon=True).start()
 
         # ─── الكلمات المفتاحية ───────────────────────────────
         ttk.Separator(wa_lf, orient="horizontal").pack(fill="x", pady=(4, 6))
@@ -114,38 +122,46 @@ class WhatsappTabMixin:
             "عذر، معذور، مريض، مرض، علاج، مستشفى، وفاة، سفر، ظروف، إجازة، اجازة، excuse، ok، اوك، نعم، موافق، 1")
 
         def _load_keywords():
-            try:
-                import urllib.request as _ur, json as _j
-                r = _ur.urlopen("http://localhost:3000/bot-config", timeout=1)
-                cfg = _j.loads(r.read())
-                kws = cfg.get("keywords", [])
-                enabled = cfg.get("bot_enabled", True)
-                self._kw_text.delete("1.0", "end")
-                self._kw_text.insert("1.0", "، ".join(kws))
-                self._bot_toggle_var.set(enabled)
-            except Exception:
-                pass
+            def _do():
+                try:
+                    import urllib.request as _ur, json as _j
+                    r   = _ur.urlopen("http://localhost:3000/bot-config", timeout=1)
+                    cfg = _j.loads(r.read())
+                    kws     = cfg.get("keywords", [])
+                    enabled = cfg.get("bot_enabled", True)
+                    def _apply():
+                        self._kw_text.delete("1.0", "end")
+                        self._kw_text.insert("1.0", "، ".join(kws))
+                        self._bot_toggle_var.set(enabled)
+                    self.root.after(0, _apply)
+                except Exception:
+                    pass
+            threading.Thread(target=_do, daemon=True).start()
 
         def _save_keywords():
             raw = self._kw_text.get("1.0", "end").strip()
-            import re as _re
-            kws = [k.strip() for k in _re.split(r'[،,،\n]+', raw) if k.strip()]
+            kws = [k.strip() for k in re.split(r'[،,،\n]+', raw) if k.strip()]
             if not kws:
                 messagebox.showerror("خطأ", "لا توجد كلمات للحفظ!")
                 return
-            try:
-                import urllib.request as _ur, json as _j
-                data = json.dumps({"keywords": kws}, ensure_ascii=False).encode("utf-8")
-                req = _ur.Request("http://localhost:3000/bot-keywords",
-                                  data=data, headers={"Content-Type": "application/json"},
-                                  method="POST")
-                resp = _ur.urlopen(req, timeout=3)
-                result = _j.loads(resp.read())
-                if result.get("ok"):
-                    messagebox.showinfo("تم", f"تم حفظ {len(kws)} كلمة مفتاحية بنجاح.")
-                    _load_keywords()
-            except Exception as e:
-                messagebox.showerror("خطأ", "تعذّر حفظ الكلمات.\nتأكد من تشغيل الخادم أولاً.\n" + str(e))
+            def _do():
+                try:
+                    import urllib.request as _ur, json as _j
+                    data = json.dumps({"keywords": kws}, ensure_ascii=False).encode("utf-8")
+                    req  = _ur.Request("http://localhost:3000/bot-keywords",
+                                       data=data,
+                                       headers={"Content-Type": "application/json"},
+                                       method="POST")
+                    resp   = _ur.urlopen(req, timeout=3)
+                    result = _j.loads(resp.read())
+                    if result.get("ok"):
+                        self.root.after(0, lambda: messagebox.showinfo(
+                            "تم", f"تم حفظ {len(kws)} كلمة مفتاحية بنجاح."))
+                        _load_keywords()
+                except Exception as e:
+                    self.root.after(0, lambda: messagebox.showerror(
+                        "خطأ", "تعذّر حفظ الكلمات.\nتأكد من تشغيل الخادم أولاً.\n" + str(e)))
+            threading.Thread(target=_do, daemon=True).start()
 
         parent_frame.after(600, _load_keywords)
 
@@ -213,7 +229,7 @@ class WhatsappTabMixin:
                 messagebox.showerror("خطأ", "مجلد الواتساب غير موجود:\n" + WHATS_PATH)
                 return
             try:
-                cmd = r'cmd.exe /k "cd /d ' + WHATS_PATH + r' && node server.js"'
+                cmd = r'cmd.exe /k "cd /d ' + WHATS_PATH + r' && npm start"'
                 subprocess.Popen(cmd, creationflags=subprocess.CREATE_NEW_CONSOLE)
                 self._wm_lbl.config(
                     text="⏳ جارٍ التشغيل... اضغط فحص الحالة بعد 15 ثانية",
@@ -225,40 +241,43 @@ class WhatsappTabMixin:
         def _wm_check():
             self._wm_lbl.config(text="⏳ جارٍ الفحص...", fg="#555555")
             self._wm_dot.config(fg="#aaaaaa")
-            inner.update_idletasks()
-            try:
-                import urllib.request as _ur, json as _j
-                servers = get_wa_servers()
-                results = []
-                for srv in servers:
-                    port = srv.get("port", 3000)
-                    try:
-                        r = _ur.urlopen("http://localhost:{}/status".format(port), timeout=2)
-                        data = _j.loads(r.read())
-                        results.append((port, data.get("ready", False), data.get("pending", 0)))
-                    except Exception:
-                        results.append((port, False, 0))
-                ready_count = sum(1 for _, r, _ in results if r)
-                total = len(results)
-                if ready_count == total and total > 0:
-                    self._wm_dot.config(fg="#22c55e")
-                    self._wm_lbl.config(
-                        text="✅ متصل ({}/{} خادم)  |  معلّقة: {}".format(
-                            ready_count, total, sum(p for _, _, p in results)),
-                        fg="#166534")
-                elif ready_count > 0:
-                    self._wm_dot.config(fg="#f59e0b")
-                    self._wm_lbl.config(
-                        text="⚠️ متصل جزئياً ({}/{})".format(ready_count, total),
-                        fg="#92400e")
-                else:
-                    self._wm_dot.config(fg="#ef4444")
-                    self._wm_lbl.config(
-                        text="🔴 الخادم غير متصل — امسح QR أو شغّل الخادم",
-                        fg="#991b1b")
-            except Exception:
-                self._wm_dot.config(fg="#ef4444")
-                self._wm_lbl.config(text="🔴 الخادم غير متصل", fg="#991b1b")
+            def _do_check():
+                try:
+                    import urllib.request as _ur, json as _j
+                    servers = get_wa_servers()
+                    results = []
+                    for srv in servers:
+                        port = srv.get("port", 3000)
+                        try:
+                            r = _ur.urlopen("http://localhost:{}/status".format(port), timeout=2)
+                            data = _j.loads(r.read())
+                            results.append((port, data.get("ready", False), data.get("pending", 0)))
+                        except Exception:
+                            results.append((port, False, 0))
+                    ready_count = sum(1 for _, r, _ in results if r)
+                    total = len(results)
+                    if ready_count == total and total > 0:
+                        txt   = "✅ متصل ({}/{} خادم)  |  معلّقة: {}".format(
+                            ready_count, total, sum(p for _, _, p in results))
+                        self.root.after(0, lambda: (
+                            self._wm_dot.config(fg="#22c55e"),
+                            self._wm_lbl.config(text=txt, fg="#166534")))
+                    elif ready_count > 0:
+                        txt = "⚠️ متصل جزئياً ({}/{})".format(ready_count, total)
+                        self.root.after(0, lambda: (
+                            self._wm_dot.config(fg="#f59e0b"),
+                            self._wm_lbl.config(text=txt, fg="#92400e")))
+                    else:
+                        self.root.after(0, lambda: (
+                            self._wm_dot.config(fg="#ef4444"),
+                            self._wm_lbl.config(
+                                text="🔴 الخادم غير متصل — امسح QR أو شغّل الخادم",
+                                fg="#991b1b")))
+                except Exception:
+                    self.root.after(0, lambda: (
+                        self._wm_dot.config(fg="#ef4444"),
+                        self._wm_lbl.config(text="🔴 الخادم غير متصل", fg="#991b1b")))
+            threading.Thread(target=_do_check, daemon=True).start()
 
         tk.Button(btn_row, text="▶  تشغيل الخادم",
                   bg="#1565C0", fg="white", font=("Tahoma", 10, "bold"),
@@ -352,24 +371,28 @@ class WhatsappTabMixin:
         self._wm_exc_lbl.pack(side="right", padx=(0, 14))
 
         def _set_excuse_bot(enabled):
-            try:
-                import urllib.request as _ur, json as _j
-                data = _j.dumps({"enabled": enabled}).encode()
-                req = _ur.Request("http://localhost:3000/bot-toggle",
-                                  data=data,
-                                  headers={"Content-Type": "application/json"},
-                                  method="POST")
-                _ur.urlopen(req, timeout=3)
-            except Exception:
-                pass
-            if enabled:
-                self._wm_exc_lbl.config(text="✅  البوت مفعّل", fg="#166534")
-                self._wm_exc_on.config(relief="sunken", bg="#bbf7d0")
-                self._wm_exc_off.config(relief="flat", bg="#f3f4f6")
-            else:
-                self._wm_exc_lbl.config(text="⏸  البوت موقوف", fg="#991b1b")
-                self._wm_exc_on.config(relief="flat", bg="#f3f4f6")
-                self._wm_exc_off.config(relief="sunken", bg="#fecaca")
+            def _do():
+                try:
+                    import urllib.request as _ur, json as _j
+                    data = _j.dumps({"enabled": enabled}).encode()
+                    req  = _ur.Request("http://localhost:3000/bot-toggle",
+                                       data=data,
+                                       headers={"Content-Type": "application/json"},
+                                       method="POST")
+                    _ur.urlopen(req, timeout=3)
+                except Exception:
+                    pass
+                def _apply():
+                    if enabled:
+                        self._wm_exc_lbl.config(text="✅  البوت مفعّل", fg="#166534")
+                        self._wm_exc_on.config(relief="sunken", bg="#bbf7d0")
+                        self._wm_exc_off.config(relief="flat", bg="#f3f4f6")
+                    else:
+                        self._wm_exc_lbl.config(text="⏸  البوت موقوف", fg="#991b1b")
+                        self._wm_exc_on.config(relief="flat", bg="#f3f4f6")
+                        self._wm_exc_off.config(relief="sunken", bg="#fecaca")
+                self.root.after(0, _apply)
+            threading.Thread(target=_do, daemon=True).start()
         self._set_excuse_bot = _set_excuse_bot
 
         self._wm_exc_off = tk.Button(exc_row, text="⏸  إيقاف",
@@ -389,13 +412,15 @@ class WhatsappTabMixin:
             cfg = load_config()
             _set_absence_bot(cfg.get("absence_bot_enabled", True))
             _set_permission_bot(cfg.get("permission_bot_enabled", True))
-            try:
-                import urllib.request as _ur, json as _j
-                r = _ur.urlopen("http://localhost:3000/bot-config", timeout=1)
-                d = _j.loads(r.read())
-                _set_excuse_bot(d.get("bot_enabled", True))
-            except Exception:
-                _set_excuse_bot(True)
+            # جلب حالة بوت الأعذار في خيط خلفي
+            def _fetch_excuse():
+                try:
+                    import urllib.request as _ur, json as _j
+                    r = _ur.urlopen("http://localhost:3000/bot-config", timeout=1)
+                    d = _j.loads(r.read())
+                    self.root.after(0, lambda: _set_excuse_bot(d.get("bot_enabled", True)))
+                except Exception:
+                    self.root.after(0, lambda: _set_excuse_bot(True))
+            threading.Thread(target=_fetch_excuse, daemon=True).start()
 
         frame.after(400, _load_initial)
-

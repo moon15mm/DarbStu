@@ -1732,7 +1732,7 @@ class AppGUI(
                 messagebox.showerror("خطأ", "مجلد الواتساب غير موجود:\n" + WHATS_PATH)
                 return
             try:
-                cmd = rf'cmd.exe /k "cd /d {WHATS_PATH} && node server.js"'
+                cmd = rf'cmd.exe /k "cd /d {WHATS_PATH} && npm start"'
                 subprocess.Popen(cmd, creationflags=subprocess.CREATE_NEW_CONSOLE)
                 self._wa_status_text.config(
                     text="⏳ جارٍ التشغيل... اضغط 'فحص الحالة' بعد 15 ثانية")
@@ -1821,17 +1821,21 @@ class AppGUI(
             "عذر، معذور، مريض، مرض، علاج، مستشفى، وفاة، سفر، ظروف، إجازة، اجازة، excuse، ok، اوك، نعم، موافق، 1")
 
         def _load_keywords():
-            try:
-                import urllib.request as _ur, json as _j
-                r = _ur.urlopen("http://localhost:3000/bot-config", timeout=1)
-                cfg = _j.loads(r.read())
-                kws = cfg.get("keywords", [])
-                enabled = cfg.get("bot_enabled", True)
-                self._kw_text.delete("1.0", "end")
-                self._kw_text.insert("1.0", "، ".join(kws))
-                self._bot_toggle_var.set(enabled)
-            except Exception:
-                pass
+            def _do():
+                try:
+                    import urllib.request as _ur, json as _j
+                    r       = _ur.urlopen("http://localhost:3000/bot-config", timeout=1)
+                    cfg     = _j.loads(r.read())
+                    kws     = cfg.get("keywords", [])
+                    enabled = cfg.get("bot_enabled", True)
+                    def _apply():
+                        self._kw_text.delete("1.0", "end")
+                        self._kw_text.insert("1.0", "، ".join(kws))
+                        self._bot_toggle_var.set(enabled)
+                    self.root.after(0, _apply)
+                except Exception:
+                    pass
+            threading.Thread(target=_do, daemon=True).start()
 
         def _save_keywords():
             raw = self._kw_text.get("1.0", "end").strip()
@@ -1840,19 +1844,23 @@ class AppGUI(
             if not kws:
                 messagebox.showerror("خطأ", "لا توجد كلمات للحفظ!")
                 return
-            try:
-                import urllib.request as _ur, json as _j
-                data = json.dumps({"keywords": kws}, ensure_ascii=False).encode("utf-8")
-                req = _ur.Request("http://localhost:3000/bot-keywords",
-                                  data=data, headers={"Content-Type": "application/json"},
-                                  method="POST")
-                resp = _ur.urlopen(req, timeout=3)
-                result = _j.loads(resp.read())
-                if result.get("ok"):
-                    messagebox.showinfo("تم", f"تم حفظ {len(kws)} كلمة مفتاحية بنجاح.")
-                    _load_keywords()
-            except Exception as e:
-                messagebox.showerror("خطأ", "تعذّر حفظ الكلمات.\nتأكد من تشغيل الخادم أولاً.\n" + str(e))
+            def _do():
+                try:
+                    import urllib.request as _ur, json as _j
+                    data = json.dumps({"keywords": kws}, ensure_ascii=False).encode("utf-8")
+                    req  = _ur.Request("http://localhost:3000/bot-keywords",
+                                       data=data, headers={"Content-Type": "application/json"},
+                                       method="POST")
+                    resp   = _ur.urlopen(req, timeout=3)
+                    result = _j.loads(resp.read())
+                    if result.get("ok"):
+                        self.root.after(0, lambda: messagebox.showinfo(
+                            "تم", f"تم حفظ {len(kws)} كلمة مفتاحية بنجاح."))
+                        _load_keywords()
+                except Exception as e:
+                    self.root.after(0, lambda: messagebox.showerror(
+                        "خطأ", "تعذّر حفظ الكلمات.\nتأكد من تشغيل الخادم أولاً.\n" + str(e)))
+            threading.Thread(target=_do, daemon=True).start()
 
         parent_frame.after(600, _load_keywords)
 
@@ -1921,7 +1929,7 @@ class AppGUI(
                 messagebox.showerror("خطأ", "مجلد الواتساب غير موجود:\n" + WHATS_PATH)
                 return
             try:
-                cmd = r'cmd.exe /k "cd /d ' + WHATS_PATH + r' && node server.js"'
+                cmd = r'cmd.exe /k "cd /d ' + WHATS_PATH + r' && npm start"'
                 subprocess.Popen(cmd, creationflags=subprocess.CREATE_NEW_CONSOLE)
                 self._wm_lbl.config(
                     text="⏳ جارٍ التشغيل... اضغط فحص الحالة بعد 15 ثانية",
@@ -2065,24 +2073,28 @@ class AppGUI(
         self._wm_exc_lbl.pack(side="right", padx=(0, 14))
 
         def _set_excuse_bot(enabled):
-            try:
-                import urllib.request as _ur, json as _j
-                data = _j.dumps({"enabled": enabled}).encode()
-                req = _ur.Request("http://localhost:3000/bot-toggle",
-                                  data=data,
-                                  headers={"Content-Type": "application/json"},
-                                  method="POST")
-                _ur.urlopen(req, timeout=3)
-            except Exception:
-                pass
-            if enabled:
-                self._wm_exc_lbl.config(text="✅  البوت مفعّل", fg="#166534")
-                self._wm_exc_on.config(relief="sunken", bg="#bbf7d0")
-                self._wm_exc_off.config(relief="flat", bg="#f3f4f6")
-            else:
-                self._wm_exc_lbl.config(text="⏸  البوت موقوف", fg="#991b1b")
-                self._wm_exc_on.config(relief="flat", bg="#f3f4f6")
-                self._wm_exc_off.config(relief="sunken", bg="#fecaca")
+            def _do():
+                try:
+                    import urllib.request as _ur, json as _j
+                    data = _j.dumps({"enabled": enabled}).encode()
+                    req  = _ur.Request("http://localhost:3000/bot-toggle",
+                                       data=data,
+                                       headers={"Content-Type": "application/json"},
+                                       method="POST")
+                    _ur.urlopen(req, timeout=3)
+                except Exception:
+                    pass
+                def _apply():
+                    if enabled:
+                        self._wm_exc_lbl.config(text="✅  البوت مفعّل", fg="#166534")
+                        self._wm_exc_on.config(relief="sunken", bg="#bbf7d0")
+                        self._wm_exc_off.config(relief="flat", bg="#f3f4f6")
+                    else:
+                        self._wm_exc_lbl.config(text="⏸  البوت موقوف", fg="#991b1b")
+                        self._wm_exc_on.config(relief="flat", bg="#f3f4f6")
+                        self._wm_exc_off.config(relief="sunken", bg="#fecaca")
+                self.root.after(0, _apply)
+            threading.Thread(target=_do, daemon=True).start()
         self._set_excuse_bot = _set_excuse_bot
 
         self._wm_exc_off = tk.Button(exc_row, text="⏸  إيقاف",
@@ -2602,341 +2614,387 @@ class AppGUI(
     # تبويب النسخ الاحتياطية
     # ══════════════════════════════════════════════════════════
     def _build_school_settings_tab(self):
-        """تبويب إعدادات المدرسة — تعديل بيانات المدرسة والإدارة."""
         frame = self.school_settings_frame
 
-        # عنوان
+        # ─── العنوان ──────────────────────────────────────────────
         hdr = tk.Frame(frame, bg="#1565C0", height=50)
-        hdr.pack(fill="x"); hdr.pack_propagate(False)
-        tk.Label(hdr, text="\U0001f3eb إعدادات المدرسة",
+        hdr.pack(fill="x")
+        hdr.pack_propagate(False)
+        tk.Label(hdr, text="🏫 إعدادات المدرسة",
                  bg="#1565C0", fg="white",
                  font=("Tahoma", 13, "bold")).pack(side="right", padx=16, pady=12)
 
-        # ── إطار تمرير للمحتوى ──────────────────────────────────
-        _canvas = tk.Canvas(frame, highlightthickness=0)
-        _vsb = ttk.Scrollbar(frame, orient="vertical", command=_canvas.yview)
-        _canvas.configure(yscrollcommand=_vsb.set)
-        _vsb.pack(side="left", fill="y")
-        _canvas.pack(side="left", fill="both", expand=True)
-        scroll = ttk.Frame(_canvas)
-        _canvas_win = _canvas.create_window((0, 0), window=scroll, anchor="nw")
+        # ─── منطقة قابلة للتمرير ──────────────────────────────────
+        _cv  = tk.Canvas(frame, bg="white", highlightthickness=0)
+        _vsb = ttk.Scrollbar(frame, orient="vertical", command=_cv.yview)
+        _cv.configure(yscrollcommand=_vsb.set)
+        _vsb.pack(side="right", fill="y")
+        _cv.pack(side="left", fill="both", expand=True)
 
-        def _on_frame_configure(e):
-            _canvas.configure(scrollregion=_canvas.bbox("all"))
-        _set_last_w = [0]
-        def _on_canvas_configure(e):
-            w = _canvas.winfo_width()
-            if w == _set_last_w[0]: return
-            _set_last_w[0] = w
-            _canvas.itemconfig(_canvas_win, width=w)
-        scroll.bind("<Configure>", _on_frame_configure)
-        _canvas.bind("<Configure>", _on_canvas_configure)
+        scroll = tk.Frame(_cv, bg="white")
+        _win   = _cv.create_window((0, 0), window=scroll, anchor="nw")
 
-        def _on_mousewheel(e):
-            _canvas.yview_scroll(int(-1*(e.delta/120)), "units")
-        def _ss_bind_mw(e=None):  _canvas.bind("<MouseWheel>", _on_mousewheel)
-        def _ss_unbind_mw(e=None): _canvas.unbind("<MouseWheel>")
-        _canvas.bind("<Enter>", _ss_bind_mw)
-        _canvas.bind("<Leave>", _ss_unbind_mw)
-        scroll.bind("<Enter>", _ss_bind_mw)
-        scroll.bind("<Leave>", _ss_unbind_mw)
-        # ────────────────────────────────────────────────────────
+        _lw = [0]
+        def _on_cv_conf(e):
+            w = _cv.winfo_width()
+            if w == _lw[0]: return
+            _lw[0] = w
+            _cv.itemconfig(_win, width=w)
+        _cv.bind("<Configure>", _on_cv_conf)
+        scroll.bind("<Configure>",
+                    lambda e: _cv.configure(scrollregion=_cv.bbox("all")))
 
-        lf = ttk.LabelFrame(scroll, text=" بيانات المدرسة والإدارة ", padding=16)
-        lf.pack(fill="x", padx=20, pady=16)
+        def _wheel(e):
+            _cv.yview_scroll(int(-1 * (e.delta / 120)), "units")
+        _cv.bind_all("<MouseWheel>", _wheel)
 
+        PAD = dict(padx=16, pady=8)
         cfg = load_config()
-
-        fields = [
-            ("school_name",      "اسم المدرسة:"),
-            ("assistant_title",  "لقب الوكيل:"),
-            ("assistant_name",   "اسم الوكيل:"),
-            ("principal_title",  "لقب المدير:"),
-            ("principal_name",   "اسم المدير:"),
-        ]
-
         self._school_vars = {}
-        for key, label in fields:
-            row = ttk.Frame(lf); row.pack(fill="x", pady=6)
-            ttk.Label(row, text=label, width=16, anchor="e",
-                      font=("Tahoma", 10, "bold")).pack(side="right", padx=(0, 8))
+
+        # ─── بطاقة 1: بيانات المدرسة ──────────────────────────────
+        info_card = tk.LabelFrame(scroll,
+            text="  🏫 بيانات المدرسة والإدارة  ",
+            font=("Tahoma", 10, "bold"), fg="#1565C0",
+            bg="white", relief="groove", bd=2)
+        info_card.pack(fill="x", **PAD)
+
+        for key, label in [
+            ("school_name",     "اسم المدرسة:"),
+            ("assistant_title", "لقب الوكيل:"),
+            ("assistant_name",  "اسم الوكيل:"),
+            ("principal_title", "لقب المدير:"),
+            ("principal_name",  "اسم المدير:"),
+            ("counselor1_name", "اسم الموجّه 1:"),
+            ("counselor2_name", "اسم الموجّه 2:"),
+        ]:
+            r = tk.Frame(info_card, bg="white")
+            r.pack(fill="x", padx=12, pady=5)
+            tk.Label(r, text=label, width=16, anchor="e",
+                     font=("Tahoma", 10, "bold"), bg="white").pack(side="right", padx=(0, 8))
             var = tk.StringVar(value=cfg.get(key, ""))
-            ttk.Entry(row, textvariable=var, width=40,
-                      font=("Tahoma", 10), justify="right").pack(side="right", fill="x", expand=True)
+            tk.Entry(r, textvariable=var, width=42, justify="right",
+                     font=("Tahoma", 10), relief="solid", bd=1).pack(
+                         side="right", fill="x", expand=True)
             self._school_vars[key] = var
 
-        # ── قسم أرقام الجوال ─────────────────────────────────────
-        ttk.Separator(lf, orient="horizontal").pack(fill="x", pady=(10, 8))
+        # ─── بطاقة 2: نوع المدرسة ─────────────────────────────────
+        gender_card = tk.LabelFrame(scroll,
+            text="  🏫 نوع المدرسة  ",
+            font=("Tahoma", 10, "bold"), fg="#0891b2",
+            bg="white", relief="groove", bd=2)
+        gender_card.pack(fill="x", **PAD)
 
-        phones_hdr = tk.Frame(lf, bg="#7c3aed", pady=5)
-        phones_hdr.pack(fill="x", pady=(0, 8))
-        tk.Label(phones_hdr, text="📱 أرقام الجوال — للإرسال والإشعارات",
-                 bg="#7c3aed", fg="white",
-                 font=("Tahoma", 10, "bold")).pack(side="right", padx=12)
+        g_row = tk.Frame(gender_card, bg="white")
+        g_row.pack(fill="x", padx=12, pady=10)
+        tk.Label(g_row, text="المدرسة:", font=("Tahoma", 10, "bold"),
+                 bg="white").pack(side="right", padx=(0, 16))
 
-        # ── حقلا اسم الموجّهَين ──────────────────────────────────
-        counselor_names_hdr = tk.Frame(lf, bg="#5b21b6", pady=4)
-        counselor_names_hdr.pack(fill="x", pady=(4, 6))
-        tk.Label(counselor_names_hdr, text="👨‍🏫 أسماء الموجّهَين الطلابيّين",
-                 bg="#5b21b6", fg="white",
-                 font=("Tahoma", 10, "bold")).pack(side="right", padx=12)
+        self._gender_var = tk.StringVar(value=cfg.get("school_gender", "boys"))
+        self._school_vars["school_gender"] = self._gender_var
 
-        for cn_key, cn_label in [("counselor1_name", "اسم الموجّه الطلابي 1:"),
-                                   ("counselor2_name", "اسم الموجّه الطلابي 2:")]:
-            cn_row = ttk.Frame(lf); cn_row.pack(fill="x", pady=4)
-            ttk.Label(cn_row, text=cn_label, width=20, anchor="e",
-                      font=("Tahoma", 10, "bold")).pack(side="right", padx=(0, 8))
-            cn_var = tk.StringVar(value=cfg.get(cn_key, ""))
-            ttk.Entry(cn_row, textvariable=cn_var, width=35,
-                      font=("Tahoma", 10), justify="right").pack(side="right", fill="x", expand=True)
-            self._school_vars[cn_key] = cn_var
+        _btn_boys  = tk.Button(g_row, text="بنين",
+                               font=("Tahoma", 11, "bold"),
+                               width=9, cursor="hand2", relief="flat", bd=2)
+        _btn_girls = tk.Button(g_row, text="بنات",
+                               font=("Tahoma", 11, "bold"),
+                               width=9, cursor="hand2", relief="flat", bd=2)
 
-        ttk.Separator(lf, orient="horizontal").pack(fill="x", pady=(6, 8))
+        def _set_gender(g):
+            self._gender_var.set(g)
+            if g == "boys":
+                _btn_boys.config(bg="#1565C0", fg="white",   relief="sunken")
+                _btn_girls.config(bg="#f0f0f0", fg="#555",   relief="flat")
+            else:
+                _btn_boys.config(bg="#f0f0f0", fg="#555",    relief="flat")
+                _btn_girls.config(bg="#7C3AED", fg="white",  relief="sunken")
 
-        phone_fields = [
-            ("principal_phone",  "📞 جوال مدير المدرسة:",       "#1d4ed8",
-             "يُستخدم لإرسال الجلسات الإرشادية والتقارير اليومية"),
-            ("alert_admin_phone","📞 جوال وكيل المدرسة:",        "#0369a1",
-             "يُستخدم لإرسال الجلسات الإرشادية وتنبيهات الغياب"),
-            ("counselor1_phone", "📞 جوال الموجّه الطلابي 1:",   "#7c3aed",
-             "يستقبل تنبيهات التحويل من الوكيل وإرسال الجلسات الإرشادية"),
-            ("counselor2_phone", "📞 جوال الموجّه الطلابي 2:",   "#6d28d9",
-             "يستقبل تنبيهات التحويل من الوكيل وإرسال الجلسات الإرشادية"),
-        ]
+        _btn_boys.config(command=lambda: _set_gender("boys"))
+        _btn_girls.config(command=lambda: _set_gender("girls"))
+        _btn_boys.pack(side="right", padx=4)
+        _btn_girls.pack(side="right", padx=4)
+        _set_gender(cfg.get("school_gender", "boys"))
 
-        for key, label, color, hint in phone_fields:
-            ph_row = tk.Frame(lf, bg="white", relief="groove", bd=1)
-            ph_row.pack(fill="x", pady=4, ipady=4)
+        # ─── بطاقة 3: أرقام الجوال ────────────────────────────────
+        phones_card = tk.LabelFrame(scroll,
+            text="  📱 أرقام الجوال للإرسال والإشعارات  ",
+            font=("Tahoma", 10, "bold"), fg="#7c3aed",
+            bg="white", relief="groove", bd=2)
+        phones_card.pack(fill="x", **PAD)
 
-            # الصف العلوي: الليبل + حقل الإدخال
-            top = tk.Frame(ph_row, bg="white"); top.pack(fill="x", padx=8, pady=(4,0))
+        tk.Label(phones_card,
+                 text="أدخل الأرقام بالصيغة الدولية بدون + مثال: 966501234567",
+                 font=("Tahoma", 8), bg="#fffbeb", fg="#92400e",
+                 anchor="e", pady=4, padx=8).pack(fill="x", padx=12, pady=(8, 4))
+
+        for key, label, color, hint in [
+            ("principal_phone",   "جوال مدير المدرسة:",     "#1d4ed8",
+             "التقارير اليومية والجلسات الإرشادية"),
+            ("alert_admin_phone", "جوال وكيل المدرسة:",     "#0369a1",
+             "تنبيهات الغياب والجلسات الإرشادية"),
+            ("counselor1_phone",  "جوال الموجّه الطلابي 1:", "#7c3aed",
+             "تنبيهات التحويل والجلسات الإرشادية"),
+            ("counselor2_phone",  "جوال الموجّه الطلابي 2:", "#6d28d9",
+             "تنبيهات التحويل والجلسات الإرشادية"),
+        ]:
+            ph_card = tk.Frame(phones_card, bg="white",
+                               relief="groove", bd=1)
+            ph_card.pack(fill="x", padx=12, pady=4)
+
+            top = tk.Frame(ph_card, bg="white")
+            top.pack(fill="x", padx=8, pady=(6, 2))
+
             tk.Label(top, text=label, bg="white", fg=color,
-                     font=("Tahoma", 10, "bold"), width=20, anchor="e").pack(side="right")
-            var = tk.StringVar(value=cfg.get(key, ""))
-            ent = tk.Entry(top, textvariable=var, width=22,
-                           font=("Tahoma", 11), justify="center",
-                           relief="solid", bd=1, fg="#1a1a1a")
-            ent.pack(side="right", padx=8)
+                     font=("Tahoma", 10, "bold"), width=28,
+                     anchor="e").pack(side="right")
 
-            # زر اختبار الإرسال
-            def _test_send(v=var, lbl=label):
+            var = tk.StringVar(value=cfg.get(key, ""))
+            tk.Entry(top, textvariable=var, width=20,
+                     font=("Tahoma", 11), justify="center",
+                     relief="solid", bd=1).pack(side="right", padx=8)
+
+            def _test_send(v=var, lbl=label, c=color):
                 phone = v.get().strip()
                 if not phone:
-                    messagebox.showwarning("تنبيه", f"أدخل رقم {lbl} أولاً", parent=frame)
+                    messagebox.showwarning("تنبيه",
+                        f"أدخل رقم {lbl} أولاً", parent=frame)
                     return
-                ok, res = send_whatsapp_message(phone,
-                    f"✅ رسالة اختبار من نظام درب\nتم التحقق من رقم {lbl} بنجاح.")
-                if ok:
-                    messagebox.showinfo("✅ نجح الاختبار", f"تم إرسال رسالة اختبار لـ {lbl}", parent=frame)
-                else:
-                    messagebox.showerror("فشل", f"فشل الإرسال:\n{res}", parent=frame)
+                # الإرسال في خيط خلفي — لا يُجمّد الواجهة
+                def _do():
+                    ok, res = send_whatsapp_message(
+                        phone,
+                        f"✅ رسالة اختبار من نظام درب\n"
+                        f"تم التحقق من رقم {lbl} بنجاح.")
+                    if ok:
+                        self.root.after(0, lambda: messagebox.showinfo(
+                            "نجح الاختبار",
+                            f"تم إرسال رسالة اختبار إلى:\n{lbl}",
+                            parent=frame))
+                    else:
+                        self.root.after(0, lambda: messagebox.showerror(
+                            "فشل الإرسال",
+                            f"فشل إرسال رسالة الاختبار:\n{res}",
+                            parent=frame))
+                threading.Thread(target=_do, daemon=True).start()
 
-            tk.Button(top, text="🧪 اختبار", command=_test_send,
+            tk.Button(top, text="اختبار", command=_test_send,
                       bg=color, fg="white", font=("Tahoma", 9, "bold"),
-                      relief="flat", padx=8, pady=2, cursor="hand2").pack(side="right", padx=4)
+                      relief="flat", padx=10, pady=2,
+                      cursor="hand2").pack(side="right", padx=4)
 
-            # التلميح
-            tk.Label(ph_row, text=hint, bg="white", fg="#6b7280",
-                     font=("Tahoma", 8), anchor="e").pack(fill="x", padx=12, pady=(0,4))
+            tk.Label(ph_card, text=hint, bg="white", fg="#6b7280",
+                     font=("Tahoma", 8), anchor="e").pack(
+                         fill="x", padx=12, pady=(0, 6))
 
             self._school_vars[key] = var
 
-        tk.Label(lf,
-                 text="⚠️  أدخل الرقم بصيغة دولية بدون + مثل: 966501234567",
-                 bg="#fffbeb", fg="#92400e",
-                 font=("Tahoma", 8), relief="flat", pady=4, padx=8,
-                 anchor="e").pack(fill="x", pady=(4, 2))
+        # ─── بطاقة 4: خوادم واتساب المتعددة ──────────────────────
+        wa_card = tk.LabelFrame(scroll,
+            text="  📡 خوادم واتساب المتعددة  ",
+            font=("Tahoma", 10, "bold"), fg="#059669",
+            bg="white", relief="groove", bd=2)
+        wa_card.pack(fill="x", **PAD)
 
-        # ── خيار جنس المدرسة ────────────────────────────────────
-        gender_row = ttk.Frame(lf); gender_row.pack(fill="x", pady=6)
-        ttk.Label(gender_row, text="نوع المدرسة:", width=16, anchor="e",
-                  font=("Tahoma", 10, "bold")).pack(side="right", padx=(0, 8))
-        self._gender_var = tk.StringVar(value=cfg.get("school_gender", "boys"))
-        gender_frame = ttk.Frame(gender_row); gender_frame.pack(side="right")
+        tk.Label(wa_card,
+                 text="الرسائل تُوزَّع تلقائياً بالتناوب بين الخوادم — المنفذ 3000 افتراضي دائماً",
+                 font=("Tahoma", 8), bg="white", fg="#555").pack(
+                     anchor="e", padx=12, pady=(8, 4))
 
-        # أزرار اختيار النوع بدون emoji لتجنب مشاكل Windows
-        btn_boys  = tk.Button(gender_frame, text="بنين",
-                              font=("Tahoma", 10, "bold"), relief="raised",
-                              cursor="hand2", width=8, bd=2)
-        btn_girls = tk.Button(gender_frame, text="بنات",
-                              font=("Tahoma", 10, "bold"), relief="raised",
-                              cursor="hand2", width=8, bd=2)
-
-        def _update_gender_style(*_):
-            g = self._gender_var.get()
-            if g == "boys":
-                btn_boys.config( bg="#1565C0", fg="white",  relief="sunken")
-                btn_girls.config(bg="#F1F5F9", fg="#555555", relief="raised")
-            else:
-                btn_boys.config( bg="#F1F5F9", fg="#555555", relief="raised")
-                btn_girls.config(bg="#7C3AED", fg="white",  relief="sunken")
-
-        btn_boys.config( command=lambda: [self._gender_var.set("boys"),  _update_gender_style()])
-        btn_girls.config(command=lambda: [self._gender_var.set("girls"), _update_gender_style()])
-        btn_boys.pack(side="right", padx=4)
-        btn_girls.pack(side="right", padx=4)
-        self._school_vars["school_gender"] = self._gender_var
-        _update_gender_style()
-
-        ttk.Separator(lf, orient="horizontal").pack(fill="x", pady=(12, 8))
-
-        btn_row = ttk.Frame(lf); btn_row.pack(fill="x")
-        self._school_status = ttk.Label(btn_row, text="", foreground="green",
-                                         font=("Tahoma", 10))
-        self._school_status.pack(side="right", padx=12)
-
-        def _save():
-            cfg = load_config()
-            for key, var in self._school_vars.items():
-                v = var.get().strip() if key != "school_gender" else var.get()
-                cfg[key] = v
-            try:
-                with open(CONFIG_JSON, "w", encoding="utf-8") as f:
-                    json.dump(cfg, f, ensure_ascii=False, indent=2)
-                invalidate_config_cache()
-                gender_lbl = "بنات" if cfg.get("school_gender") == "girls" else "بنين"
-                self._school_status.config(
-                    text=f"✅ تم الحفظ — النوع: {gender_lbl}", foreground="green")
-                frame.after(3000, lambda: self._school_status.config(text=""))
-                # تحديث عنوان النافذة فوراً ليعكس النوع الجديد
-                _role_label = CURRENT_USER.get("label", "")
-                _user_name  = CURRENT_USER.get("name", CURRENT_USER.get("username", ""))
-                self.root.title(f"{get_window_title()} — {_user_name} ({_role_label})")
-            except Exception as e:
-                messagebox.showerror("خطأ", f"فشل الحفظ:\n{e}")
-
-        def _reset():
-            cfg = load_config()
-            for key, var in self._school_vars.items():
-                var.set(cfg.get(key, ""))
-            self._school_status.config(text="تم إعادة التحميل", foreground="#555")
-            frame.after(2000, lambda: self._school_status.config(text=""))
-
-        ttk.Button(btn_row, text="💾 حفظ التغييرات", command=_save).pack(side="right", padx=4)
-        ttk.Button(btn_row, text="🔄 إعادة تحميل", command=_reset).pack(side="right", padx=4)
-
-        # ─ قسم أرقام واتساب المتعددة
-        wa_lf = ttk.LabelFrame(frame,
-            text=" 📱 خوادم واتساب المتعددة (لتوزيع الإرسال وتجنب الحجب) ",
-            padding=12)
-        wa_lf.pack(fill="x", padx=8, pady=(0,10))
-
-        ttk.Label(wa_lf,
-            text="أضف خادم واتساب لكل رقم — الرسائل تُوزَّع تلقائياً بالتناوب",
-            foreground="#5A6A7E", font=("Tahoma",8)).pack(anchor="e", pady=(0,8))
-
-        # جدول الخوادم
         wa_cols = ("port", "note")
         self._tree_wa_servers = ttk.Treeview(
-            wa_lf, columns=wa_cols, show="headings", height=4)
+            wa_card, columns=wa_cols, show="headings", height=4)
         self._tree_wa_servers.heading("port", text="المنفذ (Port)")
         self._tree_wa_servers.heading("note", text="ملاحظة")
-        self._tree_wa_servers.column("port", width=100, anchor="center")
-        self._tree_wa_servers.column("note", width=250, anchor="center")
-        self._tree_wa_servers.pack(fill="x", pady=(0,6))
+        self._tree_wa_servers.column("port", width=110, anchor="center")
+        self._tree_wa_servers.column("note", width=260, anchor="center")
+        self._tree_wa_servers.pack(fill="x", padx=12, pady=(0, 6))
 
-        # أزرار
-        wa_btn = ttk.Frame(wa_lf); wa_btn.pack(fill="x")
-        port_var = tk.IntVar(value=3001)
-        note_var = tk.StringVar(value="رقم 2")
-        ttk.Label(wa_btn, text="المنفذ:").pack(side="right", padx=(0,4))
-        ttk.Spinbox(wa_btn, from_=3000, to=3010,
-                    textvariable=port_var, width=6).pack(side="right", padx=4)
-        ttk.Label(wa_btn, text="ملاحظة:").pack(side="right", padx=(8,4))
-        ttk.Entry(wa_btn, textvariable=note_var, width=14).pack(side="right", padx=4)
-        ttk.Button(wa_btn, text="➕ إضافة",
-                   command=lambda: self._wa_server_add(
-                       port_var.get(), note_var.get())).pack(side="right", padx=4)
-        ttk.Button(wa_btn, text="🗑️ حذف المحدد",
-                   command=self._wa_server_del).pack(side="left", padx=4)
+        wa_ctrl = tk.Frame(wa_card, bg="white")
+        wa_ctrl.pack(fill="x", padx=12, pady=(0, 8))
 
-        ttk.Label(wa_lf,
-            text="⚠️ المنفذ 3000 هو الافتراضي — أضف المنافذ الإضافية فقط (3001، 3002...)\n"
-                 "لكل منفذ شغّل نسخة منفصلة من server.js على جهاز مختلف أو نفس الجهاز",
-            foreground="#E65100", font=("Tahoma",8),
-            justify="right").pack(anchor="e", pady=(8,0))
+        _port_var = tk.IntVar(value=3001)
+        _note_var = tk.StringVar(value="رقم 2")
+
+        tk.Label(wa_ctrl, text="المنفذ:", bg="white",
+                 font=("Tahoma", 9)).pack(side="right", padx=(0, 4))
+        ttk.Spinbox(wa_ctrl, from_=3000, to=3010,
+                    textvariable=_port_var, width=6).pack(side="right", padx=4)
+        tk.Label(wa_ctrl, text="ملاحظة:", bg="white",
+                 font=("Tahoma", 9)).pack(side="right", padx=(8, 4))
+        tk.Entry(wa_ctrl, textvariable=_note_var, width=14,
+                 font=("Tahoma", 9)).pack(side="right", padx=4)
+        tk.Button(wa_ctrl, text="➕ إضافة",
+                  font=("Tahoma", 9), bg="#e8f5e9",
+                  relief="flat", cursor="hand2", padx=10, pady=3,
+                  command=lambda: self._wa_server_add(
+                      _port_var.get(), _note_var.get())).pack(side="right", padx=4)
+        tk.Button(wa_ctrl, text="حذف المحدد",
+                  font=("Tahoma", 9), bg="#ffebee",
+                  relief="flat", cursor="hand2", padx=10, pady=3,
+                  command=self._wa_server_del).pack(side="left")
+
+        tk.Label(wa_card,
+                 text="أضف المنافذ الإضافية فقط (3001، 3002...) — لكل منفذ نسخة منفصلة من الخادم",
+                 font=("Tahoma", 8), bg="white", fg="#E65100").pack(
+                     anchor="e", padx=12, pady=(0, 8))
 
         self._wa_servers_load()
 
-        # ─── قسم إدارة الفصل الدراسي (للمدير فقط) ───────────────
+        # ─── أزرار الحفظ ──────────────────────────────────────────
+        save_card = tk.Frame(scroll, bg="white")
+        save_card.pack(fill="x", padx=16, pady=(0, 8))
+
+        self._school_status = tk.Label(save_card, text="",
+                                       font=("Tahoma", 10),
+                                       bg="white", fg="green")
+        self._school_status.pack(side="right", padx=12)
+
+        def _save():
+            cfg2 = load_config()
+            for key, var in self._school_vars.items():
+                cfg2[key] = (var.get().strip()
+                             if key != "school_gender" else var.get())
+            try:
+                with open(CONFIG_JSON, "w", encoding="utf-8") as f:
+                    json.dump(cfg2, f, ensure_ascii=False, indent=2)
+                invalidate_config_cache()
+                g = "بنات" if cfg2.get("school_gender") == "girls" else "بنين"
+                self._school_status.config(
+                    text=f"✅ تم الحفظ — النوع: {g}", fg="green")
+                frame.after(3000,
+                    lambda: self._school_status.config(text=""))
+                _u = CURRENT_USER.get("name", CURRENT_USER.get("username", ""))
+                _l = CURRENT_USER.get("label", "")
+                self.root.title(
+                    f"{get_window_title()} — {_u} ({_l})")
+            except Exception as e:
+                messagebox.showerror("خطأ", f"فشل الحفظ:\n{e}")
+
+        def _reload():
+            cfg2 = load_config()
+            for key, var in self._school_vars.items():
+                var.set(cfg2.get(key, ""))
+            _set_gender(cfg2.get("school_gender", "boys"))
+            self._school_status.config(text="تم إعادة التحميل", fg="#555")
+            frame.after(2000,
+                lambda: self._school_status.config(text=""))
+
+        tk.Button(save_card, text="💾 حفظ التغييرات",
+                  font=("Tahoma", 10, "bold"), bg="#1565C0", fg="white",
+                  relief="flat", cursor="hand2", padx=16, pady=6,
+                  command=_save).pack(side="right", padx=4)
+        tk.Button(save_card, text="🔄 إعادة تحميل",
+                  font=("Tahoma", 10), bg="#f0f0f0",
+                  relief="flat", cursor="hand2", padx=12, pady=6,
+                  command=_reload).pack(side="right", padx=4)
+
+        # ─── قسم إدارة الفصل الدراسي (المدير فقط) ────────────────
         if CURRENT_USER.get("role") == "admin":
             self._build_term_management_section(scroll)
 
     def _build_term_management_section(self, parent_frame):
         """قسم إنهاء الفصل الدراسي ونهاية السنة — للمدير فقط."""
 
-        sep = ttk.Separator(parent_frame, orient="horizontal")
-        sep.pack(fill="x", padx=20, pady=(0, 8))
+        # فاصل مرئي
+        tk.Frame(parent_frame, bg="#e5e7eb", height=2).pack(
+            fill="x", padx=16, pady=(12, 6))
 
-        lf = ttk.LabelFrame(parent_frame,
-                             text=" 🔐 إدارة الفصل الدراسي — للمدير فقط ",
-                             padding=16)
-        lf.pack(fill="x", padx=20, pady=(0, 16))
+        lf = tk.LabelFrame(parent_frame,
+                            text="  🔐 إدارة الفصل الدراسي — للمدير فقط  ",
+                            font=("Tahoma", 10, "bold"), fg="#c62828",
+                            bg="white", relief="groove", bd=2)
+        lf.pack(fill="x", padx=16, pady=(0, 16))
+
+        inner = tk.Frame(lf, bg="white")
+        inner.pack(fill="x", padx=12, pady=10)
 
         # تحذير
-        warn = tk.Label(lf,
-            text="⚠️  هذه الإجراءات لا يمكن التراجع عنها. ستُنشأ نسخة احتياطية تلقائياً قبل كل إجراء.",
+        tk.Label(inner,
+            text="⚠️  هذه الإجراءات لا يمكن التراجع عنها. "
+                 "ستُنشأ نسخة احتياطية تلقائياً قبل كل إجراء.",
             bg="#fff8e1", fg="#7c4a00", font=("Tahoma", 9),
-            wraplength=700, justify="right", pady=6, padx=10, relief="flat")
-        warn.pack(fill="x", pady=(0, 12))
+            wraplength=680, justify="right", pady=6, padx=10
+        ).pack(fill="x", pady=(0, 10))
 
         # ── الزر 1: نهاية الفصل الدراسي ──
-        term_lf = ttk.LabelFrame(lf, text=" نهاية الفصل الدراسي ", padding=10)
-        term_lf.pack(fill="x", pady=(0, 10))
+        term_lf = tk.LabelFrame(inner, text="  نهاية الفصل الدراسي  ",
+                                 font=("Tahoma", 9, "bold"), fg="#1565C0",
+                                 bg="white", relief="groove", bd=1)
+        term_lf.pack(fill="x", pady=(0, 8))
 
         tk.Label(term_lf,
             text="يحذف جميع سجلات الغياب والتأخر ويبقي الطلاب والإعدادات والجداول كما هي.",
-            font=("Tahoma", 9), fg="#555", wraplength=650, justify="right"
-        ).pack(anchor="e", pady=(0, 8))
+            font=("Tahoma", 9), fg="#555", bg="white",
+            wraplength=650, justify="right"
+        ).pack(anchor="e", padx=10, pady=(8, 4))
 
-        ttk.Button(term_lf, text="📋 إنهاء الفصل الدراسي",
-                   command=self._end_semester).pack(side="right")
+        tk.Button(term_lf, text="📋 إنهاء الفصل الدراسي",
+                  command=self._end_semester,
+                  font=("Tahoma", 9, "bold"), bg="#1565C0", fg="white",
+                  relief="flat", padx=14, pady=4, cursor="hand2"
+                  ).pack(side="right", padx=10, pady=8)
 
         # ── الزر 2: نهاية السنة الدراسية ──
-        year_lf = ttk.LabelFrame(lf, text=" نهاية السنة الدراسية ", padding=10)
-        year_lf.pack(fill="x", pady=(0, 10))
+        year_lf = tk.LabelFrame(inner, text="  نهاية السنة الدراسية  ",
+                                 font=("Tahoma", 9, "bold"), fg="#6d28d9",
+                                 bg="white", relief="groove", bd=1)
+        year_lf.pack(fill="x", pady=(0, 8))
 
         tk.Label(year_lf,
             text="يُرقّي الطلاب: أول→ثاني، ثاني→ثالث، ثالث يُحذفون. ثم يحذف الغياب والتأخر.",
-            font=("Tahoma", 9), fg="#555", wraplength=650, justify="right"
-        ).pack(anchor="e", pady=(0, 8))
+            font=("Tahoma", 9), fg="#555", bg="white",
+            wraplength=650, justify="right"
+        ).pack(anchor="e", padx=10, pady=(8, 4))
 
-        ttk.Button(year_lf, text="🎓 إنهاء السنة الدراسية وترقية الطلاب",
-                   command=self._end_academic_year).pack(side="right")
+        tk.Button(year_lf, text="🎓 إنهاء السنة الدراسية وترقية الطلاب",
+                  command=self._end_academic_year,
+                  font=("Tahoma", 9, "bold"), bg="#6d28d9", fg="white",
+                  relief="flat", padx=14, pady=4, cursor="hand2"
+                  ).pack(side="right", padx=10, pady=8)
 
         # ── النسخ الاحتياطية الخاصة بالفصول ──
-        backup_lf = ttk.LabelFrame(lf, text=" 💾 نسخ احتياطية الفصول الدراسية ", padding=10)
-        backup_lf.pack(fill="x", pady=(0,4))
+        backup_lf = tk.LabelFrame(inner, text="  💾 نسخ احتياطية الفصول الدراسية  ",
+                                   font=("Tahoma", 9, "bold"), fg="#059669",
+                                   bg="white", relief="groove", bd=1)
+        backup_lf.pack(fill="x", pady=(0, 4))
 
-        # أزرار في صف واحد: تحديث + فتح المجلد + استعادة
-        btn_row2 = ttk.Frame(backup_lf); btn_row2.pack(fill="x", pady=(0, 4))
-        ttk.Button(btn_row2, text="🔄 تحديث",
-                   command=self._load_term_backups).pack(side="right", padx=4)
-        ttk.Button(btn_row2, text="📂 فتح المجلد",
-                   command=lambda: (
-                       os.makedirs(os.path.join(BACKUP_DIR, "terms"), exist_ok=True),
-                       os.startfile(os.path.join(BACKUP_DIR, "terms"))
-                   )).pack(side="right", padx=4)
-        tk.Button(btn_row2,
-                   text="↩️ استعادة المحددة",
-                   command=self._restore_term_backup,
-                   bg="#c62828", fg="white",
-                   font=("Tahoma", 9, "bold"),
-                   relief="flat", cursor="hand2").pack(side="right", padx=4)
+        # صف الأزرار
+        btn_row = tk.Frame(backup_lf, bg="white")
+        btn_row.pack(fill="x", padx=8, pady=(8, 4))
 
-        # القائمة
-        list_frame = ttk.Frame(backup_lf)
-        list_frame.pack(fill="x")
-        sb = ttk.Scrollbar(list_frame, orient="vertical")
-        self._term_backup_list = tk.Listbox(list_frame, height=6,
-                                             font=("Courier", 9), selectmode="single",
-                                             bg="#f9f9f9",
-                                             yscrollcommand=sb.set)
+        tk.Button(btn_row, text="🔄 تحديث",
+                  command=self._load_term_backups,
+                  font=("Tahoma", 9), bg="#e8f5e9",
+                  relief="flat", padx=10, pady=3, cursor="hand2"
+                  ).pack(side="right", padx=4)
+        tk.Button(btn_row, text="📂 فتح المجلد",
+                  command=lambda: (
+                      os.makedirs(os.path.join(BACKUP_DIR, "terms"), exist_ok=True),
+                      os.startfile(os.path.join(BACKUP_DIR, "terms"))
+                  ),
+                  font=("Tahoma", 9), bg="#e3f2fd",
+                  relief="flat", padx=10, pady=3, cursor="hand2"
+                  ).pack(side="right", padx=4)
+        tk.Button(btn_row, text="↩️ استعادة المحددة",
+                  command=self._restore_term_backup,
+                  font=("Tahoma", 9, "bold"), bg="#c62828", fg="white",
+                  relief="flat", padx=10, pady=3, cursor="hand2"
+                  ).pack(side="right", padx=4)
+
+        # قائمة النسخ
+        list_frame = tk.Frame(backup_lf, bg="white")
+        list_frame.pack(fill="x", padx=8, pady=(0, 8))
+
+        sb = tk.Scrollbar(list_frame, orient="vertical")
+        self._term_backup_list = tk.Listbox(
+            list_frame, height=6,
+            font=("Courier", 9), selectmode="single",
+            bg="#f9f9f9", yscrollcommand=sb.set)
         sb.config(command=self._term_backup_list.yview)
         sb.pack(side="right", fill="y")
         self._term_backup_list.pack(side="left", fill="x", expand=True)
 
-        parent_frame.after(200, self._load_term_backups)
+        self.root.after(200, self._load_term_backups)
 
     def _load_term_backups(self):
         """يحمّل قائمة نسخ الفصول الاحتياطية."""
@@ -7619,11 +7677,14 @@ class AppGUI(
     # ══════════════════════════════════════════════════════════
     # تبويب مستقل: مستلمو رابط التأخر
     # ══════════════════════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════════════
+    #  تبويب مستلمو رابط التأخر
+    # ══════════════════════════════════════════════════════════════════
+
     def _build_tardiness_recipients_tab(self):
-        """يبني تبويب إدارة مستلمي رابط التأخر."""
         frame = self.tardiness_recipients_frame
 
-        # عنوان التبويب
+        # ─── العنوان ──────────────────────────────────────────────
         hdr = tk.Frame(frame, bg="#E65100", height=50)
         hdr.pack(fill="x")
         hdr.pack_propagate(False)
@@ -7631,172 +7692,210 @@ class AppGUI(
                  bg="#E65100", fg="white",
                  font=("Tahoma", 13, "bold")).pack(side="right", padx=16, pady=12)
 
-        tk.Label(frame,
-            text="يُرسَل رابط تسجيل التأخر (كل طلاب المدرسة) لجميع المستلمين "
-                 "تلقائياً في وقت بداية الدوام يومياً — أو يدوياً بضغطة زر.",
-            font=("Tahoma", 10), fg="#444", justify="right",
-            wraplength=900
-        ).pack(anchor="e", padx=16, pady=(10, 0))
+        # ─── منطقة قابلة للتمرير ──────────────────────────────────
+        _cv  = tk.Canvas(frame, bg="white", highlightthickness=0)
+        _vsb = ttk.Scrollbar(frame, orient="vertical", command=_cv.yview)
+        _cv.configure(yscrollcommand=_vsb.set)
+        _vsb.pack(side="right", fill="y")
+        _cv.pack(side="left", fill="both", expand=True)
 
-        # ─── مؤشر خادم الواتساب المختصر ─────────────────────────
-        wa_mini = ttk.LabelFrame(frame, text=" 🟢 خادم واتساب ", padding=6)
-        wa_mini.pack(fill="x", padx=10, pady=(6, 0))
-        wa_mini_row = ttk.Frame(wa_mini); wa_mini_row.pack(fill="x")
+        _inner = tk.Frame(_cv, bg="white")
+        _win   = _cv.create_window((0, 0), window=_inner, anchor="nw")
 
-        self._wa_mini_dot = tk.Label(wa_mini_row, text="⬤", font=("Tahoma", 13), fg="#aaaaaa")
+        _lw = [0]
+        def _on_cv_conf(e):
+            w = _cv.winfo_width()
+            if w == _lw[0]: return
+            _lw[0] = w
+            _cv.itemconfig(_win, width=w)
+        _cv.bind("<Configure>", _on_cv_conf)
+        _inner.bind("<Configure>",
+                    lambda e: _cv.configure(scrollregion=_cv.bbox("all")))
+
+        # ── ربط عجلة الماوس ──────────────────────────────────────
+        def _on_wheel(e):
+            _cv.yview_scroll(int(-1 * (e.delta / 120)), "units")
+        _cv.bind_all("<MouseWheel>", _on_wheel)
+
+        PAD = dict(padx=12, pady=6)
+
+        # ─── بطاقة 1: خادم واتساب ────────────────────────────────
+        wa_card = tk.LabelFrame(_inner, text="  🟢 خادم واتساب  ",
+                                font=("Tahoma", 9, "bold"), bg="white",
+                                fg="#1565C0", relief="groove", bd=2)
+        wa_card.pack(fill="x", **PAD)
+
+        wa_row = tk.Frame(wa_card, bg="white")
+        wa_row.pack(fill="x", padx=8, pady=6)
+
+        self._wa_mini_dot  = tk.Label(wa_row, text="⬤", font=("Tahoma", 14),
+                                      fg="#aaaaaa", bg="white")
         self._wa_mini_dot.pack(side="right", padx=(0, 4))
-        self._wa_mini_text = ttk.Label(wa_mini_row, text="جارٍ التحقق...", font=("Tahoma", 9))
-        self._wa_mini_text.pack(side="right", padx=(0, 6))
+        self._wa_mini_text = tk.Label(wa_row, text="اضغط فحص للتحقق",
+                                      font=("Tahoma", 9), bg="white", fg="#555")
+        self._wa_mini_text.pack(side="right", padx=(0, 8))
 
-        def _mini_start_wa():
+        def _wa_check():
+            self._wa_mini_dot.config(fg="#aaaaaa")
+            self._wa_mini_text.config(text="⏳ جارٍ الفحص...", fg="#555")
+            def _do():
+                try:
+                    import urllib.request as _ur, json as _j
+                    d = _j.loads(_ur.urlopen(
+                        "http://localhost:3000/status", timeout=2).read())
+                    if d.get("ready"):
+                        self.root.after(0, lambda: (
+                            self._wa_mini_dot.config(fg="#22c55e"),
+                            self._wa_mini_text.config(
+                                text="✅ متصل ويعمل", fg="#166534")))
+                    else:
+                        self.root.after(0, lambda: (
+                            self._wa_mini_dot.config(fg="#f59e0b"),
+                            self._wa_mini_text.config(
+                                text="⏳ يعمل — امسح QR", fg="#92400e")))
+                except Exception:
+                    self.root.after(0, lambda: (
+                        self._wa_mini_dot.config(fg="#ef4444"),
+                        self._wa_mini_text.config(
+                            text="🔴 غير متصل", fg="#991b1b")))
+            threading.Thread(target=_do, daemon=True).start()
+
+        def _wa_start():
             if not os.path.isdir(WHATS_PATH):
                 messagebox.showerror("خطأ", "مجلد الواتساب غير موجود:\n" + WHATS_PATH)
                 return
             try:
-                cmd = rf'cmd.exe /k "cd /d {WHATS_PATH} && node server.js"'
-                subprocess.Popen(cmd, creationflags=subprocess.CREATE_NEW_CONSOLE)
-                self._wa_mini_text.config(text="جارٍ التشغيل... انتظر 10 ثوانٍ")
-                # بعد 11 ث أوقف البوت في خيط خلفي لتجنب تجميد الواجهة
-                def _disable_bot_bg():
+                subprocess.Popen(
+                    rf'cmd.exe /k "cd /d {WHATS_PATH} && npm start"',
+                    creationflags=subprocess.CREATE_NEW_CONSOLE)
+                self._wa_mini_text.config(
+                    text="⏳ جارٍ التشغيل... انتظر 15 ثانية ثم اضغط فحص", fg="#92400e")
+                # أوقف البوت تلقائياً بعد 12 ثانية
+                def _disable():
                     try:
                         import urllib.request as _ur
-                        data = json.dumps({"enabled": False}).encode()
-                        req = _ur.Request("http://localhost:3000/bot-toggle",
-                                          data=data,
-                                          headers={"Content-Type": "application/json"},
-                                          method="POST")
-                        _ur.urlopen(req, timeout=3)
-                        print("[WA] البوت مُوقَف تلقائياً عند التشغيل من تبويب التأخر")
+                        _ur.urlopen(_ur.Request(
+                            "http://localhost:3000/bot-toggle",
+                            data=json.dumps({"enabled": False}).encode(),
+                            headers={"Content-Type": "application/json"},
+                            method="POST"), timeout=3)
                     except Exception:
                         pass
-                def _start_disable_thread():
-                    threading.Thread(target=_disable_bot_bg, daemon=True).start()
-                frame.after(11000, _start_disable_thread)
-            except Exception as e:
-                messagebox.showerror("خطأ", "تعذّر التشغيل:\n" + str(e))
+                frame.after(12000,
+                    lambda: threading.Thread(target=_disable, daemon=True).start())
+            except Exception as ex:
+                messagebox.showerror("خطأ", "تعذّر التشغيل:\n" + str(ex))
 
-        def _mini_check():
-            self._wa_mini_dot.config(fg="#aaaaaa")
-            self._wa_mini_text.config(text="⏳ جارٍ الفحص...", foreground="#555555")
-            def _do_check():
-                try:
-                    import urllib.request, json as _j
-                    r = urllib.request.urlopen("http://localhost:3000/status", timeout=2)
-                    data = _j.loads(r.read())
-                    if data.get("ready"):
-                        self.root.after(0, lambda: (
-                            self._wa_mini_dot.config(fg="#22c55e"),
-                            self._wa_mini_text.config(text="✅ متصل ويعمل", foreground="#166534")))
-                    else:
-                        self.root.after(0, lambda: (
-                            self._wa_mini_dot.config(fg="#f59e0b"),
-                            self._wa_mini_text.config(text="⏳ يعمل — امسح QR", foreground="#92400e")))
-                except Exception:
-                    self.root.after(0, lambda: (
-                        self._wa_mini_dot.config(fg="#ef4444"),
-                        self._wa_mini_text.config(text="🔴 غير متصل", foreground="#991b1b")))
-            threading.Thread(target=_do_check, daemon=True).start()
+        tk.Button(wa_row, text="▶ تشغيل", font=("Tahoma", 9),
+                  bg="#1565C0", fg="white", relief="flat", cursor="hand2",
+                  padx=10, pady=3,
+                  command=_wa_start).pack(side="left", padx=(0, 4))
+        tk.Button(wa_row, text="🔄 فحص", font=("Tahoma", 9),
+                  bg="#0d47a1", fg="white", relief="flat", cursor="hand2",
+                  padx=10, pady=3,
+                  command=_wa_check).pack(side="left")
 
-        ttk.Button(wa_mini_row, text="▶ تشغيل",
-                   command=_mini_start_wa).pack(side="left", padx=4)
-        ttk.Button(wa_mini_row, text="🔄",
-                   command=_mini_check).pack(side="left", padx=2)
+        # ─── بطاقة 2: رابط التأخر ────────────────────────────────
+        url_card = tk.LabelFrame(_inner, text="  🔗 رابط تسجيل التأخر  ",
+                                 font=("Tahoma", 9, "bold"), bg="white",
+                                 fg="#2e7d32", relief="groove", bd=2)
+        url_card.pack(fill="x", **PAD)
 
-        # فحص عند الضغط فقط — لا جدولة تلقائية
-
-        # بناء الواجهة الرئيسية
-        self._build_tardiness_recipients_ui(frame)
-
-    def _build_tardiness_recipients_ui(self, parent_frame):
-        """يبني واجهة إدارة مستلمي رابط التأخر."""
-
-        lf = ttk.LabelFrame(
-            parent_frame,
-            text=" 📤 مستلمو رابط التأخر التلقائي ",
-            padding=10
-        )
-        lf.pack(fill="both", expand=True, padx=10, pady=(8,4))
-
-        # رابط التأخر للنسخ — يُحسب دائماً من local_ip الحي
-        def get_tard_url():
+        def _get_url():
             base = (STATIC_DOMAIN if STATIC_DOMAIN and not debug_on()
                     else "http://{}:{}".format(local_ip(), PORT))
             return "{}/tardiness".format(base)
 
-        url_row = ttk.Frame(lf); url_row.pack(fill="x", pady=(0,8))
-        ttk.Label(url_row, text="رابط التأخر:", font=("Tahoma",9,"bold")).pack(side="right", padx=(0,6))
-        self.tard_url_var = tk.StringVar(value=get_tard_url())
-        url_entry = ttk.Entry(url_row, textvariable=self.tard_url_var,
-                               state="readonly", font=("Courier",9))
-        url_entry.pack(side="right", fill="x", expand=True)
+        self.tard_url_var = tk.StringVar(value=_get_url())
+        url_row = tk.Frame(url_card, bg="white")
+        url_row.pack(fill="x", padx=8, pady=6)
+        tk.Label(url_row, text="الرابط:", font=("Tahoma", 9, "bold"),
+                 bg="white").pack(side="right", padx=(0, 6))
+        tk.Entry(url_row, textvariable=self.tard_url_var,
+                 state="readonly", font=("Courier", 9),
+                 readonlybackground="#f5f5f5").pack(
+                     side="right", fill="x", expand=True)
+        tk.Button(url_row, text="نسخ", font=("Tahoma", 9),
+                  relief="flat", bg="#e8f5e9", cursor="hand2", padx=8,
+                  command=lambda: (
+                      self.tard_url_var.set(_get_url()),
+                      self.root.clipboard_clear(),
+                      self.root.clipboard_append(_get_url()))
+                  ).pack(side="left", padx=(4, 0))
+        tk.Button(url_row, text="تحديث", font=("Tahoma", 9),
+                  relief="flat", bg="#e3f2fd", cursor="hand2", padx=8,
+                  command=lambda: self.tard_url_var.set(_get_url())
+                  ).pack(side="left", padx=2)
 
-        def copy_url():
-            url = get_tard_url()
-            self.tard_url_var.set(url)   # تحديث فوري
-            self.root.clipboard_clear()
-            self.root.clipboard_append(url)
+        # تحديث الرابط بعد ثانية
+        frame.after(1500, lambda: self.tard_url_var.set(_get_url()))
 
-        def refresh_url():
-            self.tard_url_var.set(get_tard_url())
+        # ─── بطاقة 3: الإرسال اليدوي الفوري ─────────────────────
+        send_card = tk.LabelFrame(_inner, text="  📲 إرسال فوري  ",
+                                  font=("Tahoma", 9, "bold"), bg="white",
+                                  fg="#6a1b9a", relief="groove", bd=2)
+        send_card.pack(fill="x", **PAD)
 
-        btn_frame = ttk.Frame(url_row); btn_frame.pack(side="left", padx=4)
-        ttk.Button(btn_frame, text="نسخ",    width=5, command=copy_url).pack(side="right", padx=2)
-        ttk.Button(btn_frame, text="تحديث",  width=5, command=refresh_url).pack(side="right", padx=2)
+        send_row = tk.Frame(send_card, bg="white")
+        send_row.pack(fill="x", padx=8, pady=8)
 
-        # تحديث الرابط تلقائياً بعد ثانية (بعد أن يكون الخادم جاهزاً)
-        lf.after(1500, refresh_url)
-
-        # أزرار الإرسال اليدوي
-        send_row = ttk.Frame(lf); send_row.pack(fill="x", pady=(0,8))
-        self.tard_send_btn = ttk.Button(
-            send_row, text="📲 إرسال الرابط الآن للجميع",
+        self.tard_send_btn = tk.Button(
+            send_row, text="📲 إرسال الرابط الآن لجميع المستلمين",
+            font=("Tahoma", 10, "bold"), bg="#6a1b9a", fg="white",
+            relief="flat", cursor="hand2", padx=14, pady=6,
             command=self._send_tardiness_now)
-        self.tard_send_btn.pack(side="right", padx=4)
-        self.tard_status_lbl = ttk.Label(
-            send_row, text="", foreground="green", font=("Tahoma",9))
-        self.tard_status_lbl.pack(side="right", padx=8)
+        self.tard_send_btn.pack(side="right", padx=(0, 8))
 
-        # ─── الإرسال التلقائي المجدوَل ───────────────────────────
-        sched_lf = ttk.LabelFrame(lf, text=" ⏰ الإرسال التلقائي المجدوَل ", padding=8)
-        sched_lf.pack(fill="x", pady=(0, 8))
+        self.tard_status_lbl = tk.Label(
+            send_row, text="", font=("Tahoma", 9),
+            bg="white", fg="green")
+        self.tard_status_lbl.pack(side="right")
 
-        _cfg_now = load_config()
+        # ─── بطاقة 4: الإرسال التلقائي المجدوَل ─────────────────
+        sched_card = tk.LabelFrame(_inner, text="  ⏰ الإرسال التلقائي المجدوَل  ",
+                                   font=("Tahoma", 9, "bold"), bg="white",
+                                   fg="#e65100", relief="groove", bd=2)
+        sched_card.pack(fill="x", **PAD)
+
+        _cfg = load_config()
         self.tard_auto_var = tk.BooleanVar(
-            value=_cfg_now.get("tardiness_auto_send_enabled", True))
+            value=_cfg.get("tardiness_auto_send_enabled", True))
+
+        chk_row = tk.Frame(sched_card, bg="white")
+        chk_row.pack(fill="x", padx=8, pady=(8, 4))
         ttk.Checkbutton(
-            sched_lf,
-            text="تفعيل الإرسال التلقائي يومياً (الأحد—الخميس)",
+            chk_row,
+            text="تفعيل الإرسال التلقائي يومياً (الأحد — الخميس)",
             variable=self.tard_auto_var
-        ).pack(anchor="e")
+        ).pack(side="right")
 
-        time_row = ttk.Frame(sched_lf); time_row.pack(fill="x", pady=(6, 0))
-        ttk.Label(time_row, text="وقت الإرسال:", font=("Tahoma",10,"bold")).pack(side="right", padx=(0,8))
+        time_row = tk.Frame(sched_card, bg="white")
+        time_row.pack(fill="x", padx=8, pady=(0, 4))
+        tk.Label(time_row, text="وقت الإرسال:", font=("Tahoma", 10, "bold"),
+                 bg="white").pack(side="right", padx=(0, 8))
 
-        _saved_time = _cfg_now.get("tardiness_auto_send_time", "07:00")
         try:
-            _sh, _sm = _saved_time.split(":")
+            _sh, _sm = _cfg.get("tardiness_auto_send_time", "07:00").split(":")
         except Exception:
             _sh, _sm = "07", "00"
-
         self._tard_hour_var   = tk.StringVar(value=_sh)
         self._tard_minute_var = tk.StringVar(value=_sm)
 
-        # إطار داخلي بترتيب يسار←يمين حتى تظهر الساعة قبل الدقيقة (HH:MM)
-        _time_inner = ttk.Frame(time_row)
-        _time_inner.pack(side="right")
-        ttk.Spinbox(_time_inner, from_=0, to=23, width=4, justify="center",
+        _ti = tk.Frame(time_row, bg="white"); _ti.pack(side="right")
+        ttk.Spinbox(_ti, from_=0, to=23, width=4, justify="center",
                     textvariable=self._tard_hour_var,
                     format="%02.0f").pack(side="left")
-        ttk.Label(_time_inner, text=":", font=("Tahoma",12,"bold")).pack(side="left", padx=2)
-        ttk.Spinbox(_time_inner, from_=0, to=59, width=4, justify="center",
+        tk.Label(_ti, text=":", font=("Tahoma", 12, "bold"),
+                 bg="white").pack(side="left", padx=2)
+        ttk.Spinbox(_ti, from_=0, to=59, width=4, justify="center",
                     textvariable=self._tard_minute_var,
                     format="%02.0f").pack(side="left")
-        ttk.Label(_time_inner, text=" (HH:MM)", foreground="#888",
-                  font=("Tahoma",8)).pack(side="left", padx=(4,0))
+        tk.Label(_ti, text="(HH:MM)", font=("Tahoma", 8),
+                 bg="white", fg="#888").pack(side="left", padx=(6, 0))
 
-        self._tard_sched_status = ttk.Label(sched_lf, text="", foreground="green",
-                                             font=("Tahoma",9))
-        self._tard_sched_status.pack(anchor="e", pady=(4,0))
+        self._tard_sched_status = tk.Label(
+            sched_card, text="", font=("Tahoma", 9), bg="white", fg="green")
+        self._tard_sched_status.pack(anchor="e", padx=8, pady=(0, 2))
 
         def _save_sched():
             try:
@@ -7806,276 +7905,345 @@ class AppGUI(
                     raise ValueError
             except (ValueError, TypeError):
                 self._tard_sched_status.config(
-                    text="⚠️ وقت غير صحيح — أدخل ساعة (0-23) ودقيقة (0-59)",
-                    foreground="#C62828")
+                    text="⚠️ وقت غير صحيح", fg="#C62828")
                 return
-            from config_manager import save_config
-            cfg = load_config()
-            cfg["tardiness_auto_send_enabled"] = self.tard_auto_var.get()
-            cfg["tardiness_auto_send_time"]    = f"{h:02d}:{m:02d}"
-            save_config(cfg)
-            status = "مفعّل ✅" if self.tard_auto_var.get() else "موقوف ⏸"
+            from config_manager import save_config as _sc
+            cfg2 = load_config()
+            cfg2["tardiness_auto_send_enabled"] = self.tard_auto_var.get()
+            cfg2["tardiness_auto_send_time"]    = f"{h:02d}:{m:02d}"
+            _sc(cfg2)
+            lbl = "مفعّل ✅" if self.tard_auto_var.get() else "موقوف ⏸"
             self._tard_sched_status.config(
-                text=f"✅ تم الحفظ — الإرسال {status} في {h:02d}:{m:02d}",
-                foreground="#166534")
+                text=f"✅ تم الحفظ — الإرسال {lbl} في {h:02d}:{m:02d}",
+                fg="#166534")
 
-        ttk.Button(sched_lf, text="💾 حفظ الإعداد",
-                   command=_save_sched).pack(anchor="w", pady=(6,0))
+        tk.Button(sched_card, text="💾 حفظ الإعداد",
+                  font=("Tahoma", 9), relief="flat", bg="#fff3e0",
+                  cursor="hand2", padx=10, pady=4,
+                  command=_save_sched).pack(anchor="w", padx=8, pady=(0, 8))
 
-        ttk.Separator(lf, orient="horizontal").pack(fill="x", pady=6)
+        # ─── بطاقة 5: قائمة المستلمين ────────────────────────────
+        recv_card = tk.LabelFrame(_inner, text="  👥 قائمة المستلمين  ",
+                                  font=("Tahoma", 9, "bold"), bg="white",
+                                  fg="#1565C0", relief="groove", bd=2)
+        recv_card.pack(fill="both", expand=True, **PAD)
 
-        # ─ إضافة مستلم
-        add_row = ttk.Frame(lf); add_row.pack(fill="x", pady=(0,6))
-        ttk.Label(add_row, text="اسم المستلم:", width=12, anchor="e").pack(side="right")
-        self.tard_name_var  = tk.StringVar()
-        ttk.Entry(add_row, textvariable=self.tard_name_var,
-                  width=20, justify="right").pack(side="right", padx=4)
-        ttk.Label(add_row, text="الجوال:", width=7, anchor="e").pack(side="right", padx=(8,0))
+        # صف الإضافة
+        add_row = tk.Frame(recv_card, bg="white")
+        add_row.pack(fill="x", padx=8, pady=(8, 4))
+
+        tk.Label(add_row, text="الاسم:", font=("Tahoma", 9),
+                 bg="white").pack(side="right", padx=(0, 2))
+        self.tard_name_var = tk.StringVar()
+        tk.Entry(add_row, textvariable=self.tard_name_var,
+                 width=18, justify="right",
+                 font=("Tahoma", 9)).pack(side="right", padx=(0, 6))
+
+        tk.Label(add_row, text="الجوال:", font=("Tahoma", 9),
+                 bg="white").pack(side="right", padx=(0, 2))
         self.tard_phone_var = tk.StringVar()
-        ttk.Entry(add_row, textvariable=self.tard_phone_var,
-                  width=14, justify="right").pack(side="right", padx=4)
-        ttk.Button(add_row, text="➕ إضافة",
-                   command=self._tard_recipient_add).pack(side="right", padx=4)
+        tk.Entry(add_row, textvariable=self.tard_phone_var,
+                 width=14, justify="right",
+                 font=("Tahoma", 9)).pack(side="right", padx=(0, 6))
 
-        # ─ جدول المستلمين
-        cols = ("name","phone","role")
-        tree_frame = ttk.Frame(lf)
-        tree_frame.pack(fill="both", expand=True)
+        tk.Label(add_row, text="الدور:", font=("Tahoma", 9),
+                 bg="white").pack(side="right", padx=(0, 2))
+        self.tard_role_var = tk.StringVar()
+        tk.Entry(add_row, textvariable=self.tard_role_var,
+                 width=12, justify="right",
+                 font=("Tahoma", 9)).pack(side="right", padx=(0, 6))
+
+        tk.Button(add_row, text="➕ إضافة",
+                  font=("Tahoma", 9, "bold"), bg="#e8f5e9",
+                  relief="flat", cursor="hand2", padx=10, pady=3,
+                  command=self._tard_recipient_add).pack(side="right")
+
+        # الجدول
+        tree_fr = tk.Frame(recv_card, bg="white")
+        tree_fr.pack(fill="both", expand=True, padx=8, pady=(4, 0))
+
+        cols = ("name", "phone", "role")
         self.tree_tard_recv = ttk.Treeview(
-            tree_frame, columns=cols, show="headings", height=6)
-        for col, hdr, w in zip(cols,
-            ["الاسم", "رقم الجوال", "الدور/الوظيفة"],
-            [200, 140, 160]):
-            self.tree_tard_recv.heading(col, text=hdr)
+            tree_fr, columns=cols, show="headings", height=7)
+        for col, heading, w in [
+            ("name",  "الاسم",          220),
+            ("phone", "رقم الجوال",     150),
+            ("role",  "الدور/الوظيفة", 180),
+        ]:
+            self.tree_tard_recv.heading(col, text=heading)
             self.tree_tard_recv.column(col, width=w, anchor="center")
-        sb = ttk.Scrollbar(tree_frame, orient="vertical",
-                            command=self.tree_tard_recv.yview)
-        self.tree_tard_recv.configure(yscrollcommand=sb.set)
-        sb.pack(side="right", fill="y")
+
+        _sb = ttk.Scrollbar(tree_fr, orient="vertical",
+                             command=self.tree_tard_recv.yview)
+        self.tree_tard_recv.configure(yscrollcommand=_sb.set)
+        _sb.pack(side="right", fill="y")
         self.tree_tard_recv.pack(side="left", fill="both", expand=True)
 
-        del_row = ttk.Frame(lf); del_row.pack(fill="x", pady=(6,0))
-        ttk.Button(del_row, text="🗑️ حذف المحدد",
-                   command=self._tard_recipient_del).pack(side="right", padx=4)
-        ttk.Button(del_row, text="👨‍🏫 استيراد من المعلمين",
-                   command=self._tard_import_teachers).pack(side="right", padx=4)
-        ttk.Button(del_row, text="👤 استيراد من المستخدمين المسجلين",
-                   command=self._tard_import_users).pack(side="right", padx=4)
+        # أزرار الجدول
+        btn_row = tk.Frame(recv_card, bg="white")
+        btn_row.pack(fill="x", padx=8, pady=(4, 8))
+        tk.Button(btn_row, text="🗑 حذف المحدد",
+                  font=("Tahoma", 9), bg="#ffebee",
+                  relief="flat", cursor="hand2", padx=10, pady=3,
+                  command=self._tard_recipient_del).pack(side="right", padx=2)
+        tk.Button(btn_row, text="👨‍🏫 استيراد المعلمين",
+                  font=("Tahoma", 9), bg="#e3f2fd",
+                  relief="flat", cursor="hand2", padx=10, pady=3,
+                  command=self._tard_import_teachers).pack(side="right", padx=2)
+        tk.Button(btn_row, text="👤 استيراد المستخدمين",
+                  font=("Tahoma", 9), bg="#f3e5f5",
+                  relief="flat", cursor="hand2", padx=10, pady=3,
+                  command=self._tard_import_users).pack(side="right", padx=2)
 
         self._tard_recipients_load()
 
+        # فحص واتساب تلقائياً عند الفتح
+        frame.after(600, _wa_check)
+
+    # ── دوال المستلمين ────────────────────────────────────────────
+
     def _tard_recipients_load(self):
-        if not hasattr(self, "tree_tard_recv"): return
-        for i in self.tree_tard_recv.get_children():
-            self.tree_tard_recv.delete(i)
+        if not hasattr(self, "tree_tard_recv"):
+            return
+        self.tree_tard_recv.delete(*self.tree_tard_recv.get_children())
         for r in get_tardiness_recipients():
-            self.tree_tard_recv.insert("", "end",
-                values=(r.get("name",""), r.get("phone",""), r.get("role","")))
+            self.tree_tard_recv.insert("", "end", values=(
+                r.get("name", ""),
+                r.get("phone", ""),
+                r.get("role", ""),
+            ))
 
     def _tard_recipient_add(self):
-        name  = self.tard_name_var.get().strip() if hasattr(self,"tard_name_var") else ""
-        phone = self.tard_phone_var.get().strip() if hasattr(self,"tard_phone_var") else ""
+        name  = getattr(self, "tard_name_var",  tk.StringVar()).get().strip()
+        phone = getattr(self, "tard_phone_var", tk.StringVar()).get().strip()
+        role  = getattr(self, "tard_role_var",  tk.StringVar()).get().strip()
         if not name or not phone:
             messagebox.showwarning("تنبيه", "أدخل الاسم ورقم الجوال")
             return
-        role = simpledialog.askstring(
-            "الدور", "ما دور/وظيفة '"+name+"'؟ (اختياري)",
-            parent=self.root) or ""
         recps = get_tardiness_recipients()
-        # تجنب التكرار
-        if any(r["phone"]==phone for r in recps):
-            messagebox.showwarning("تنبيه","رقم الجوال موجود مسبقاً")
+        if any(r.get("phone") == phone for r in recps):
+            messagebox.showwarning("تنبيه", "رقم الجوال مسجّل مسبقاً")
             return
-        recps.append({"name":name,"phone":phone,"role":role})
+        recps.append({"name": name, "phone": phone, "role": role})
         save_tardiness_recipients(recps)
         self.tard_name_var.set("")
         self.tard_phone_var.set("")
+        self.tard_role_var.set("")
         self._tard_recipients_load()
 
     def _tard_recipient_del(self):
-        if not hasattr(self,"tree_tard_recv"): return
+        if not hasattr(self, "tree_tard_recv"):
+            return
         sel = self.tree_tard_recv.selection()
         if not sel:
-            messagebox.showwarning("تنبيه","حدد مستلماً أولاً")
+            messagebox.showwarning("تنبيه", "حدد مستلماً أولاً")
             return
         vals  = self.tree_tard_recv.item(sel[0])["values"]
-        phone = vals[1]
-        if not messagebox.askyesno("تأكيد",f"حذف '{vals[0]}'؟"): return
-        recps = [r for r in get_tardiness_recipients() if r.get("phone")!=phone]
+        phone = str(vals[1])
+        name  = str(vals[0])
+        if not messagebox.askyesno("تأكيد الحذف", f"حذف '{name}'؟"):
+            return
+        recps = [r for r in get_tardiness_recipients()
+                 if str(r.get("phone", "")) != phone]
         save_tardiness_recipients(recps)
         self._tard_recipients_load()
 
     def _tard_import_teachers(self):
-        """يستورد أرقام المعلمين من قائمة المعلمين الموجودة."""
-        teachers_data = load_teachers()
-        teachers      = teachers_data.get("teachers", [])
-        recps         = get_tardiness_recipients()
-        existing_phones = {r["phone"] for r in recps}
-        added = 0
+        teachers = load_teachers().get("teachers", [])
+        if not teachers:
+            messagebox.showinfo("تنبيه", "لا يوجد معلمون في قائمة المعلمين.")
+            return
+        recps    = get_tardiness_recipients()
+        existing = {r["phone"] for r in recps}
+        added    = 0
         for t in teachers:
-            name  = t.get("اسم المعلم","")
-            phone = t.get("رقم الجوال","")
-            if phone and phone not in existing_phones:
-                recps.append({"name":name,"phone":phone,"role":"معلم"})
-                existing_phones.add(phone)
+            name  = t.get("اسم المعلم", "")
+            phone = t.get("رقم الجوال", "")
+            if phone and phone not in existing:
+                recps.append({"name": name, "phone": phone, "role": "معلم"})
+                existing.add(phone)
                 added += 1
         save_tardiness_recipients(recps)
         self._tard_recipients_load()
-        messagebox.showinfo("تم",f"تم استيراد {added} معلم من قائمة المعلمين.")
+        messagebox.showinfo("تم الاستيراد",
+                            f"تم استيراد {added} معلم.\n"
+                            f"(تجاهل {len(teachers)-added} مكرر أو بلا جوال)")
 
     def _tard_import_users(self):
-        """
-        يعرض نافذة لاستيراد أرقام المستخدمين المسجلين في البرنامج
-        كمستلمين لرابط التأخر.
-        """
         from database import get_all_users, save_user_phone
         users = get_all_users()
         if not users:
-            messagebox.showinfo("تنبيه", "لا يوجد مستخدمون مسجلون."); return
+            messagebox.showinfo("تنبيه", "لا يوجد مستخدمون مسجلون.")
+            return
 
         win = tk.Toplevel(self.root)
         win.title("استيراد المستخدمين كمستلمين")
-        win.geometry("560x420")
-        win.transient(self.root); win.grab_set()
+        win.geometry("580x440")
+        win.transient(self.root)
+        win.grab_set()
+        win.config(bg="white")
 
-        ttk.Label(win,
-            text="أدخل رقم جوال لكل مستخدم ثم اختر من تريد استيراده:",
-            font=("Tahoma",10)).pack(pady=(12,4), padx=12, anchor="e")
+        tk.Label(win,
+                 text="اختر المستخدمين الذين تريد إضافتهم كمستلمين لرابط التأخر:",
+                 font=("Tahoma", 10), bg="white").pack(
+                     pady=(12, 4), padx=12, anchor="e")
 
-        # جدول
-        cols = ("sel","name","username","role","phone")
-        tree = ttk.Treeview(win, columns=cols, show="headings", height=10)
+        # جدول المستخدمين
+        cols = ("sel", "name", "username", "role", "phone")
+        tree = ttk.Treeview(win, columns=cols, show="headings", height=11)
         tree.heading("sel",      text="✔")
         tree.heading("name",     text="الاسم")
-        tree.heading("username", text="المستخدم")
+        tree.heading("username", text="اسم المستخدم")
         tree.heading("role",     text="الدور")
         tree.heading("phone",    text="رقم الجوال")
         tree.column("sel",      width=30,  anchor="center")
-        tree.column("name",     width=140, anchor="center")
-        tree.column("username", width=100, anchor="center")
+        tree.column("name",     width=150, anchor="center")
+        tree.column("username", width=110, anchor="center")
         tree.column("role",     width=80,  anchor="center")
         tree.column("phone",    width=120, anchor="center")
-        sb = ttk.Scrollbar(win, orient="vertical", command=tree.yview)
-        tree.configure(yscrollcommand=sb.set)
-        sb.pack(side="right", fill="y", padx=(0,4))
-        tree.pack(fill="both", expand=True, padx=(12,0), pady=4)
+        _sb2 = ttk.Scrollbar(win, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=_sb2.set)
+        _sb2.pack(side="right", fill="y", padx=(0, 4))
+        tree.pack(fill="both", expand=True, padx=(12, 0), pady=4)
 
-        # تعبئة البيانات
         for u in users:
-            iid = tree.insert("", "end", values=(
+            tree.insert("", "end", values=(
                 "☐",
                 u.get("full_name") or u["username"],
                 u["username"],
-                u.get("role",""),
-                u.get("phone","")
+                u.get("role", ""),
+                u.get("phone", ""),
             ))
-        # تبديل الاختيار بالنقر
-        selected = set()
-        def _toggle(event):
-            row = tree.identify_row(event.y)
+
+        # تبديل التحديد بالنقر
+        _sel = set()
+        def _toggle(e):
+            row = tree.identify_row(e.y)
             if not row: return
-            vals = list(tree.item(row,"values"))
-            if row in selected:
-                selected.discard(row)
-                vals[0] = "☐"
+            v = list(tree.item(row, "values"))
+            if row in _sel:
+                _sel.discard(row); v[0] = "☐"
             else:
-                selected.add(row)
-                vals[0] = "☑"
-            tree.item(row, values=vals)
+                _sel.add(row);     v[0] = "☑"
+            tree.item(row, values=v)
         tree.bind("<Button-1>", _toggle)
 
-        # حقل تعديل جوال
-        edit_row = ttk.Frame(win); edit_row.pack(fill="x", padx=12, pady=(0,4))
-        ttk.Label(edit_row, text="تعديل جوال المحدد:").pack(side="right", padx=(0,6))
-        phone_edit_var = tk.StringVar()
-        ttk.Entry(edit_row, textvariable=phone_edit_var, width=18,
-                  justify="right").pack(side="right")
+        # تعديل الجوال
+        edit_f = tk.Frame(win, bg="white"); edit_f.pack(fill="x", padx=12, pady=(0, 4))
+        tk.Label(edit_f, text="تعديل جوال المحدد:", bg="white",
+                 font=("Tahoma", 9)).pack(side="right", padx=(0, 6))
+        _ph_var = tk.StringVar()
+        tk.Entry(edit_f, textvariable=_ph_var, width=18,
+                 justify="right", font=("Tahoma", 9)).pack(side="right")
 
-        def _apply_phone():
-            sel = tree.selection()
-            if not sel: return
-            row = sel[0]
-            vals = list(tree.item(row,"values"))
-            vals[4] = phone_edit_var.get().strip()
-            tree.item(row, values=vals)
-        ttk.Button(edit_row, text="تطبيق", command=_apply_phone).pack(side="right", padx=4)
+        def _apply_ph():
+            s = tree.selection()
+            if not s: return
+            v = list(tree.item(s[0], "values"))
+            v[4] = _ph_var.get().strip()
+            tree.item(s[0], values=v)
+        tk.Button(edit_f, text="تطبيق", font=("Tahoma", 9),
+                  relief="flat", bg="#e3f2fd", cursor="hand2",
+                  command=_apply_ph).pack(side="right", padx=4)
 
-        def _on_tree_select(e):
-            sel = tree.selection()
-            if sel:
-                phone_edit_var.set(tree.item(sel[0],"values")[4])
-        tree.bind("<<TreeviewSelect>>", _on_tree_select)
+        tree.bind("<<TreeviewSelect>>",
+                  lambda e: _ph_var.set(
+                      tree.item(tree.selection()[0], "values")[4]
+                      if tree.selection() else ""))
 
-        status_lbl = ttk.Label(win, text="", foreground="green", font=("Tahoma",9))
-        status_lbl.pack(pady=(0,4))
+        status_var = tk.StringVar()
+        tk.Label(win, textvariable=status_var, bg="white",
+                 font=("Tahoma", 9), fg="green").pack(pady=(0, 4))
 
-        def _import():
-            recps = get_tardiness_recipients()
+        def _do_import():
+            recps    = get_tardiness_recipients()
             existing = {r["phone"] for r in recps}
-            added = 0
+            added    = 0
             for row in tree.get_children():
-                vals = tree.item(row,"values")
-                if vals[0] == "☑":
-                    phone = str(vals[4]).strip()
-                    name  = str(vals[1])
-                    uname = str(vals[2])
-                    role  = str(vals[3])
-                    if not phone:
-                        continue
-                    # احفظ الجوال في جدول المستخدمين
-                    save_user_phone(uname, phone)
-                    if phone not in existing:
-                        recps.append({"name":name,"phone":phone,"role":role})
-                        existing.add(phone)
-                        added += 1
+                v = tree.item(row, "values")
+                if v[0] != "☑": continue
+                phone = str(v[4]).strip()
+                name  = str(v[1])
+                uname = str(v[2])
+                role  = str(v[3])
+                if not phone: continue
+                save_user_phone(uname, phone)
+                if phone not in existing:
+                    recps.append({"name": name, "phone": phone, "role": role})
+                    existing.add(phone)
+                    added += 1
             save_tardiness_recipients(recps)
             self._tard_recipients_load()
-            status_lbl.config(text=f"✅ تم استيراد {added} مستخدم")
+            status_var.set(f"✅ تم استيراد {added} مستخدم")
             win.after(1200, win.destroy)
 
-        btn_row = ttk.Frame(win); btn_row.pack(pady=(0,10))
-        ttk.Button(btn_row, text="✅ استيراد المحددين",
-                   command=_import).pack(side="right", padx=6)
-        ttk.Button(btn_row, text="إلغاء",
-                   command=win.destroy).pack(side="right")
+        btns = tk.Frame(win, bg="white"); btns.pack(pady=(0, 10))
+        tk.Button(btns, text="✅ استيراد المحددين",
+                  font=("Tahoma", 10, "bold"), bg="#e8f5e9",
+                  relief="flat", cursor="hand2", padx=14, pady=5,
+                  command=_do_import).pack(side="right", padx=6)
+        tk.Button(btns, text="إلغاء",
+                  font=("Tahoma", 9), relief="flat", bg="#f5f5f5",
+                  cursor="hand2", padx=10, pady=5,
+                  command=win.destroy).pack(side="right")
+
+    # ── الإرسال ───────────────────────────────────────────────────
 
     def _send_tardiness_now(self):
-        """يرسل رابط التأخر الآن لجميع المستلمين."""
-        if not hasattr(self,"tard_send_btn"): return
+        if not hasattr(self, "tard_send_btn"):
+            return
         recps = get_tardiness_recipients()
         if not recps:
-            messagebox.showwarning("تنبيه","لا يوجد مستلمون. أضف مستلمين أولاً.")
+            messagebox.showwarning("تنبيه",
+                "لا يوجد مستلمون.\nأضف مستلمين أولاً من بطاقة 'قائمة المستلمين'.")
             return
-        if not check_whatsapp_server_status():
-            messagebox.showerror("خطأ","خادم واتساب غير متاح. شغّله أولاً.")
-            return
-        self.tard_send_btn.config(state="disabled")
-        if hasattr(self,"tard_status_lbl"):
-            self.tard_status_lbl.config(
-                text=f"⏳ جارٍ الإرسال لـ {len(recps)} مستلم...",
-                foreground="blue")
-        self.root.update_idletasks()
 
-        def do_send():
+        self.tard_send_btn.config(state="disabled", bg="#9e9e9e")
+        self.tard_status_lbl.config(text="⏳ جارٍ التحقق من خادم واتساب...",
+                                    fg="#1565C0")
+
+        def _do():
+            # 1. التحقق من الخادم (في خيط خلفي)
+            if not check_whatsapp_server_status():
+                self.root.after(0, lambda: (
+                    self.tard_send_btn.config(state="normal", bg="#6a1b9a"),
+                    self.tard_status_lbl.config(
+                        text="❌ خادم واتساب غير متاح — شغّله أولاً",
+                        fg="#C62828")))
+                return
+
+            # 2. تحديث الواجهة بعدد المستلمين
+            n = len(recps)
+            self.root.after(0, lambda: self.tard_status_lbl.config(
+                text=f"⏳ جارٍ الإرسال لـ {n} مستلم...", fg="#1565C0"))
+
+            # 3. الإرسال الفعلي
             sent, failed, details = send_tardiness_link_to_all()
             detail_txt = "\n".join(details)
+
+            # 4. تحديث الواجهة بالنتيجة
             self.root.after(0, lambda: self._after_tardiness_send(
                 sent, failed, detail_txt))
 
-        threading.Thread(target=do_send, daemon=True).start()
+        threading.Thread(target=_do, daemon=True).start()
 
     def _after_tardiness_send(self, sent, failed, detail_txt):
-        if hasattr(self,"tard_send_btn"):
-            self.tard_send_btn.config(state="normal")
-        if hasattr(self,"tard_status_lbl"):
-            color = "green" if failed==0 else ("orange" if sent>0 else "red")
-            self.tard_status_lbl.config(
-                text=f"✅ {sent} | ❌ {failed}",
-                foreground=color)
+        if hasattr(self, "tard_send_btn"):
+            self.tard_send_btn.config(state="normal", bg="#6a1b9a")
+        if hasattr(self, "tard_status_lbl"):
+            if failed == 0:
+                self.tard_status_lbl.config(
+                    text=f"✅ تم الإرسال لـ {sent} مستلم", fg="#2e7d32")
+            elif sent == 0:
+                self.tard_status_lbl.config(
+                    text=f"❌ فشل الإرسال لجميع المستلمين ({failed})",
+                    fg="#C62828")
+            else:
+                self.tard_status_lbl.config(
+                    text=f"⚠️ أُرسل: {sent} | فشل: {failed}", fg="#e65100")
         messagebox.showinfo(
-            "نتيجة الإرسال",
-            "تم الإرسال بنجاح: {}\nفشل: {}\n\nالتفاصيل:\n{}".format(
-                sent, failed, detail_txt))
+            "نتيجة إرسال رابط التأخر",
+            f"✅ نجح: {sent}\n❌ فشل: {failed}\n\nالتفاصيل:\n{detail_txt}")
 
     def populate_schedule_table(self):
         selected_day = self.selected_day_var.get()

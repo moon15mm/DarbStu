@@ -54,12 +54,31 @@ def init_db():
     tardiness_exists = cur.fetchone() is not None
 
     if tardiness_exists:
-        # افحص هل الـ UNIQUE القديم يمنع التسجيل
+        # إذا وُجدت tardiness_old → ترقية سابقة توقفت في المنتصف، أكملها أولاً
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='tardiness_old'")
+        if cur.fetchone():
+            try:
+                cur.execute("""INSERT OR IGNORE INTO tardiness
+                    (id,date,class_id,class_name,student_id,student_name,
+                     teacher_name,period,minutes_late,created_at)
+                    SELECT id,date,
+                           COALESCE(class_id,''),COALESCE(class_name,''),
+                           student_id,student_name,
+                           teacher_name,period,COALESCE(minutes_late,0),created_at
+                    FROM tardiness_old""")
+            except Exception:
+                pass
+            cur.execute("DROP TABLE tardiness_old")
+            print("[DB] تم تنظيف tardiness_old من ترقية سابقة غير مكتملة")
+
+        # افحص هل الـ UNIQUE الحالي هو (date, student_id) الصحيح
         cur.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='tardiness'")
-        old_sql = (cur.fetchone() or ("",))[0] or ""
-        # الجدول القديم لديه UNIQUE يشمل class_id أو period → يمنع التسجيل
-        # الحل: أعد بناءه بالبنية الصحيحة
-        need_rebuild = ("class_id" in old_sql and "UNIQUE" in old_sql) or                        ("period" in old_sql and "UNIQUE" in old_sql and "student_id" in old_sql)
+        current_sql = (cur.fetchone() or ("",))[0] or ""
+        import re as _re
+        m = _re.search(r'UNIQUE\s*\(([^)]+)\)', current_sql, _re.IGNORECASE)
+        current_unique = m.group(1).replace(' ', '').lower() if m else ""
+        need_rebuild = current_unique not in ("date,student_id", "")
+
         if need_rebuild:
             cur.execute("ALTER TABLE tardiness RENAME TO tardiness_old")
             cur.execute("""
@@ -85,16 +104,20 @@ def init_db():
                            student_id,student_name,
                            teacher_name,period,COALESCE(minutes_late,0),created_at
                     FROM tardiness_old""")
-            except Exception: pass
-            cur.execute("DROP TABLE IF EXISTS tardiness_old")
-            print("[DB] تم ترقية جدول tardiness - الـ UNIQUE الجديد: date+student_id")
+            except Exception:
+                pass
+            cur.execute("DROP TABLE tardiness_old")
+            print("[DB] تم ترقية جدول tardiness — الـ UNIQUE الجديد: date+student_id")
         else:
             # أضف أعمدة ناقصة فقط
             existing_cols = {row[1] for row in cur.execute("PRAGMA table_info(tardiness)")}
-            for col, dfn in [("teacher_name","TEXT"),("period","INTEGER"),("minutes_late","INTEGER DEFAULT 0")]:
+            for col, dfn in [("teacher_name","TEXT"), ("period","INTEGER"),
+                             ("minutes_late","INTEGER DEFAULT 0")]:
                 if col not in existing_cols:
-                    try: cur.execute("ALTER TABLE tardiness ADD COLUMN {} {}".format(col, dfn))
-                    except Exception: pass
+                    try:
+                        cur.execute("ALTER TABLE tardiness ADD COLUMN {} {}".format(col, dfn))
+                    except Exception:
+                        pass
     else:
         cur.execute("""
         CREATE TABLE tardiness (

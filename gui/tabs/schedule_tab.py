@@ -203,7 +203,7 @@ class ScheduleTabMixin:
                 return
             try:
                 # يشغّل الخادم مع تعطيل البوت تلقائياً
-                cmd = rf'cmd.exe /k "cd /d {WHATS_PATH} && node server.js"'
+                cmd = rf'cmd.exe /k "cd /d {WHATS_PATH} && npm start"'
                 subprocess.Popen(cmd, creationflags=subprocess.CREATE_NEW_CONSOLE)
                 self._wa_mini_text.config(text="جارٍ التشغيل... انتظر 10 ثوانٍ")
                 # بعد تشغيل الخادم أوقف البوت تلقائياً

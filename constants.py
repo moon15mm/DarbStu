@@ -51,7 +51,7 @@ MY_STATIC_DOMAIN  = 'darbte.uk'
 ngrok = None
 
 APP_TITLE           = 'تسجيل غياب الطلاب'
-APP_VERSION         = '2.8.1'
+APP_VERSION         = '2.8.2'
 UPDATE_URL          = 'https://raw.githubusercontent.com/moon15mm/DarbStu/main/version.json'
 UPDATE_DOWNLOAD_URL = 'https://github.com/moon15mm/DarbStu/archive/refs/heads/main.zip'
 DB_PATH             = 'absences.db'
