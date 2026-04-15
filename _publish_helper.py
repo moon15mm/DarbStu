@@ -39,6 +39,15 @@ def update_files(new_ver, notes):
     with open(os.path.join(BASE, "version.json"), "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
+    # installer.iss
+    iss_path = os.path.join(BASE, "installer.iss")
+    if os.path.exists(iss_path):
+        with open(iss_path, "r", encoding="utf-8") as f:
+            iss_txt = f.read()
+        iss_txt = re.sub(r'#define AppVersion\s+"[^"]+"', f'#define AppVersion   "{new_ver}"', iss_txt)
+        with open(iss_path, "w", encoding="utf-8") as f:
+            f.write(iss_txt)
+
 def main():
     os.system("chcp 65001 >nul 2>&1")
     print()

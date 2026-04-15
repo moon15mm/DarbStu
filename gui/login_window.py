@@ -6,7 +6,8 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import os, json, base64
 from constants import APP_VERSION, CURRENT_USER, ROLES, DATA_DIR
-from database import authenticate, get_user_allowed_tabs
+from database import authenticate, get_user_allowed_tabs, refresh_cloud_client
+from config_manager import load_config, save_config
 
 # ملف حفظ بيانات الدخول
 _SAVED_LOGIN = os.path.join(DATA_DIR, "saved_login.json")
@@ -130,6 +131,14 @@ class LoginWindow:
             command=self._do_login
         ).pack(fill="x", pady=(14, 0))
 
+        # ─── رابط إعدادات السحاب ─────────────────────────────
+        cloud_lbl = tk.Label(
+            body, text="🌐 إعدادات المزامنة السحابية",
+            bg="#F5F7FA", fg="#1565C0", font=("Tahoma", 10, "underline"),
+            cursor="hand2")
+        cloud_lbl.pack(pady=(16, 0))
+        cloud_lbl.bind("<Button-1>", lambda e: self._open_cloud_settings())
+
         # ─── رابط حذف البيانات المحفوظة ────────────────────────
         saved_u, _ = _load_credentials()
         if saved_u:
@@ -208,3 +217,41 @@ class LoginWindow:
                     fg="#C62828")
             self.password_var.set("")
             self.pw_entry.focus()
+
+    def _open_cloud_settings(self):
+        """تفتح نافذة لإدخال إعدادات السيرفر السحابي."""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("إعدادات المزامنة السحابية")
+        dialog.geometry("400x320")
+        dialog.resizable(False, False)
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        cfg = load_config()
+
+        container = tk.Frame(dialog, padx=20, pady=20)
+        container.pack(fill="both", expand=True)
+
+        tk.Label(container, text="الربط بسيرفر المدرسة", font=("Tahoma", 12, "bold")).pack(pady=(0, 10))
+
+        mode_var = tk.BooleanVar(value=cfg.get("cloud_mode", False))
+        tk.Checkbutton(container, text="تفعيل الوضع السحابي (جهاز عميل)", variable=mode_var, font=("Tahoma", 10)).pack(fill="x", pady=5)
+
+        tk.Label(container, text="رابط السيرفر (URL):", font=("Tahoma", 9)).pack(fill="x")
+        url_var = tk.StringVar(value=cfg.get("cloud_url", ""))
+        tk.Entry(container, textvariable=url_var, font=("Tahoma", 10), justify="left").pack(fill="x", pady=(2, 10))
+
+        tk.Label(container, text="رمز الأمان (Access Token):", font=("Tahoma", 9)).pack(fill="x")
+        token_var = tk.StringVar(value=cfg.get("cloud_token", ""))
+        tk.Entry(container, textvariable=token_var, font=("Tahoma", 10), show="*", justify="left").pack(fill="x", pady=(2, 15))
+
+        def save():
+            cfg["cloud_mode"] = mode_var.get()
+            cfg["cloud_url"] = url_var.get().strip()
+            cfg["cloud_token"] = token_var.get().strip()
+            save_config(cfg)
+            refresh_cloud_client()
+            messagebox.showinfo("تم الحفظ", "تم تحديث إعدادات المزامنة.")
+            dialog.destroy()
+
+        tk.Button(container, text="حفظ الإعدادات", bg="#2E7D32", fg="white", font=("Tahoma", 10, "bold"), command=save).pack(fill="x")

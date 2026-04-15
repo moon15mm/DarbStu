@@ -40,8 +40,15 @@ def start_cloudflare_tunnel(port: int, domain: str):
     - إذا لم يوجد → يستخدم Quick Tunnel ويلتقط الرابط العشوائي تلقائياً
     """
     global _cf_process
-    # ابحث عن cloudflared.exe بالمسارات المعروفة أولاً
+    # مجلد البرنامج نفسه (يعمل سواء Python مباشر أو EXE مجمّع)
+    import sys as _sys
+    _app_dir = (os.path.dirname(_sys.executable)
+                if getattr(_sys, 'frozen', False)
+                else os.path.dirname(os.path.abspath(__file__)))
+
+    # ابحث عن cloudflared.exe — الأولوية لمجلد البرنامج ثم المسارات المعروفة
     _cf_candidates = [
+        os.path.join(_app_dir, "cloudflared.exe"),          # ← مجلد البرنامج (EXE مجمّع)
         r"C:\Program Files (x86)\cloudflared\cloudflared.exe",
         r"C:\Program Files\cloudflared\cloudflared.exe",
         r"C:\Windows\System32\cloudflared.exe",

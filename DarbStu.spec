@@ -1,48 +1,73 @@
 # -*- mode: python ; coding: utf-8 -*-
 # ─── DarbStu.spec — PyInstaller Build Configuration ───────────────────────────
 from PyInstaller.utils.hooks import collect_data_files, collect_all
-import os
+import sys, os
 
 block_cipher = None
 
-# ── جمع ملفات البيانات لكل مكتبة تحتاجها ─────────────────────────────────────
+# ── مسار Python الحالي (يعمل على أي جهاز) ────────────────────────────────────
+PY = sys.prefix          # مثال: C:\Python311
+DLL_DIR  = os.path.join(PY, 'DLLs')
+TCL_DIR  = os.path.join(PY, 'tcl')
+
+# ── مسار tkinterweb_tkhtml (يُبحث عنه تلقائياً) ──────────────────────────────
+try:
+    import tkinterweb_tkhtml
+    _twt_base = os.path.dirname(tkinterweb_tkhtml.__file__)
+    _tkhtml_dll = os.path.join(_twt_base, 'tkhtml', 'libTkhtml3.0.dll')
+    tkhtml_bin = [(_tkhtml_dll, 'tkinterweb_tkhtml/tkhtml')] if os.path.exists(_tkhtml_dll) else []
+except ImportError:
+    tkhtml_bin = []
+
+# ── جمع ملفات البيانات ────────────────────────────────────────────────────────
 ttkthemes_datas       = collect_data_files('ttkthemes')
 tkinterweb_datas      = collect_data_files('tkinterweb')
-tkinterweb_tkhtml_datas = collect_data_files('tkinterweb_tkhtml')
 arabic_reshaper_datas = collect_data_files('arabic_reshaper')
 tkcalendar_datas      = collect_data_files('tkcalendar')
+try:
+    matplotlib_datas, matplotlib_bins, matplotlib_hidden = collect_all('matplotlib')
+except Exception:
+    matplotlib_datas = []; matplotlib_bins = []; matplotlib_hidden = []
+try:
+    tkinterweb_tkhtml_datas = collect_data_files('tkinterweb_tkhtml')
+except Exception:
+    tkinterweb_tkhtml_datas = []
+
+# ── تحديد مسارات DLL الأساسية لـ Tcl/Tk ─────────────────────────────────────
+tk_bins = []
+for dll in ['_tkinter.pyd', 'tcl86t.dll', 'tk86t.dll']:
+    p = os.path.join(DLL_DIR, dll)
+    if os.path.exists(p):
+        tk_bins.append((p, '.'))
+
+# ── بيانات Tcl/Tk ─────────────────────────────────────────────────────────────
+tk_datas = []
+for d in ['tcl8.6', 'tk8.6']:
+    p = os.path.join(TCL_DIR, d)
+    if os.path.exists(p):
+        tk_datas.append((p, f'tcl/{d}'))
 
 a = Analysis(
-    ['DarbStu_v3.py'],
+    ['main.py'],
     pathex=['.'],
-    binaries=[
-        # مكتبة TkHTML الأصلية لـ tkinterweb
-        (
-            'C:/Users/maher/AppData/Local/Programs/Python/Python311/Lib/site-packages/tkinterweb_tkhtml/tkhtml/libTkhtml3.0.dll',
-            'tkinterweb_tkhtml/tkhtml'
-        ),
-        # مكتبات Tcl/Tk الأساسية
-        ('C:/Users/maher/AppData/Local/Programs/Python/Python311/DLLs/_tkinter.pyd', '.'),
-        ('C:/Users/maher/AppData/Local/Programs/Python/Python311/DLLs/tcl86t.dll', '.'),
-        ('C:/Users/maher/AppData/Local/Programs/Python/Python311/DLLs/tk86t.dll', '.'),
-    ],
+    binaries=tk_bins + tkhtml_bin + matplotlib_bins,
     datas=[
         ('icon.ico', '.'),
-        # مجلدات Tcl/Tk
-        ('C:/Users/maher/AppData/Local/Programs/Python/Python311/tcl/tcl8.6', 'tcl/tcl8.6'),
-        ('C:/Users/maher/AppData/Local/Programs/Python/Python311/tcl/tk8.6',  'tcl/tk8.6'),
+        ('api', 'api'),
+        *tk_datas,
         *ttkthemes_datas,
+        *matplotlib_datas,
         *tkinterweb_datas,
         *tkinterweb_tkhtml_datas,
         *arabic_reshaper_datas,
         *tkcalendar_datas,
     ],
     hiddenimports=[
-        # ── Tkinter core ──────────────────────────────────────────
+        # ── Tkinter ───────────────────────────────────────────────
         '_tkinter', 'tkinter', 'tkinter.ttk', 'tkinter.messagebox',
         'tkinter.filedialog', 'tkinter.simpledialog',
         'PIL._tkinter_finder',
-        # ── FastAPI / Uvicorn / Starlette ──────────────────────────────
+        # ── FastAPI / Uvicorn ─────────────────────────────────────
         'uvicorn', 'uvicorn.main', 'uvicorn.config',
         'uvicorn.loops', 'uvicorn.loops.asyncio',
         'uvicorn.protocols', 'uvicorn.protocols.http',
@@ -55,41 +80,40 @@ a = Analysis(
         'anyio', 'anyio._backends', 'anyio._backends._asyncio',
         'anyio._backends._trio',
         'h11',
-        # ── Email ──────────────────────────────────────────────────────
+        # ── Cloud & Security ─────────────────────────────────────
+        'secrets', 'cryptography', 'cryptography.hazmat.backends.openssl',
+        'requests', 'urllib3', 'cloudflare_tunnel',
+        # ── Email ─────────────────────────────────────────────────
         'email.mime', 'email.mime.text', 'email.mime.multipart',
-        # ── Data / Excel ───────────────────────────────────────────────
+        # ── Excel / Data ──────────────────────────────────────────
         'pandas', 'pandas.io.formats.excel',
         'openpyxl', 'openpyxl.styles', 'openpyxl.utils',
         'openpyxl.drawing', 'openpyxl.drawing.image',
-        # ── Charts ────────────────────────────────────────────────────
+        # ── Charts ────────────────────────────────────────────────
         'matplotlib', 'matplotlib.pyplot',
         'matplotlib.backends.backend_tkagg',
         'matplotlib.backends.backend_agg',
-        # ── Arabic text ────────────────────────────────────────────────
+        # ── Arabic ────────────────────────────────────────────────
         'arabic_reshaper', 'bidi', 'bidi.algorithm',
-        # ── UI ────────────────────────────────────────────────────────
+        # ── UI ────────────────────────────────────────────────────
         'ttkthemes', 'tkcalendar', 'tkinterweb', 'tkinterweb_tkhtml',
-        # ── Images / PDF ───────────────────────────────────────────────
+        # ── Images / PDF ──────────────────────────────────────────
         'PIL', 'PIL.Image', 'PIL.ImageTk', 'PIL.ImageDraw',
-        'pdf2image',
-        'fpdf', 'fpdf2',
-        'reportlab', 'reportlab.pdfgen',
-        'weasyprint',
-        # ── QR / Requests ─────────────────────────────────────────────
-        'qrcode', 'qrcode.image.pil',
-        'requests', 'urllib3',
-        # ── Misc ──────────────────────────────────────────────────────
-        'pyngrok',
+        'reportlab', 'reportlab.pdfgen', 'reportlab.lib',
+        'reportlab.platypus', 'qrcode', 'qrcode.image.pil',
+        'fpdf2',
+        # ── Misc ──────────────────────────────────────────────────
         'jinja2', 'jinja2.ext',
-        'cryptography',
         'typing_extensions',
         'pkg_resources',
-        'pkg_resources.py2_compat',
+        'sqlite3',
+        'zipfile', 'hashlib', 'hmac',
+        *matplotlib_hidden,
     ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['test', 'tests', 'unittest', 'doctest'],
+    excludes=['test', 'tests', 'unittest', 'doctest', 'pyngrok', 'playwright'],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
@@ -108,7 +132,7 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False,           # بدون نافذة CMD
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

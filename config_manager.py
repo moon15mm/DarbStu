@@ -2,8 +2,8 @@
 """
 config_manager.py — إدارة الإعدادات وقوالب الرسائل
 """
-import os, json, base64
-from typing import Dict, Any
+import os, json, base64, secrets, datetime
+from typing import Dict, Any, List, Optional
 import constants as _const
 from constants import (DATA_DIR, CONFIG_JSON, DB_PATH, BASE_DIR,
                        TZ_OFFSET, _ensure_matplotlib)
@@ -77,6 +77,10 @@ DEFAULT_CONFIG = {
     # ─── إعدادات بوتات الواتساب ─────────────────────────────────
     "absence_bot_enabled":    True,   # بوت رسائل الغياب التلقائية
     "permission_bot_enabled": True,   # بوت رسائل الاستئذان التلقائية
+    # ─── إعدادات الربط السحابي ─────────────────────────────────
+    "cloud_mode":             False,  # تفعيل الربط بسيرفر خارجي
+    "cloud_url":              "",     # رابط السيرفر (مثلاً https://darbte.uk)
+    "cloud_token":            "",     # رمز الأمان (Access Token)
 }
 
 _CONFIG_CACHE: Dict[str, Any] = {}
@@ -144,6 +148,11 @@ def load_config() -> Dict[str, Any]:
         if key not in cfg:
             cfg[key] = default_value
             changes_made = True
+
+    # توليد توكن تلقائي إذا كان فارغاً (للجهاز الرئيسي)
+    if not cfg.get("cloud_token"):
+        cfg["cloud_token"] = secrets.token_urlsafe(16)
+        changes_made = True
 
     if changes_made:
         try:

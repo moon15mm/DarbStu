@@ -3,6 +3,7 @@
 report_builder.py — بناء تقارير HTML والتقارير المتقدمة
 """
 import datetime, os, base64, json, io, csv, sqlite3
+import pandas as pd
 from tkinter import messagebox
 from typing import List, Dict, Any, Optional
 from constants import DB_PATH, DATA_DIR, TZ_OFFSET, BACKUP_DIR, now_riyadh_date

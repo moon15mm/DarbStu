@@ -36,6 +36,8 @@ class UsersTabMixin:
                    command=self._user_toggle).pack(side="right", padx=3)
         ttk.Button(ctrl, text="🗑️ حذف",
                    command=self._user_delete).pack(side="right", padx=3)
+        ttk.Button(ctrl, text="توليد حسابات وإرسال بالواتساب",
+                   command=self._user_generate_teachers).pack(side="right", padx=3)
 
         cols = ("id","username","full_name","role","active","tabs_info")
         self.tree_users = ttk.Treeview(left_lf, columns=cols,
@@ -91,7 +93,7 @@ class UsersTabMixin:
             # يومي
             "لوحة المراقبة",        "روابط الفصول",         "التأخر",
             "الأعذار",               "الاستئذان",             "المراقبة الحية",
-            "الموجّه الطلابي",
+            "الموجّه الطلابي",       "استلام تحويلات",
             # السجلات
             "السجلات / التصدير",    "إدارة الغياب",          "التقارير / الطباعة",
             "تقرير الفصل",           "نشر النتائج",           "تحليل النتائج",           "تصدير نور",
@@ -102,6 +104,8 @@ class UsersTabMixin:
             # البيانات
             "إدارة الطلاب",          "إضافة طالب",            "إدارة الفصول",
             "إدارة أرقام الجوالات",
+            # أدوات المعلم
+            "تحويل طالب",            "نماذج المعلم",          "خطابات الاستفسار",
             # الإعدادات
             "إعدادات المدرسة",       "المستخدمون",            "النسخ الاحتياطية",
         ]
@@ -372,6 +376,66 @@ class UsersTabMixin:
             messagebox.showwarning("تنبيه","لا يمكن حذف حساب المدير الرئيسي"); return
         if not messagebox.askyesno("تأكيد",f"حذف المستخدم '{username}'؟"): return
         delete_user(user_id); self._users_load()
+
+    def _user_generate_teachers(self):
+        if not messagebox.askyesno("تأكيد", "سيتم توليد حسابات (اسم المستخدم وكلمة مرور عشوائية) للمعلمين وإرسالها لهم عبر واتساب.\nهل أنت متأكد؟"):
+            return
+        from database import load_teachers, create_user, save_user_allowed_tabs, get_all_users
+        from config_manager import load_config
+        from whatsapp_service import send_whatsapp_message
+        import random
+
+        teachers_data = load_teachers().get("teachers", [])
+        if not teachers_data:
+            messagebox.showwarning("تنبيه", "لا يوجد معلمين. تأكد من استيراد ملف المعلمين أولاً.")
+            return
+
+        cfg = load_config()
+        public_url = cfg.get("public_url", "")
+        if not public_url:
+            messagebox.showwarning("تنبيه", "يرجى تعيين 'الرابط العالمي' من إعدادات المدرسة قبل الإرسال لتضمينه في رسالة الواتساب.")
+            return
+
+        existing_users = {u["username"]: u for u in get_all_users()}
+        
+        success_count = 0
+        skip_count = 0
+
+        self.root.config(cursor="wait")
+        try:
+            for t in teachers_data:
+                name = t.get("اسم المعلم", "").strip()
+                phone = t.get("رقم الجوال", "").strip()
+                civ_id = t.get("رقم الهوية", "").strip()
+
+                username = civ_id if civ_id else phone
+                if not username:
+                    skip_count += 1
+                    continue
+                
+                if username not in existing_users:
+                    password = str(random.randint(100000, 999999))
+                    ok, _ = create_user(username, password, "teacher", name)
+                    if ok:
+                        save_user_allowed_tabs(username, ["لوحة القيادة", "تحليل النتائج", "تحويل طالب", "نماذج المعلم", "خطابات الاستفسار"])
+                        
+                        msg = (f"مرحباً أستاذ {name}\n\n"
+                               f"يسعدنا انضمامك للنظام. بيانات الدخول عبر الويب:\n\n"
+                               f"الرابط العام:\n{public_url}\n\n"
+                               f"اسم المستخدم: {username}\n"
+                               f"كلمة المرور: {password}\n"
+                               f"\nمع تحيات إدارة المدرسة")
+                        
+                        if phone:
+                            send_whatsapp_message(phone, msg)
+                        success_count += 1
+                else:
+                    skip_count += 1
+                    
+            self._users_load()
+            messagebox.showinfo("اكتمل", f"تم إنشاء وإرسال {success_count} حساب معلم.\nتم تخطي {skip_count} (موجود مسبقاً أو بياناته ناقصة).")
+        finally:
+            self.root.config(cursor="")
 
     # ══════════════════════════════════════════════════════════
     # تبويب النسخ الاحتياطية

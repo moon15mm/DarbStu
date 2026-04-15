@@ -3,11 +3,56 @@
 database.py — طبقة قاعدة البيانات: init + كل عمليات CRUD
 """
 import os, sqlite3, datetime, hashlib, json, zipfile, csv, re
+import tkinter as tk
+from tkinter import messagebox, filedialog
+try:
+    import pandas as pd
+except ImportError:
+    pd = None
 from typing import List, Dict, Any, Optional
 from constants import (DB_PATH, DATA_DIR, BACKUP_DIR, STUDENTS_JSON,
                        TEACHERS_JSON, CONFIG_JSON, ROLE_TABS,
                        STUDENTS_STORE, ensure_dirs)
 from config_manager import load_config
+import requests
+
+class CloudDBClient:
+    """عميل للتواصل مع السيرفر السحابي بدلاً من قاعدة البيانات المحلية."""
+    def __init__(self):
+        cfg = load_config()
+        self.url = cfg.get("cloud_url", "").rstrip("/")
+        self.token = cfg.get("cloud_token", "")
+        self.enabled = cfg.get("cloud_mode", False)
+
+    def is_active(self):
+        return self.enabled and self.url
+
+    def _get_headers(self):
+        return {"Authorization": f"Bearer {self.token}"}
+
+    def get(self, endpoint, params=None):
+        try:
+            resp = requests.get(f"{self.url}{endpoint}", params=params, headers=self._get_headers(), timeout=10)
+            return resp.json() if resp.status_code == 200 else {"ok": False, "msg": f"Error {resp.status_code}"}
+        except Exception as e:
+            return {"ok": False, "msg": str(e)}
+
+    def post(self, endpoint, json_data):
+        try:
+            resp = requests.post(f"{self.url}{endpoint}", json=json_data, headers=self._get_headers(), timeout=10)
+            return resp.json() if resp.status_code == 200 else {"ok": False, "msg": f"Error {resp.status_code}"}
+        except Exception as e:
+            return {"ok": False, "msg": str(e)}
+
+_cloud_client = CloudDBClient()
+
+def get_cloud_client():
+    global _cloud_client
+    return _cloud_client
+
+def refresh_cloud_client():
+    global _cloud_client
+    _cloud_client = CloudDBClient()
 
 def get_db():
     """يُنشئ اتصال DB مع إعدادات مُحسَّنة."""
@@ -332,6 +377,77 @@ def init_db():
         created_at   TEXT NOT NULL
     )""")
 
+    # ─── جدول خطابات الاستفسار الأكاديمي ────────────────────────
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS academic_inquiries (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        date             TEXT NOT NULL,
+        counselor_name   TEXT NOT NULL,
+        teacher_username TEXT NOT NULL,
+        teacher_name     TEXT NOT NULL,
+        class_name       TEXT NOT NULL,
+        subject          TEXT NOT NULL,
+        student_name     TEXT NOT NULL,
+        teacher_reply_date TEXT,
+        teacher_reply_reasons TEXT,
+        teacher_reply_evidence TEXT,
+        status           TEXT DEFAULT 'جديد',
+        inquiry_type     TEXT DEFAULT 'تدني ملحوظ',
+        created_at       TEXT NOT NULL
+    )""")
+    try:
+        cur.execute("ALTER TABLE academic_inquiries ADD COLUMN inquiry_type TEXT DEFAULT 'تدني ملحوظ'")
+    except: pass
+
+    # ─── جدول تحويلات الطلاب من المعلم ───────────────────────
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS student_referrals (
+        id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+        ref_date             TEXT NOT NULL,
+        student_id           TEXT DEFAULT '',
+        student_name         TEXT NOT NULL,
+        class_id             TEXT DEFAULT '',
+        class_name           TEXT NOT NULL,
+        subject              TEXT DEFAULT '',
+        period               TEXT DEFAULT '',
+        session_time         TEXT DEFAULT '',
+        session_ampm         TEXT DEFAULT 'ص',
+        violation_type       TEXT DEFAULT 'سلوكية',
+        violation            TEXT DEFAULT '',
+        problem_causes       TEXT DEFAULT '',
+        repeat_count         TEXT DEFAULT 'الأول',
+        teacher_action1      TEXT DEFAULT '',
+        teacher_action2      TEXT DEFAULT '',
+        teacher_action3      TEXT DEFAULT '',
+        teacher_action4      TEXT DEFAULT '',
+        teacher_action5      TEXT DEFAULT '',
+        teacher_name         TEXT NOT NULL,
+        teacher_username     TEXT DEFAULT '',
+        teacher_date         TEXT DEFAULT '',
+        status               TEXT DEFAULT 'pending',
+        deputy_meeting_date  TEXT DEFAULT '',
+        deputy_meeting_period TEXT DEFAULT '',
+        deputy_action1       TEXT DEFAULT '',
+        deputy_action2       TEXT DEFAULT '',
+        deputy_action3       TEXT DEFAULT '',
+        deputy_action4       TEXT DEFAULT '',
+        deputy_name          TEXT DEFAULT '',
+        deputy_date          TEXT DEFAULT '',
+        deputy_referred_date TEXT DEFAULT '',
+        counselor_meeting_date TEXT DEFAULT '',
+        counselor_meeting_period TEXT DEFAULT '',
+        counselor_action1    TEXT DEFAULT '',
+        counselor_action2    TEXT DEFAULT '',
+        counselor_action3    TEXT DEFAULT '',
+        counselor_action4    TEXT DEFAULT '',
+        counselor_name       TEXT DEFAULT '',
+        counselor_date       TEXT DEFAULT '',
+        counselor_referred_back_date TEXT DEFAULT '',
+        created_at           TEXT NOT NULL
+    )""")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_referrals_teacher ON student_referrals(teacher_username)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_referrals_status  ON student_referrals(status)")
+
     con.commit(); con.close()
 
 
@@ -339,6 +455,14 @@ def init_db():
 
 # ===================== عمليات السجلات =====================
 def insert_absences(date_str, class_id, class_name, students, teacher_id, teacher_name, period):
+    client = get_cloud_client()
+    if client.is_active():
+        res = client.post("/web/api/add-absence", {
+            "date": date_str, "class_id": class_id, "class_name": class_name,
+            "students": students, "period": period
+        })
+        return res if res.get("ok") else {"created": 0, "skipped": 0}
+
     con = get_db(); cur = con.cursor()
     created, skipped = 0, 0
     created_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -355,6 +479,11 @@ def insert_absences(date_str, class_id, class_name, students, teacher_id, teache
     return {"created": created, "skipped": skipped}
 
 def query_absences(date_filter=None, class_id=None):
+    client = get_cloud_client()
+    if client.is_active():
+        res = client.get("/web/api/absences", params={"date": date_filter, "class_id": class_id})
+        return res.get("rows", []) if res.get("ok") else []
+
     con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
     q, params = "SELECT * FROM absences WHERE 1=1", []
     if date_filter: q += " AND date = ?"; params.append(date_filter)
@@ -761,6 +890,14 @@ def hash_password(pw: str) -> str:
 
 def authenticate(username: str, password: str):
     """يتحقق من المستخدم — يُرجع dict المستخدم أو None."""
+    client = get_cloud_client()
+    if client.is_active():
+        # في وضع السحاب، نستخدم الـ API للتحقق
+        res = client.post("/web/api/login", {"username": username, "password": password})
+        if res.get("ok"):
+            return {"username": username, "role": res.get("role", "teacher"), "full_name": res.get("name", username)}
+        return None
+
     con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
     cur.execute("SELECT * FROM users WHERE username=? AND active=1", (username,))
     row = cur.fetchone(); con.close()
@@ -789,6 +926,18 @@ def save_user_allowed_tabs(username: str, tabs: list):
     cur.execute("UPDATE users SET allowed_tabs=? WHERE username=?",
                 (_j.dumps(tabs, ensure_ascii=False), username))
     con.commit(); con.close()
+
+def query_permissions(date_filter=None):
+    client = get_cloud_client()
+    if client.is_active():
+        res = client.get("/web/api/permissions", params={"date": date_filter})
+        return res.get("rows", []) if res.get("ok") else []
+
+    con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
+    q, params = "SELECT * FROM permissions WHERE 1=1", []
+    if date_filter: q += " AND date=?"; params.append(date_filter)
+    cur.execute(q + " ORDER BY created_at DESC", params)
+    rows = [dict(r) for r in cur.fetchall()]; con.close(); return rows
 
 def get_all_users():
     con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
@@ -833,6 +982,14 @@ def delete_user(user_id):
 # ═══════════════════════════════════════════════════════════════
 def insert_tardiness(date_str, class_id, class_name, student_id,
                      student_name, teacher_name, period, minutes_late=0):
+    client = get_cloud_client()
+    if client.is_active():
+        res = client.post("/web/api/add-tardiness", {
+            "date": date_str, "student_id": student_id, "student_name": student_name,
+            "class_id": class_id, "class_name": class_name, "minutes_late": minutes_late
+        })
+        return res.get("ok", False)
+
     created_at = datetime.datetime.utcnow().isoformat()
     try:
         con = get_db(); cur = con.cursor()
@@ -847,6 +1004,11 @@ def insert_tardiness(date_str, class_id, class_name, student_id,
         return False
 
 def query_tardiness(date_filter=None, class_id=None):
+    client = get_cloud_client()
+    if client.is_active():
+        res = client.get("/web/api/tardiness", params={"date": date_filter})
+        return res.get("rows", []) if res.get("ok") else []
+
     con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
     q, params = "SELECT * FROM tardiness WHERE 1=1", []
     if date_filter: q += " AND date=?"; params.append(date_filter)
@@ -879,7 +1041,15 @@ EXCUSE_REASONS = [
 ]
 
 def insert_excuse(date_str, student_id, student_name, class_id,
-                  class_name, reason, source="admin", approved_by=""):
+                   class_name, reason, source="admin", approved_by=""):
+    client = get_cloud_client()
+    if client.is_active():
+        res = client.post("/web/api/add-excuse", {
+            "date": date_str, "student_id": student_id, "student_name": student_name,
+            "class_id": class_id, "class_name": class_name, "reason": reason
+        })
+        return res.get("ok", False)
+
     created_at = datetime.datetime.utcnow().isoformat()
     con = get_db(); cur = con.cursor()
     cur.execute("""INSERT OR IGNORE INTO excuses
@@ -891,6 +1061,11 @@ def insert_excuse(date_str, student_id, student_name, class_id,
     con.commit(); con.close()
 
 def query_excuses(date_filter=None, student_id=None):
+    client = get_cloud_client()
+    if client.is_active():
+        res = client.get("/web/api/excuses", params={"date": date_filter})
+        return res.get("rows", []) if res.get("ok") else []
+
     con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
     q, params = "SELECT * FROM excuses WHERE 1=1", []
     if date_filter: q += " AND date=?"; params.append(date_filter)
@@ -974,6 +1149,15 @@ def load_students(force_reload: bool = False) -> Dict[str, Any]:
     global STUDENTS_STORE
     if STUDENTS_STORE and not force_reload:
         return STUDENTS_STORE
+    
+    client = get_cloud_client()
+    if client.is_active():
+        res = client.get("/web/api/students")
+        if res.get("ok"):
+            classes = res.get("classes", [])
+            STUDENTS_STORE = {"list": classes, "by_id": {c["id"]: c for c in classes}}
+            return STUDENTS_STORE
+
     ensure_dirs()
     if os.path.exists(STUDENTS_JSON):
         with open(STUDENTS_JSON, "r", encoding="utf-8") as f: data = json.load(f)
@@ -1009,6 +1193,8 @@ def import_teachers_from_excel(xlsx_path: str) -> Dict[str, Any]:
     NAME_HINTS  = ["اسم المعلم", "المعلم", "الاسم", "اسم الموظف"]
     PHONE_HINTS = ["رقم الجوال", "الجوال", "phone", "telephone"]
     
+    ID_HINTS    = ["رقم الهوية", "رقم السجل", "السجل المدني", "الهوية"]
+    
     xls = pd.ExcelFile(xlsx_path)
     target_df = None
 
@@ -1030,6 +1216,7 @@ def import_teachers_from_excel(xlsx_path: str) -> Dict[str, Any]:
         # ملف بأعمدة واضحة
         name_col  = next((c for c in target_df.columns if any(h in c for h in NAME_HINTS)), None)
         phone_col = next((c for c in target_df.columns if any(h in c for h in PHONE_HINTS)), None)
+        id_col    = next((c for c in target_df.columns if any(h in c for h in ID_HINTS)), None)
         if not name_col:
             raise ValueError("لم أجد عمود اسم المعلم في الملف.")
         teachers = []
@@ -1038,9 +1225,11 @@ def import_teachers_from_excel(xlsx_path: str) -> Dict[str, Any]:
             name = str(row.get(name_col,"")).strip()
             if name.lower() in SKIP or not name: continue
             phone_raw = str(row.get(phone_col,"")) if phone_col else ""
-            teachers.append({"اسم المعلم": name, "رقم الجوال": _clean_phone_noor(phone_raw)})
+            id_raw = str(row.get(id_col,"")).strip() if id_col else ""
+            if id_raw.endswith(".0"): id_raw = id_raw[:-2]
+            teachers.append({"اسم المعلم": name, "رقم الجوال": _clean_phone_noor(phone_raw), "رقم الهوية": id_raw})
     else:
-        # صيغة نور المعروفة: عمود 19 = الاسم، عمود 3 = الجوال
+        # صيغة نور المعروفة: عمود 19 = الاسم، عمود 3 = الجوال، عمود 18 قد يكون السجل
         raw = pd.read_excel(xlsx_path, header=None, dtype=str)
         if raw.shape[1] < 20:
             raise ValueError("لم أتعرف على صيغة الملف. تأكد من أن يحتوي على أعمدة اسم المعلم ورقم الجوال.")
@@ -1050,7 +1239,10 @@ def import_teachers_from_excel(xlsx_path: str) -> Dict[str, Any]:
             name = str(row.iloc[19]).strip()
             if name.lower() in SKIP or not name: continue
             phone_raw = str(row.iloc[3])
-            teachers.append({"اسم المعلم": name, "رقم الجوال": _clean_phone_noor(phone_raw)})
+            id_raw = str(row.iloc[18]).strip() if raw.shape[1] >= 19 else ""
+            if id_raw.endswith(".0"): id_raw = id_raw[:-2]
+            if not id_raw.isdigit() or len(id_raw) < 8: id_raw = ""
+            teachers.append({"اسم المعلم": name, "رقم الجوال": _clean_phone_noor(phone_raw), "رقم الهوية": id_raw})
 
     if not teachers:
         raise ValueError("لم يُعثر على أي معلمين في الملف.")
@@ -1068,6 +1260,12 @@ def import_teachers_from_excel(xlsx_path: str) -> Dict[str, Any]:
     return data
 
 def load_teachers() -> Dict[str, Any]:
+    client = get_cloud_client()
+    if client.is_active():
+        res = client.get("/web/api/teachers")
+        if res.get("ok"):
+            return {"teachers": res.get("teachers", [])}
+
     if os.path.exists(TEACHERS_JSON):
         with open(TEACHERS_JSON, "r", encoding="utf-8") as f: return json.load(f)
     else:
@@ -1094,4 +1292,201 @@ def _apply_class_name_fix(rows: List[Dict[str,Any]]) -> List[Dict[str,Any]]:
                 r["class_name"] = f"{level} - فصل {section_label_from_value(parts[1])}"
             else: r["class_name"] = r.get("class_name", old_cid)
     return rows
+
+
+# ═══════════════════════════════════════════════════════════════
+# تحويلات الطلاب — student_referrals CRUD
+# ═══════════════════════════════════════════════════════════════
+def create_student_referral(data: dict) -> int:
+    """يُنشئ تحويل طالب جديد ويُعيد الـ id."""
+    client = get_cloud_client()
+    if client.is_active():
+        res = client.post("/web/api/referrals/create", data)
+        return res.get("id", 0) if res.get("ok") else 0
+
+    con = get_db(); cur = con.cursor()
+    now = datetime.datetime.now().isoformat()
+    cur.execute("""
+        INSERT INTO student_referrals
+        (ref_date,student_id,student_name,class_id,class_name,
+         subject,period,session_time,session_ampm,
+         violation_type,violation,problem_causes,repeat_count,
+         teacher_action1,teacher_action2,teacher_action3,teacher_action4,teacher_action5,
+         teacher_name,teacher_username,teacher_date,status,created_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    """, (
+        data.get("ref_date",""), data.get("student_id",""), data.get("student_name",""),
+        data.get("class_id",""), data.get("class_name",""),
+        data.get("subject",""), data.get("period",""),
+        data.get("session_time",""), data.get("session_ampm","ص"),
+        data.get("violation_type","سلوكية"), data.get("violation",""),
+        data.get("problem_causes",""), data.get("repeat_count","الأول"),
+        data.get("teacher_action1",""), data.get("teacher_action2",""),
+        data.get("teacher_action3",""), data.get("teacher_action4",""),
+        data.get("teacher_action5",""), data.get("teacher_name",""),
+        data.get("teacher_username",""), data.get("teacher_date",""),
+        "pending", now
+    ))
+    ref_id = cur.lastrowid
+    con.commit(); con.close()
+    return ref_id
+
+def get_referrals_for_teacher(teacher_username: str) -> list:
+    """يُعيد كل تحويلات المعلم."""
+    client = get_cloud_client()
+    if client.is_active():
+        res = client.get("/web/api/referrals/teacher", params={"username": teacher_username})
+        return res.get("rows", []) if res.get("ok") else []
+
+    con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
+    cur.execute("""SELECT * FROM student_referrals
+                   WHERE teacher_username=? ORDER BY created_at DESC""",
+                (teacher_username,))
+    rows = [dict(r) for r in cur.fetchall()]; con.close(); return rows
+
+def get_all_referrals(status_filter: str = None) -> list:
+    """يُعيد كل التحويلات (للوكيل/المدير)."""
+    con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
+    if status_filter:
+        cur.execute("SELECT * FROM student_referrals WHERE status=? ORDER BY created_at DESC",
+                    (status_filter,))
+    else:
+        cur.execute("SELECT * FROM student_referrals ORDER BY created_at DESC")
+    rows = [dict(r) for r in cur.fetchall()]; con.close(); return rows
+
+def get_referral_by_id(ref_id: int) -> dict:
+    """يُعيد تفاصيل تحويل واحد."""
+    con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
+    cur.execute("SELECT * FROM student_referrals WHERE id=?", (ref_id,))
+    row = cur.fetchone(); con.close()
+    return dict(row) if row else {}
+
+def update_referral_deputy(ref_id: int, data: dict):
+    """يحفظ إجراءات الوكيل على التحويل."""
+    con = get_db(); cur = con.cursor()
+    new_status = data.get("status", "with_deputy")
+    cur.execute("""UPDATE student_referrals SET
+        status=?, deputy_meeting_date=?, deputy_meeting_period=?,
+        deputy_action1=?, deputy_action2=?, deputy_action3=?, deputy_action4=?,
+        deputy_name=?, deputy_date=?, deputy_referred_date=?
+        WHERE id=?
+    """, (
+        new_status,
+        data.get("deputy_meeting_date",""), data.get("deputy_meeting_period",""),
+        data.get("deputy_action1",""), data.get("deputy_action2",""),
+        data.get("deputy_action3",""), data.get("deputy_action4",""),
+        data.get("deputy_name",""), data.get("deputy_date",""),
+        data.get("deputy_referred_date",""), ref_id
+    ))
+    con.commit(); con.close()
+
+def update_referral_counselor(ref_id: int, data: dict):
+    """يحفظ إجراءات الموجه على التحويل."""
+    con = get_db(); cur = con.cursor()
+    new_status = data.get("status", "with_counselor")
+    cur.execute("""UPDATE student_referrals SET
+        status=?, counselor_meeting_date=?, counselor_meeting_period=?,
+        counselor_action1=?, counselor_action2=?, counselor_action3=?, counselor_action4=?,
+        counselor_name=?, counselor_date=?, counselor_referred_back_date=?
+        WHERE id=?
+    """, (
+        new_status,
+        data.get("counselor_meeting_date",""), data.get("counselor_meeting_period",""),
+        data.get("counselor_action1",""), data.get("counselor_action2",""),
+        data.get("counselor_action3",""), data.get("counselor_action4",""),
+        data.get("counselor_name",""), data.get("counselor_date",""),
+        data.get("counselor_referred_back_date",""), ref_id
+    ))
+    con.commit(); con.close()
+
+def close_referral(ref_id: int):
+    """يُغلق التحويل (تم الحل)."""
+    con = get_db(); cur = con.cursor()
+    cur.execute("UPDATE student_referrals SET status='resolved' WHERE id=?", (ref_id,))
+    con.commit(); con.close()
+
+def get_deputy_phones() -> list:
+    """يُعيد أرقام جوالات المستخدمين ذوي دور وكيل."""
+    con = get_db(); cur = con.cursor()
+    cur.execute("SELECT phone FROM users WHERE role='deputy' AND active=1 AND phone!='' AND phone IS NOT NULL")
+    phones = [r[0] for r in cur.fetchall()]; con.close(); return phones
+
+def get_counselor_phones() -> list:
+    """يُعيد أرقام جوالات الموجّهين من config.json."""
+    try:
+        from config_manager import load_config
+        cfg = load_config()
+        phones = []
+        for key in ("counselor1_phone", "counselor2_phone"):
+            p = cfg.get(key, "").strip()
+            if p:
+                phones.append(p)
+        return phones
+    except Exception:
+        return []
+
+# ═══════════════════════════════════════════════════════════════
+# خطابات الاستفسار الأكاديمي (الموجه ← المعلم)
+# ═══════════════════════════════════════════════════════════════
+def create_academic_inquiry(data: dict) -> int:
+    client = get_cloud_client()
+    if client.is_active():
+        res = client.post("/web/api/create-academic-inquiry", data)
+        return res.get("id", 0) if res.get("ok") else 0
+
+    con = get_db(); cur = con.cursor()
+    now = datetime.datetime.now().isoformat()
+    cur.execute("""
+        INSERT INTO academic_inquiries
+        (date, counselor_name, teacher_username, teacher_name,
+         class_name, subject, student_name,
+         teacher_reply_date, teacher_reply_reasons, teacher_reply_evidence,
+         status, inquiry_type, created_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+    """, (
+        data.get("date", ""), data.get("counselor_name", ""),
+        data.get("teacher_username", ""), data.get("teacher_name", ""),
+        data.get("class_name", ""), data.get("subject", ""),
+        data.get("student_name", ""),
+        "", "", "", "جديد", data.get("inquiry_type", "تدني ملحوظ"), now
+    ))
+    inq_id = cur.lastrowid
+    con.commit(); con.close()
+    return inq_id
+
+def get_academic_inquiries(teacher_username: str = None) -> list:
+    client = get_cloud_client()
+    if client.is_active():
+        res = client.get("/web/api/academic-inquiries")
+        return res.get("rows", []) if res.get("ok") else []
+
+    con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
+    if teacher_username:
+        cur.execute("SELECT * FROM academic_inquiries WHERE teacher_username=? ORDER BY created_at DESC", (teacher_username,))
+    else:
+        cur.execute("SELECT * FROM academic_inquiries ORDER BY created_at DESC")
+    rows = [dict(r) for r in cur.fetchall()]; con.close(); return rows
+
+def get_academic_inquiry(inq_id: int) -> dict:
+    con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
+    cur.execute("SELECT * FROM academic_inquiries WHERE id=?", (inq_id,))
+    row = cur.fetchone(); con.close(); return dict(row) if row else {}
+
+def reply_academic_inquiry(inq_id: int, data: dict):
+    con = get_db(); cur = con.cursor()
+    now = datetime.datetime.now().isoformat()
+    cur.execute("""
+        UPDATE academic_inquiries
+        SET teacher_reply_date=?, teacher_reply_reasons=?, teacher_reply_evidence=?, status=?, inquiry_type=?
+        WHERE id=?
+    """, (
+        data.get("date", now.split("T")[0]),
+        data.get("reasons", ""),
+        data.get("evidence", ""),
+        "تم الرد",
+        data.get("inquiry_type", ""),
+        inq_id
+    ))
+    con.commit(); con.close()
+
 # ===================== بناء التقارير HTML =====================

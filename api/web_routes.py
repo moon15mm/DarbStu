@@ -28,7 +28,12 @@ from database import (get_db, load_students, load_teachers,
                       authenticate, hash_password, save_user_allowed_tabs,
                       get_user_allowed_tabs,
                       import_students_from_excel_sheet2_format,
-                      import_teachers_from_excel)
+                      import_teachers_from_excel,
+                      create_student_referral, get_referrals_for_teacher,
+                      get_all_referrals, get_referral_by_id,
+                      update_referral_deputy, close_referral,
+                      create_academic_inquiry, get_academic_inquiries,
+                      get_academic_inquiry, reply_academic_inquiry)
 from whatsapp_service import (send_whatsapp_message, send_whatsapp_pdf,
                                check_whatsapp_server_status)
 from alerts_service import (log_message_status, run_smart_alerts,
@@ -48,6 +53,12 @@ from pdf_generator import (generate_session_pdf, generate_behavioral_contract_pd
                             _render_pdf_page_as_png, save_results_to_db,
                             parse_results_pdf, get_student_result)
 from config_manager import get_message_template
+
+try:
+    from gui.tabs.teacher_forms_tab import _make_lesson_pdf as generate_lesson_pdf, _make_program_pdf as generate_program_pdf
+except ImportError:
+    generate_lesson_pdf = lambda d: b""
+    generate_program_pdf = lambda d: b""
 from grade_analysis import _ga_parse_file, _ga_build_html
 
 router = APIRouter()
@@ -69,9 +80,12 @@ def _verify_token(token: str) -> dict:
         return {}
 
 def _get_current_user(request: Request) -> dict:
-    token = request.cookies.get("darb_token","") or             request.headers.get("Authorization","").replace("Bearer ","")
+    token = request.cookies.get("darb_token","") or request.headers.get("Authorization","").replace("Bearer ","")
     if not token: return {}
-    return _verify_token(token)
+    data = _verify_token(token)
+    if data:
+        data["username"] = data.get("sub", "")
+    return data
 
 
 # ─── Login API ───────────────────────────────────────────────
@@ -313,6 +327,29 @@ async def web_add_permission(req: Request):
     except Exception as e:
         return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
 
+@router.post("/web/api/update-permission", response_class=JSONResponse)
+async def web_update_permission(req: Request):
+    user = _get_current_user(req)
+    if not user or user["role"] not in ("admin", "deputy"):
+        return JSONResponse({"error": "غير مصرح"}, status_code=401)
+    try:
+        data = await req.json()
+        pid = int(data.get("id", 0))
+        update_permission_status(pid, data.get("status", "approved"), user["sub"])
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/academic-inquiry/{inq_id}", response_class=JSONResponse)
+async def web_get_academic_inquiry_detail(inq_id: int, request: Request):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"error": "غير مصرح"}, status_code=401)
+    try:
+        row = get_academic_inquiry(inq_id)
+        return JSONResponse({"ok": True, "row": row})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
 
 @router.get("/web/api/daily-report", response_class=JSONResponse)
 async def web_daily_report(request: Request, date: str = None):
@@ -463,6 +500,120 @@ async def web_me(request: Request):
         "is_girls": gender == "girls",
     })
 
+@router.get("/web/api/teachers", response_class=JSONResponse)
+async def web_get_teachers(request: Request):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"error": "غير مصرح"}, status_code=401)
+    try:
+        users = get_all_users()
+        teachers = [{"username": u["username"], "full_name": u.get("full_name") or u["username"]} for u in users if u["role"] == "teacher" and u["active"]]
+        return JSONResponse({"ok": True, "teachers": teachers})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.post("/web/api/create-academic-inquiry", response_class=JSONResponse)
+async def web_create_academic_inquiry(req: Request):
+    user = _get_current_user(req)
+    if not user: return JSONResponse({"error": "غير مصرح"}, status_code=401)
+    try:
+        data = await req.json()
+        inq_id = create_academic_inquiry(data)
+        return JSONResponse({"ok": True, "id": inq_id})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/academic-inquiries", response_class=JSONResponse)
+async def web_get_academic_inquiries(request: Request):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"error": "غير مصرح"}, status_code=401)
+    try:
+        is_teacher = user["role"] == "teacher"
+        rows = get_academic_inquiries(teacher_username=user["sub"] if is_teacher else None)
+        return JSONResponse({"ok": True, "rows": rows})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.post("/web/api/reply-academic-inquiry", response_class=JSONResponse)
+async def web_reply_academic_inquiry(req: Request):
+    user = _get_current_user(req)
+    if not user or user["role"] != "teacher": 
+        return JSONResponse({"error": "غير مصرح"}, status_code=401)
+    try:
+        data = await req.json()
+        inq_id = int(data.get("id", 0))
+        if inq_id <= 0: return JSONResponse({"ok": False, "msg": "معرف الخطاب غير صالح"})
+        reply_academic_inquiry(inq_id, data)
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.post("/web/api/referrals/create", response_class=JSONResponse)
+async def web_referral_create(req: Request):
+    user = _get_current_user(req)
+    if not user: return JSONResponse({"error": "غير مصرح"}, status_code=401)
+    try:
+        data = await req.json()
+        ref_id = create_student_referral(data)
+        return JSONResponse({"ok": True, "id": ref_id})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/referrals/teacher", response_class=JSONResponse)
+async def web_referral_teacher(request: Request, username: str):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"error": "غير مصرح"}, status_code=401)
+    try:
+        rows = get_referrals_for_teacher(username)
+        return JSONResponse({"ok": True, "rows": rows})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/referrals/all", response_class=JSONResponse)
+async def web_referral_all(request: Request, status: str = None):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"error": "غير مصرح"}, status_code=401)
+    try:
+        rows = get_all_referrals(status_filter=status)
+        return JSONResponse({"ok": True, "rows": rows})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/referrals/detail/{ref_id}", response_class=JSONResponse)
+async def web_referral_detail(ref_id: int, request: Request):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"error": "غير مصرح"}, status_code=401)
+    try:
+        row = get_referral_by_id(ref_id)
+        return JSONResponse({"ok": True, "row": row})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.post("/web/api/referrals/update-deputy", response_class=JSONResponse)
+async def web_referral_update_deputy(req: Request):
+    user = _get_current_user(req)
+    if not user or user["role"] not in ("admin", "deputy"):
+        return JSONResponse({"error": "غير مصرح"}, status_code=401)
+    try:
+        data = await req.json()
+        ref_id = int(data.get("id", 0))
+        update_referral_deputy(ref_id, data)
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.post("/web/api/referrals/close", response_class=JSONResponse)
+async def web_referral_close(req: Request):
+    user = _get_current_user(req)
+    if not user or user["role"] not in ("admin", "deputy"):
+        return JSONResponse({"error": "غير مصرح"}, status_code=401)
+    try:
+        data = await req.json()
+        close_referral(int(data.get("id", 0)))
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
 
 # ═══════════════════════════════════════════════════════════════
 # HTML صفحات الويب
@@ -584,6 +735,11 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
             ("تصدير نور",           "noor_export",          "📤"),
             ("نشر النتائج",         "results",              "🏅"),
             ("الموجّه الطلابي",     "counselor",            "🧠"),
+            ("استلام تحويلات",      "referral_deputy",      "📥"),
+        ]),
+        ("أدوات المعلم", [
+            ("تحويل طالب",          "referral_teacher",     "📋"),
+            ("نماذج المعلم",        "teacher_forms",        "📝"),
         ]),
         ("الإعدادات", [
             ("إعدادات المدرسة",     "school_settings",      "🏛️"),
@@ -1286,6 +1442,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
     <button class="itb active" onclick="si('counselor','co-main');loadCounselorList();">📋 قائمة المحوّلين</button>
     <button class="itb" onclick="si('counselor','co-ses')">📝 تسجيل جلسة</button>
     <button class="itb" onclick="si('counselor','co-add')">➕ إضافة يدوية</button>
+    <button class="itb" onclick="si('counselor','co-inq');loadCounselorInquiries()">📬 خطابات الاستفسار</button>
   </div>
 
   <!-- ── قائمة المحوّلين الموحَّدة (مرآة للتطبيق المكتبي) ── -->
@@ -1340,6 +1497,28 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
       </div>
       <button class="btn bp1" onclick="addCounselorManual(false)">✅ إضافة للموجّه</button>
       <div id="coa-st" style="margin-top:10px"></div>
+    </div>
+  </div>
+  <!-- ── خطابات الاستفسار الأكاديمي ── -->
+  <div id="co-inq" class="ip">
+    <div class="section">
+      <div class="st">📩 توجيه خطاب استفسار لمعلم</div>
+      <div class="fg2">
+        <div class="fg"><label class="fl">التاريخ</label><input type="date" id="coinq-date"></div>
+        <div class="fg"><label class="fl">المعلم</label><select id="coinq-teacher"><option value="">اختر المعلم</option></select></div>
+        <div class="fg"><label class="fl">الفصل</label><input type="text" id="coinq-class" placeholder="مثال: الأول ثانوي - أ"></div>
+        <div class="fg"><label class="fl">المادة</label><input type="text" id="coinq-subject"></div>
+        <div class="fg"><label class="fl">الطالب (أو "الكل")</label><input type="text" id="coinq-student" value="الكل"></div>
+      </div>
+      <button class="btn bp1" onclick="sendCounselorInquiry()">📤 إرسال الخطاب</button>
+      <div id="coinq-st" style="margin-top:10px"></div>
+    </div>
+    <div class="section">
+      <div class="st">📜 سجل الخطابات والردود</div>
+      <div class="tw"><table>
+        <thead><tr><th>التاريخ</th><th>المعلم</th><th>الفصل</th><th>المادة</th><th>الحالة</th><th>التفاصيل</th></tr></thead>
+        <tbody id="coinq-tbl"></tbody>
+      </table></div>
     </div>
   </div>
 </div>
@@ -1439,6 +1618,180 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
     <div id="qn-list"></div>
   </div>
 </div>
+
+<div id="tab-referral_teacher">
+  <h2 class="pt">📋 تحويل طالب إلى الوكيل</h2>
+  <div class="it">
+    <button class="itb active" onclick="si('referral_teacher','rt-new');loadRefStudents()">➕ تحويل جديد</button>
+    <button class="itb" onclick="si('referral_teacher','rt-hist');loadRefHistory()">📜 سجل تحويلاتي</button>
+  </div>
+  <div id="rt-new" class="ip active">
+    <div class="section">
+      <div class="st">بيانات الطالب والمخالفة</div>
+      <div class="fg2">
+        <div class="fg"><label class="fl">الطالب</label><select id="rt-stu" onchange="rtAutoClass()"><option value="">اختر طالباً</option></select></div>
+        <div class="fg"><label class="fl">الفصل</label><input type="text" id="rt-cls" readonly style="background:#f9f9f9"></div>
+        <div class="fg"><label class="fl">المادة</label><input type="text" id="rt-subj"></div>
+        <div class="fg"><label class="fl">الحصة</label><select id="rt-per"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></div>
+        <div class="fg"><label class="fl">الوقت</label><div style="display:flex;gap:4px"><input type="time" id="rt-time" style="width:100%"></div></div>
+        <div class="fg"><label class="fl">نوع المخالفة</label><select id="rt-vtype"><option>سلوكية</option><option>تربوية</option><option>أخرى</option></select></div>
+        <div class="fg" style="grid-column:1/-1"><label class="fl">وصف المخالفة</label><input type="text" id="rt-violation"></div>
+        <div class="fg" style="grid-column:1/-1"><label class="fl">أسباب التحويل</label><textarea id="rt-causes" rows="2"></textarea></div>
+        <div class="fg"><label class="fl">تكرار المشكلة</label><select id="rt-repeat"><option>الأول</option><option>الثاني</option><option>الثالث</option><option>الرابع</option></select></div>
+      </div>
+      <div class="st" style="margin-top:14px">الإجراءات المتخذة</div>
+      <div class="fg"><input type="text" id="rt-act1" placeholder="1. "></div>
+      <div class="fg"><input type="text" id="rt-act2" placeholder="2. "></div>
+      <button class="btn bp1" style="margin-top:12px" onclick="submitTeacherReferral()">📤 إرسال التحويل</button>
+      <div id="rt-st" style="margin-top:10px"></div>
+    </div>
+  </div>
+  <div id="rt-hist" class="ip">
+    <div class="section"><div class="tw"><table>
+      <thead><tr><th>رقم</th><th>التاريخ</th><th>الطالب</th><th>الفصل</th><th>الحالة</th><th>التفاصيل</th></tr></thead>
+      <tbody id="rt-hist-tbl"></tbody>
+    </table></div></div>
+  </div>
+</div>
+
+<div id="tab-referral_deputy">
+  <h2 class="pt">📥 إدارة تحويلات الطلاب</h2>
+  <div class="section">
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <select id="rd-filter" onchange="loadDeputyReferrals()"><option value="all">الكل</option><option value="pending">بانتظار الوكيل</option><option value="with_deputy">مع الوكيل</option><option value="with_counselor">مع الموجه</option><option value="resolved">مغلق</option></select>
+      <button class="btn bp1 bsm" onclick="loadDeputyReferrals()">🔄 تحديث</button>
+    </div>
+    <div class="tw"><table>
+      <thead><tr><th>رقم</th><th>التاريخ</th><th>الطالب</th><th>الفصل</th><th>المعلم</th><th>الحالة</th><th>إجراء</th></tr></thead>
+      <tbody id="rd-tbl"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<div id="tab-teacher_forms">
+  <h2 class="pt">📋 نماذج المعلم</h2>
+  <div class="ab ai">اختر النموذج المراد تعبئته، وسيقوم النظام بتوليد ملف PDF وإرساله للمدير. (يتطلب اتصال واتساب للرسائل)</div>
+  <div class="stat-cards">
+    <div class="sc" onclick="si('teacher_forms','tf-lesson')" style="cursor:pointer;background:#F0FDF4;border-color:#BBF7D0">
+      <div class="v" style="color:#166534">📘</div><div class="l">نموذج تحضير الدرس</div>
+    </div>
+    <div class="sc" onclick="si('teacher_forms','tf-prog')" style="cursor:pointer;background:#EFF6FF;border-color:#BFDBFE">
+      <div class="v" style="color:#1D4ED8">📊</div><div class="l">تقرير تنفيذ البرنامج</div>
+    </div>
+    <div class="sc" onclick="si('teacher_forms','tf-inq');loadTeacherInquiries()" style="cursor:pointer;background:#FAF5FF;border-color:#E9D5FF">
+      <div class="v" style="color:#7E22CE">📬</div><div class="l">استفسارات الموجّه</div>
+    </div>
+  </div>
+  
+  <div id="tf-lesson" class="ip" style="margin-top:16px">
+    <div class="section"><div class="st">📘 نموذج تحضير الدرس</div>
+      <div class="fg2">
+        <div class="fg"><label class="fl">المرحلة الدراسية</label><select id="tfl-grade"><option>الأول متوسط</option><option>الثاني متوسط</option><option>الثالث متوسط</option><option>الأول ثانوي</option><option>الثاني ثانوي</option><option>الثالث ثانوي</option></select></div>
+        <div class="fg"><label class="fl">الفصل</label><input type="text" id="tfl-cls" value="جميع الفصول"></div>
+        <div class="fg"><label class="fl">عدد الطلاب</label><input type="number" id="tfl-count" value="30"></div>
+        <div class="fg"><label class="fl">المادة</label><input type="text" id="tfl-subj"></div>
+        <div class="fg"><label class="fl">التاريخ</label><input type="date" id="tfl-date"></div>
+        <div class="fg"><label class="fl">عنوان الدرس</label><input type="text" id="tfl-lesson"></div>
+        <div class="fg"><label class="fl">الاستراتيجية</label><select id="tfl-strat">
+          <option>التعلم المبني على حل المشكلات</option><option>العصف الذهني</option><option>التعلم التعاوني</option>
+          <option>الخرائط الذهنية</option><option>التدريس التبادلي</option><option>التعلم الذاتي</option><option>أخرى</option>
+        </select></div>
+      </div>
+      <div class="st" style="margin-top:14px">الأدوات والوسائل التعليمية</div>
+      <div id="tfl-tools" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:13px;margin-bottom:10px">
+        <label><input type="checkbox" value="سبورة تقليدية" checked> سبورة تقليدية</label>
+        <label><input type="checkbox" value="جهاز عرض"> جهاز عرض</label>
+        <label><input type="checkbox" value="سبورة ذكية"> سبورة ذكية</label>
+        <label><input type="checkbox" value="جهاز الحاسب"> جهاز الحاسب</label>
+        <label><input type="checkbox" value="بطاقات تعليمية"> بطاقات تعليمية</label>
+        <label><input type="checkbox" value="أوراق عمل"> أوراق عمل</label>
+      </div>
+      <div class="st" style="margin-top:14px">الأهداف (كل هدف بسطر)</div>
+      <textarea id="tfl-goals" rows="4"></textarea>
+      <div class="st" style="margin-top:14px">الشواهد (نصي)</div>
+      <textarea id="tfl-evidence" rows="3"></textarea>
+      <div class="fg" style="margin-top:8px"><label class="fl">صورة شاهد (اختياري)</label><input type="file" id="tfl-ev-img" accept="image/*"></div>
+      <div class="bg-btn" style="margin-top:12px">
+        <button class="btn bp1" onclick="submitTeacherForm('lesson', false)">تحميل PDF</button>
+        <button class="btn bp4" onclick="submitTeacherForm('lesson', true)">📲 إرسال للمدير</button>
+      </div><div id="tfl-st"></div>
+    </div>
+  </div>
+  
+  <div id="tf-prog" class="ip" style="margin-top:16px">
+    <div class="section"><div class="st">📊 تقرير التنفيذ</div>
+      <div class="fg2">
+        <div class="fg"><label class="fl">تاريخ التنفيذ</label><input type="date" id="tfp-date"></div>
+        <div class="fg"><label class="fl">المنفذ</label><input type="text" id="tfp-exec"></div>
+        <div class="fg"><label class="fl">مكان التنفيذ</label><input type="text" id="tfp-place"></div>
+        <div class="fg"><label class="fl">المستهدفون</label><input type="text" id="tfp-target"></div>
+        <div class="fg"><label class="fl">عدد المستفيدين</label><input type="number" id="tfp-count" value="30"></div>
+      </div>
+      <div class="st" style="margin-top:14px">الأهداف (كل هدف بسطر)</div>
+      <textarea id="tfp-goals" rows="4"></textarea>
+      <div class="fg2" style="margin-top:8px">
+        <div class="fg"><label class="fl">صورة الشاهد 1 (اختياري)</label><input type="file" id="tfp-img1" accept="image/*"></div>
+        <div class="fg"><label class="fl">صورة الشاهد 2 (اختياري)</label><input type="file" id="tfp-img2" accept="image/*"></div>
+      </div>
+      <div class="bg-btn" style="margin-top:12px">
+        <button class="btn bp1" onclick="submitTeacherForm('program', false)">تحميل PDF</button>
+        <button class="btn bp4" onclick="submitTeacherForm('program', true)">📲 إرسال للمدير</button>
+      </div><div id="tfp-st"></div>
+    </div>
+    </div>
+  </div>
+  
+  <div id="tf-inq" class="ip" style="margin-top:16px">
+    <div class="section"><div class="st">📬 استفسارات الموجّه الطلابي</div>
+      <div class="tw"><table>
+        <thead><tr><th>التاريخ</th><th>الفصل</th><th>المادة</th><th>الطالب</th><th>الحالة</th><th>إجراء</th></tr></thead>
+        <tbody id="tfinq-tbl"></tbody>
+      </table></div>
+    </div>
+    <div id="tfinq-reply-form" class="section" style="display:none;background:#F8FAFC;border:2px solid #E2E8F0">
+      <div class="st" id="tfinq-reply-title">رد على استفسار</div>
+      <input type="hidden" id="tfinq-id">
+      <div class="fg" style="margin-bottom:12px">
+        <label class="fl">إفادة المعلم (الأسباب)</label>
+        <textarea id="tfinq-reasons" rows="4" placeholder="اكتب أسباب تدني المستوى..."></textarea>
+      </div>
+      <div class="fg" style="margin-bottom:12px">
+        <label class="fl">شواهد المعلم (نص)</label>
+        <textarea id="tfinq-evidence" rows="3" placeholder="الشواهد والإشعارات..."></textarea>
+      </div>
+      <div class="fg" style="margin-bottom:12px">
+        <label class="fl">ملف شواهد (اختياري - صورة)</label>
+        <input type="file" id="tfinq-file" accept="image/*">
+      </div>
+      <div class="bg-btn">
+        <button class="btn bp1" onclick="submitTeacherInquiryReply()">📤 إرسال الإفادة</button>
+        <button class="btn bp2" onclick="document.getElementById('tfinq-reply-form').style.display='none'">❌ إلغاء</button>
+      </div>
+      <div id="tfinq-st" style="margin-top:10px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal for Deputy Actions -->
+<div id="rd-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;padding:20px;overflow-y:auto">
+  <div style="background:#fff;max-width:600px;margin:30px auto;border-radius:12px;padding:20px;position:relative;box-shadow:var(--sh)">
+    <button onclick="document.getElementById('rd-modal').style.display='none'" style="position:absolute;left:15px;top:15px;background:none;border:none;font-size:20px;cursor:pointer">✖</button>
+    <div class="pt">تفاصيل التحويل <span id="rd-m-id" class="badge bg"></span></div>
+    <div id="rd-m-details" style="font-size:13px;line-height:1.6;margin-bottom:16px;background:#f8fafc;padding:12px;border-radius:8px"></div>
+    <div class="st">إجراءات الوكيل</div>
+    <div class="fg2" style="background:#fff;padding:10px;border:1px solid var(--bd);border-radius:8px">
+      <div class="fg"><label class="fl">تاريخ المقابلة</label><input type="date" id="rd-m-date"></div>
+      <div class="fg"><label class="fl">عمل رئيسي</label><select id="rd-m-act1"><option>التوجيه والإرشاد</option><option>الاتصال بولي الأمر</option><option>أخرى</option></select></div>
+      <div class="fg" style="grid-column:1/-1"><label class="fl">إجراءات أخرى (اختياري)</label><input type="text" id="rd-m-act2"></div>
+    </div>
+    <div id="rd-m-st"></div>
+    <div class="bg-btn" style="margin-top:16px;border-top:1px solid var(--bd);padding-top:14px">
+      <button class="btn bp1" onclick="saveDeputyAction(false)">💾 حفظ</button>
+      <button class="btn bp4" onclick="saveDeputyAction(true)">🧠 تحويل للموجّه</button>
+      <button class="btn bp3" onclick="closeDeputyReferral()">✅ حل وإغلاق</button>
+    </div>
+  </div>
+</div>
 '''
 
     # ── JavaScript الكامل المضغوط ─────────────────────────────
@@ -1501,6 +1854,8 @@ function showTab(key){
     'tardiness_recipients':loadRecipients,
     'grade_analysis':function(){fillSel('ga-cls');},
     'term_report':function(){fillSel('tr-cls');},
+    'referral_teacher':function(){loadRefStudents();loadRefHistory();},
+    'referral_deputy':loadDeputyReferrals,
   };
   if(L[key])L[key]();
   if(window.innerWidth<=768)closeSidebar();
@@ -2095,10 +2450,30 @@ function renderCounselorList(rows){
     return;
   }
   tbl.innerHTML=rows.map(function(r){
-    var bg=r.referral_type==='غياب'?'background:#FFF0F0':'background:#FFF7ED';
+    var bg = 'background:#FFF7ED';
+    if(r.referral_type === 'غياب') bg = 'background:#FFF0F0';
+    else if(r.referral_type === 'تحويل معلم') bg = 'background:#EDE7F6';
     var sid=String(r.student_id).replace(/'/g,"\\'");
     var sn=String(r.student_name).replace(/'/g,"\\'");
     var cn=String(r.class_name).replace(/'/g,"\\'");
+    
+    var buttons = '';
+    if (r.referral_type === 'تحويل معلم') {
+      buttons = `<button class="btn bp4 bsm" onclick="openCounselorReferralForm('${r.ref_id}')">📋 إجراءات التحويل</button>`;
+    } else {
+      buttons = `<button class="btn bp1 bsm" onclick="viewCounselorHistory('${sid}','${sn}')" title="السجل الإرشادي">📄</button> `+
+        `<div style="display:inline-block;position:relative" onmouseleave="this.querySelector('.drp').style.display='none'">`+
+          `<button class="btn bp3 bsm" onclick="var d=this.nextElementSibling;d.style.display=d.style.display==='block'?'none':'block'" title="جلسة إرشادية">✏️ جلسة ▾</button>`+
+          `<div class="drp" style="display:none;position:absolute;top:100%;right:0;background:#fff;border:1px solid var(--bd);border-radius:6px;z-index:100;min-width:120px;box-shadow:var(--sh);overflow:hidden;text-align:right">`+
+            `<div style="padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--bd)" onclick="openSessionDialog('${sid}','${sn}','${cn}','discipline');this.parentNode.style.display='none'" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='#fff'">انضباط مدرسي</div>`+
+            `<div style="padding:8px 12px;cursor:pointer;font-size:12px" onclick="openSessionDialog('${sid}','${sn}','${cn}','behavior');this.parentNode.style.display='none'" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='#fff'">سلوك</div>`+
+          `</div>`+
+        `</div> `+
+        `<button class="btn bp4 bsm" onclick="openContractDialog('${sid}','${sn}','${cn}')" title="عقد سلوكي">📝</button> `+
+        `<button class="btn bp2 bsm" onclick="openAlertDialog('${sid}','${sn}')" title="تنبيه/استدعاء">🔔</button> `+
+        `<button class="btn bp5 bsm" onclick="delCounselorStudent('${sid}','${sn}')" title="حذف">🗑️</button>`;
+    }
+    
     return '<tr style="'+bg+'">'+
       '<td>'+r.student_id+'</td>'+
       '<td><strong>'+r.student_name+'</strong></td>'+
@@ -2106,13 +2481,7 @@ function renderCounselorList(rows){
       '<td><span class="badge br">'+r.absences+'</span></td>'+
       '<td><span class="badge bo">'+r.tardiness+'</span></td>'+
       '<td style="font-size:11px">'+(r.last_action||'—')+'</td>'+
-      '<td style="white-space:nowrap">'+
-        '<button class="btn bp1 bsm" onclick="viewCounselorHistory(\''+sid+'\',\''+sn+'\')" title="السجل الإرشادي">📄</button> '+
-        '<button class="btn bp3 bsm" onclick="openSessionDialog(\''+sid+'\',\''+sn+'\',\''+cn+'\')" title="جلسة إرشادية">✏️</button> '+
-        '<button class="btn bp4 bsm" onclick="openContractDialog(\''+sid+'\',\''+sn+'\',\''+cn+'\')" title="عقد سلوكي">📝</button> '+
-        '<button class="btn bp2 bsm" onclick="openAlertDialog(\''+sid+'\',\''+sn+'\')" title="تنبيه/استدعاء">🔔</button> '+
-        '<button class="btn bp5 bsm" onclick="delCounselorStudent(\''+sid+'\',\''+sn+'\')" title="حذف">🗑️</button>'+
-      '</td>'+
+      '<td style="white-space:nowrap">'+buttons+'</td>'+
     '</tr>';
   }).join('');
 }
@@ -2237,11 +2606,30 @@ function openAlertDialog(sid,sname){
 /* ──────────────────────────────────────────────────────────
    جلسة إرشادية كاملة — مرآة لـ _open_session_dialog المكتبية
    ────────────────────────────────────────────────────────── */
-async function openSessionDialog(sid,sname,sclass){
+async function openSessionDialog(sid,sname,sclass, sessionType){
+  sessionType = sessionType || 'discipline';
   // جلب البنود الافتراضية + معلومات المدير/الوكيل من الـ backend
   var defs=await api('/web/api/counselor-session-defaults');
   if(!defs||!defs.ok){alert('فشل جلب البيانات');return;}
   var goals=defs.goals||[],discs=defs.discussions||[],recs=defs.recommendations||[];
+
+  if (sessionType === 'behavior') {
+      goals = [
+          "التعرف على المشكلة وأسبابها",
+          "توضيح دور الطالب ومسؤولياته في المدرسة",
+          "الالتزام بقوانين وأنظمة المدرسة",
+          "اخد التعهد على الطالب بعدم تكرار المخالفة"
+      ];
+      discs = [
+          "تمت مناقشة الطالب عن السلوك الذي قام به ( الهروب من المدرسـة وعدم حضور الحصص )",
+          "تمت مناقشة الطالب عن أسباب هذا السلوك والدافع له"
+      ];
+      recs = [
+          "توضيح سلبيات هذا السلوك ومخالفته للائحة السلوك وأنظمة المدرسة",
+          "متابعة الطالب دراسياً ومتابعة حضوره للحصص",
+          "تحويل الطالب (          ) للوكيل (          )"
+      ];
+  }
   var c1=(defs.counselor1_name||'').trim();
   var c2=(defs.counselor2_name||'').trim();
   var activeC=(defs.active_counselor||'1');
@@ -2271,7 +2659,7 @@ async function openSessionDialog(sid,sname,sclass){
     '<div class="fg2">'+
       '<div class="fg"><label class="fl">اسم الطالب</label><input type="text" value="'+sname+'" disabled></div>'+
       '<div class="fg"><label class="fl">الفصل</label><input type="text" value="'+sclass+'" disabled></div>'+
-      '<div class="fg"><label class="fl">عنوان الجلسة</label><input type="text" id="sd-title" value="الانضباط المدرسي"></div>'+
+      '<div class="fg"><label class="fl">عنوان الجلسة</label><input type="text" id="sd-title" value="'+(sessionType==='behavior' ? 'سلوك' : 'الانضباط المدرسي')+'"></div>'+
       '<div class="fg"><label class="fl">التاريخ</label><input type="text" id="sd-date" value="'+today+'"></div>'+
       counselorPicker+
     '</div>'+
@@ -2333,7 +2721,7 @@ async function openSessionDialog(sid,sname,sclass){
     '<button class="btn bp2" onclick="printSession(\''+sid+'\',\''+sname+'\',\''+sclass+'\')">🖨️ طباعة PDF</button>'+
     '</div>';
 
-  showCoModal('📝 جلسة إرشاد فردي — '+sname,html,'#7c3aed','#5b21b6');
+  showCoModal('📝 جلسة إرشاد فردي — '+sname+(sessionType==='behavior'?' (سلوك)':' (انضباط)'),html,'#7c3aed','#5b21b6');
 }
 
 function _collectSessionData(sid,sname,sclass){
@@ -2422,6 +2810,67 @@ function printSession(sid,sname,sclass){
       if(w)try{w.close();}catch(e){}
       alert('خطأ في إنشاء PDF: '+(err&&err.message?err.message:''));
     });
+}
+
+/* ──────────────────────────────────────────────────────────
+   نموذج إجراءات الموجّه لتحويلات المعلمين
+   ────────────────────────────────────────────────────────── */
+async function openCounselorReferralForm(refId){
+  var d=await api('/web/api/referral/'+refId);
+  if(!d||!d.ok||!d.referral){alert('❌ فشل تحميل بيانات التحويل');return;}
+  var ref=d.referral;
+  var defs=await api('/web/api/counselor-session-defaults');
+  var today=new Date().toISOString().split('T')[0];
+  var cName=(defs&&defs.counselor_name)||'الموجّه الطلابي';
+  var html='<div style="background:#f3e5f5;padding:12px;border-radius:8px;margin-bottom:12px;font-size:13px">'+
+    '<div style="margin-bottom:4px"><strong>الطالب:</strong> '+ref.student_name+'</div>'+
+    '<div style="margin-bottom:4px"><strong>الفصل:</strong> '+(ref.class_name||'—')+'</div>'+
+    '<div style="margin-bottom:4px"><strong>المخالفة:</strong> '+(ref.violation_type||'')+' — '+(ref.violation||'')+'</div>'+
+    '<div><strong>المعلم:</strong> '+(ref.teacher_name||'—')+'</div>'+
+    '</div>'+
+    '<div class="fg2">'+
+      '<div class="fg"><label class="fl">تاريخ المقابلة</label><input type="date" id="crf-date" value="'+(ref.counselor_meeting_date||today)+'" class="fc"></div>'+
+      '<div class="fg"><label class="fl">الحصة</label><select id="crf-period" class="fc">'+[1,2,3,4,5,6,7,8].map(function(i){return '<option value="'+i+'"'+(ref.counselor_meeting_period==i?' selected':'')+'>'+i+'</option>'}).join('')+'</select></div>'+
+    '</div>'+
+    '<div class="fg"><label class="fl">الإجراء 1 (التوجيه والإرشاد)</label><input type="text" id="crf-a1" class="fc" value="'+(ref.counselor_action1||'')+'"></div>'+
+    '<div class="fg"><label class="fl">الإجراء 2 (التواصل مع ولي الأمر)</label><input type="text" id="crf-a2" class="fc" value="'+(ref.counselor_action2||'')+'"></div>'+
+    '<div class="fg"><label class="fl">الإجراء 3 (الإحالة لجهة أخرى)</label><input type="text" id="crf-a3" class="fc" value="'+(ref.counselor_action3||'')+'"></div>'+
+    '<div class="fg"><label class="fl">الإجراء 4 (أخرى)</label><input type="text" id="crf-a4" class="fc" value="'+(ref.counselor_action4||'')+'"></div>'+
+    '<div class="fg2">'+
+      '<div class="fg"><label class="fl">اسم الموجّه</label><input type="text" id="crf-name" class="fc" value="'+(ref.counselor_name||cName)+'"></div>'+
+      '<div class="fg"><label class="fl">تاريخ الإعادة للوكيل</label><input type="date" id="crf-back" class="fc" value="'+(ref.counselor_referred_back_date||'')+'"></div>'+
+    '</div>'+
+    '<div id="crf-st" style="margin-bottom:8px"></div>'+
+    '<div class="bg-btn" style="margin-top:8px">'+
+      '<button class="btn bp1" onclick="submitCounselorReferralForm('+refId+',false)">💾 حفظ الإجراءات</button>'+
+      '<button class="btn bp3" onclick="submitCounselorReferralForm('+refId+',true)">✅ حفظ وإغلاق التحويل</button>'+
+    '</div>';
+  showCoModal('📋 إجراءات الموجّه الطلابي', html, '#6a1b9a', '#4a148c');
+}
+
+async function submitCounselorReferralForm(refId, closeIt){
+  var payload={
+    counselor_meeting_date:document.getElementById('crf-date').value.trim(),
+    counselor_meeting_period:document.getElementById('crf-period').value.trim(),
+    counselor_action1:document.getElementById('crf-a1').value.trim(),
+    counselor_action2:document.getElementById('crf-a2').value.trim(),
+    counselor_action3:document.getElementById('crf-a3').value.trim(),
+    counselor_action4:document.getElementById('crf-a4').value.trim(),
+    counselor_name:document.getElementById('crf-name').value.trim(),
+    counselor_referred_back_date:document.getElementById('crf-back').value.trim(),
+    close_it: closeIt
+  };
+  if(!payload.counselor_name){ss('crf-st','أدخل اسم الموجّه','er');return;}
+  ss('crf-st','⏳ جارٍ الحفظ...','ai');
+  try{
+    var r=await fetch('/web/api/update-counselor-referral/'+refId,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    var d=await r.json();
+    if(d.ok){
+      ss('crf-st','✅ تم الحفظ','ok');
+      if(closeIt) setTimeout(function(){var m=document.getElementById('co-modal');if(m)m.remove();},800);
+      loadCounselorList();
+    }else ss('crf-st','❌ '+(d.msg||'فشل'),'er');
+  }catch(e){ss('crf-st','❌ خطأ اتصال','er');}
 }
 
 /* ──────────────────────────────────────────────────────────
@@ -2610,6 +3059,195 @@ function setCoModalBody(html){
   var body=document.getElementById('co-modal-body');
   if(body)body.innerHTML=html;
 }
+
+/* ── TEACHER REFERRALS (تحويل طالب) ── */
+async function loadRefStudents(){
+  var d=await api('/web/api/students');if(!d||!d.ok)return;
+  var all=[];d.classes.forEach(function(c){c.students.forEach(function(s){all.push(Object.assign({},s,{class_name:c.name,class_id:c.id}));});});
+  window._refStudents=all;
+  document.getElementById('rt-stu').innerHTML='<option value="">اختر طالباً</option>'+
+    all.map(function(s){return '<option value="'+s.id+'">'+s.name+'</option>';}).join('');
+}
+function rtAutoClass(){
+  var id=document.getElementById('rt-stu').value;
+  var s=(window._refStudents||[]).find(function(x){return x.id==id;});
+  if(s)document.getElementById('rt-cls').value=s.class_name;
+  else document.getElementById('rt-cls').value='';
+}
+async function submitTeacherReferral(){
+  var stuSel=document.getElementById('rt-stu');
+  if(!stuSel.value){ss('rt-st','اختر طالباً','er');return;}
+  var st = (window._refStudents||[]).find(function(x){return x.id==stuSel.value;});
+  var payload={
+    student_id:stuSel.value,
+    student_name:stuSel.options[stuSel.selectedIndex].text,
+    class_id:st?st.class_id:'',
+    class_name:document.getElementById('rt-cls').value,
+    subject:document.getElementById('rt-subj').value,
+    period:document.getElementById('rt-per').value,
+    session_time:document.getElementById('rt-time').value||'',
+    violation_type:document.getElementById('rt-vtype').value,
+    violation:document.getElementById('rt-violation').value,
+    problem_causes:document.getElementById('rt-causes').value,
+    repeat_count:document.getElementById('rt-repeat').value,
+    teacher_action1:document.getElementById('rt-act1').value,
+    teacher_action2:document.getElementById('rt-act2').value
+  };
+  ss('rt-st','⏳ جارٍ الإرسال...','ai');
+  var r=await fetch('/web/api/create-referral',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  var d=await r.json();
+  if(d.ok){
+    ss('rt-st','✅ تم إرسال التحويل لمدير/وكيل شؤون الطلاب','ok');
+    document.getElementById('rt-subj').value='';document.getElementById('rt-violation').value='';
+    document.getElementById('rt-causes').value='';document.getElementById('rt-act1').value='';
+    document.getElementById('rt-act2').value='';
+  }else ss('rt-st','❌ '+(d.msg||'خطأ'),'er');
+}
+async function loadRefHistory(){
+  var d=await api('/web/api/referral-history');if(!d||!d.ok)return;
+  var stLabel={pending:'⏳ بانتظار الوكيل',with_deputy:'📋 مع الوكيل',with_counselor:'👨‍🏫 مع الموجه',resolved:'✅ تم الحل'};
+  document.getElementById('rt-hist-tbl').innerHTML=(d.referrals||[]).map(function(r){
+    return `<tr><td>${r.id}</td><td>${r.ref_date}</td><td>${r.student_name}</td><td>${r.class_name}</td><td><span class="badge ${r.status==='resolved'?'bg':'bb'}">${(stLabel[r.status]||r.status)}</span></td><td><button class="btn bp1 bsm" onclick="openTeacherRefDetails(${r.id})">🔍 التفاصيل</button></td></tr>`;
+  }).join('')||'<tr><td colspan="6" style="color:#9CA3AF">لا يوجد</td></tr>';
+}
+
+async function openTeacherRefDetails(id){
+  var d=await api('/web/api/referral/'+id);
+  if(!d||!d.ok){alert('❌ فشل تحميل تفاصيل التحويل');return;}
+  var r=d.referral;
+  var html='<div style="line-height:1.8;padding:12px;font-size:13px;color:#333;">';
+  html+='<div style="margin-bottom:12px"><strong>نوع المخالفة:</strong> '+r.violation_type+' — '+r.violation+'</div>';
+  if(r.problem_causes) html+='<div style="margin-bottom:12px"><strong>الأسباب:</strong> '+r.problem_causes+'</div>';
+  
+  // Teacher Actions
+  if(r.teacher_action1 || r.teacher_action2){
+    var ta='<ul style="margin:4px 0;padding-inline-start:20px">';
+    if(r.teacher_action1) ta+='<li>'+r.teacher_action1+'</li>';
+    if(r.teacher_action2) ta+='<li>'+r.teacher_action2+'</li>';
+    ta+='</ul>';
+    html+='<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:8px;margin-bottom:10px;color:#1e3a8a"><strong style="display:block;margin-bottom:4px">📝 إجراءات المعلم:</strong>'+ta+'</div>';
+  }
+  
+  // Deputy Actions
+  if(r.deputy_action1 || r.deputy_action2){
+    var da='<ul style="margin:4px 0;padding-inline-start:20px">';
+    if(r.deputy_action1) da+='<li>'+r.deputy_action1+'</li>';
+    if(r.deputy_action2) da+='<li>'+r.deputy_action2+'</li>';
+    if(r.refer_to_counselor) da+='<li><span style="background:#fef08a;padding:2px 6px;border-radius:4px;color:#a16207;font-size:11px">تم التحويل للموجه</span></li>';
+    da+='</ul>';
+    var dd=r.deputy_meeting_date?' '+r.deputy_meeting_date:'';
+    html+='<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:8px;margin-bottom:10px;color:#92400e"><strong style="display:block;margin-bottom:4px">📋 إجراء الوكيل'+dd+':</strong>'+da+'</div>';
+  }
+  
+  // Counselor Actions
+  if(r.counselor_action1 || r.counselor_action2 || r.counselor_action3 || r.counselor_action4){
+    var ca='<ul style="margin:4px 0;padding-inline-start:20px">';
+    if(r.counselor_action1) ca+='<li>'+r.counselor_action1+'</li>';
+    if(r.counselor_action2) ca+='<li>'+r.counselor_action2+'</li>';
+    if(r.counselor_action3) ca+='<li>'+r.counselor_action3+'</li>';
+    if(r.counselor_action4) ca+='<li>'+r.counselor_action4+'</li>';
+    ca+='</ul>';
+    var cd=r.counselor_meeting_date?' '+r.counselor_meeting_date:'';
+    html+='<div style="background:#f3e5f5;border:1px solid #e1bee7;border-radius:6px;padding:8px;margin-bottom:10px;color:#4a148c"><strong style="display:block;margin-bottom:4px">🧠 إجراء الموجه'+cd+':</strong>'+ca+'</div>';
+  }
+  html+='</div>';
+  showCoModal('تفاصيل التحويل رقم '+id, html, '#1565C0', '#0D47A1');
+}
+
+/* ── DEPUTY REFERRALS (استلام تحويلات) ── */
+async function loadDeputyReferrals(){
+  var sf=document.getElementById('rd-filter').value;
+  var url='/web/api/all-referrals'+(sf!=='all'?'?status='+sf:'');
+  var d=await api(url);if(!d||!d.ok)return;
+  var stLabel={pending:'⏳ بانتظار الوكيل',with_deputy:'📋 مع الوكيل',with_counselor:'👨‍🏫 مع الموجه',resolved:'✅ تم الحل'};
+  document.getElementById('rd-tbl').innerHTML=(d.referrals||[]).map(function(r){
+    return '<tr><td>'+r.id+'</td><td>'+r.ref_date+'</td><td>'+r.student_name+'</td><td>'+r.class_name+'</td><td>'+r.teacher_name+'</td>'+
+      '<td><span class="badge '+(r.status==='resolved'?'bg':'bb')+'">'+(stLabel[r.status]||r.status)+'</span></td>'+
+      '<td><button class="btn bp1 bsm" onclick="openDeputyReferralModal('+r.id+')">التفاصيل</button></td></tr>';
+  }).join('')||'<tr><td colspan="7" style="color:#9CA3AF">لا يوجد</td></tr>';
+}
+window._curRef=0;
+async function openDeputyReferralModal(id){
+  var d=await api('/web/api/referral/'+id);if(!d||!d.ok){alert('خطأ');return;}
+  window._curRef=id;var r=d.referral;
+  document.getElementById('rd-m-id').innerText='#'+r.id;
+  document.getElementById('rd-m-details').innerHTML='<strong>الطالب:</strong> '+r.student_name+' &nbsp;|&nbsp; <strong>المعلم:</strong> '+r.teacher_name+'<br>'+
+    '<strong>المخالفة:</strong> '+r.violation_type+' - '+r.violation+'<br><strong>الأسباب:</strong> '+r.problem_causes+'<br><strong>إجراءات المعلم:</strong> '+(r.teacher_action1||'')+' / '+(r.teacher_action2||'');
+  document.getElementById('rd-m-date').value=(r.deputy_meeting_date||new Date().toISOString().split('T')[0]);
+  document.getElementById('rd-m-act1').value=(r.deputy_action1||'التوجيه والإرشاد');
+  document.getElementById('rd-m-act2').value=(r.deputy_action2||'');
+  document.getElementById('rd-modal').style.display='block';
+}
+async function saveDeputyAction(referToCounselor){
+  var payload={
+    deputy_meeting_date:document.getElementById('rd-m-date').value,
+    deputy_action1:document.getElementById('rd-m-act1').value,
+    deputy_action2:document.getElementById('rd-m-act2').value,
+    refer_to_counselor:referToCounselor
+  };
+  var r=await fetch('/web/api/update-referral/'+window._curRef,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  var d=await r.json();if(d.ok){ss('rd-m-st','✅ تم الحفظ','ok');loadDeputyReferrals();}else ss('rd-m-st','❌ خطأ','er');
+}
+async function closeDeputyReferral(){
+  if(!confirm('إغلاق هذا التحويل كـ (تم الحل)؟'))return;
+  var r=await fetch('/web/api/close-referral/'+window._curRef,{method:'POST'});
+  var d=await r.json();if(d.ok){document.getElementById('rd-modal').style.display='none';loadDeputyReferrals();alert('تم إغلاق التحويل');}
+}
+
+/* ── TEACHER FORMS (نماذج المعلم) ── */
+async function toBase64(file){
+   return new Promise(function(resolve){
+       if(!file) return resolve('');
+       var reader = new FileReader();
+       reader.onload = function(e){ resolve(e.target.result.split(',')[1]); };
+       reader.onerror = function(){ resolve(''); };
+       reader.readAsDataURL(file);
+   });
+}
+async function submitTeacherForm(formType, sendToPrincipal){
+  var payload={form_type:formType,send:sendToPrincipal};
+  if(formType==='lesson'){
+    payload.strategy=document.getElementById('tfl-strat').value;
+    payload.subject=document.getElementById('tfl-subj').value;
+    payload.date=document.getElementById('tfl-date').value;
+    payload.grade=document.getElementById('tfl-grade').value;
+    payload.class_name=document.getElementById('tfl-cls').value;
+    payload.student_count=document.getElementById('tfl-count').value;
+    payload.lesson=document.getElementById('tfl-lesson').value;
+    payload.evidence=document.getElementById('tfl-evidence').value;
+    payload.goals=document.getElementById('tfl-goals').value.split('\n').filter(Boolean);
+    payload.tools=Array.from(document.querySelectorAll('#tfl-tools input:checked')).map(function(c){return c.value;});
+    payload.evidence_img_b64 = await toBase64(document.getElementById('tfl-ev-img').files[0]);
+  } else {
+    payload.date=document.getElementById('tfp-date').value || new Date().toISOString().split('T')[0];
+    payload.executor=document.getElementById('tfp-exec').value;
+    payload.place=document.getElementById('tfp-place').value;
+    payload.target=document.getElementById('tfp-target').value;
+    payload.count=document.getElementById('tfp-count').value;
+    payload.goals=document.getElementById('tfp-goals').value.split('\n').filter(Boolean);
+    payload.img1_b64 = await toBase64(document.getElementById('tfp-img1').files[0]);
+    payload.img2_b64 = await toBase64(document.getElementById('tfp-img2').files[0]);
+  }
+  var stId=formType==='lesson'?'tfl-st':'tfp-st';
+  ss(stId,'⏳ جارٍ الإنشاء...','ai');
+  try {
+      if(!sendToPrincipal){
+         var r = await fetch('/web/api/generate-teacher-form',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+         var blob = await r.blob();
+         ss(stId,'✅ تم الإنشاء','ok');
+         var url=URL.createObjectURL(blob);
+         var w=window.open(url,'_blank');
+         if(!w){var a=document.createElement('a');a.href=url;a.download=formType+'.pdf';document.body.appendChild(a);a.click();URL.revokeObjectURL(url);}
+      } else {
+         var r = await fetch('/web/api/send-teacher-form',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+         var d = await r.json();
+         if(d.ok) ss(stId,'✅ '+d.msg,'ok'); else ss(stId,'❌ '+d.msg,'er');
+      }
+  } catch(err) {
+      ss(stId,'❌ فشل العملية','er');
+  }
+}
+
 
 /* ── CLASS LIST ── */
 async function loadClassList(){
@@ -2839,6 +3477,134 @@ function printSec(id){
   var c=document.getElementById(id);if(!c)return;
   var w=window.open('','_blank');w.document.write('<html dir="rtl"><head><meta charset="UTF-8"><title>طباعة</title></head><body>'+c.innerHTML+'</body></html>');
   w.print();w.close();
+}
+
+/* ── ACADEMIC INQUIRIES ── */
+async function loadCounselorInquiries(){
+  var d=await api('/web/api/academic-inquiries');
+  if(!d||!d.ok)return;
+  document.getElementById('coinq-tbl').innerHTML=(d.rows||[]).map(function(r){
+    var st = r.status==='جديد'?'<span class="badge bo">جديد - بانتظار المعلم</span>':'<span class="badge bg">تم الرد</span>';
+    return '<tr><td>'+r.inquiry_date+'</td><td>'+r.teacher_name+'</td><td>'+r.class_name+'</td><td>'+r.subject+'</td><td>'+st+'</td>'+
+    '<td><button class="btn bp1 bsm" onclick="viewInqDetails('+r.id+',true)">الرد</button></td></tr>';
+  }).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--mu)">لا توجد خطابات</td></tr>';
+  
+  // load teachers drop down
+  var dt=await api('/web/api/teachers');
+  if(dt&&dt.ok){
+     document.getElementById('coinq-teacher').innerHTML='<option value="">اختر المعلم</option>'+
+       dt.teachers.map(function(t){return '<option value="'+t.username+'">'+t.full_name+'</option>';}).join('');
+  }
+}
+
+async function sendCounselorInquiry(){
+  var tSel=document.getElementById('coinq-teacher');
+  var teacher_uname = tSel.value;
+  var teacher_name = tSel.options[tSel.selectedIndex]?tSel.options[tSel.selectedIndex].text:'';
+  var date = document.getElementById('coinq-date').value;
+  var class_name = document.getElementById('coinq-class').value;
+  var subject = document.getElementById('coinq-subject').value;
+  var student_name = document.getElementById('coinq-student').value;
+  if(!teacher_uname || !class_name || !subject){
+    ss('coinq-st','أكمل البيانات المطلوبة (المعلم، الفصل، المادة)','er'); return;
+  }
+  var r = await fetch('/web/api/create-academic-inquiry',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      inquiry_date:date, teacher_username:teacher_uname, teacher_name:teacher_name,
+      class_name:class_name, subject:subject, student_name:student_name
+    })});
+  var d=await r.json();
+  ss('coinq-st',d.ok?'✅ تم إرسال الخطاب للمعلم':'❌ '+(d.msg||'خطأ'),d.ok?'ok':'er');
+  if(d.ok){
+    document.getElementById('coinq-class').value='';
+    document.getElementById('coinq-subject').value='';
+    document.getElementById('coinq-student').value='الكل';
+    loadCounselorInquiries();
+  }
+}
+
+async function loadTeacherInquiries(){
+  var d=await api('/web/api/academic-inquiries');
+  if(!d||!d.ok)return;
+  document.getElementById('tfinq-tbl').innerHTML=(d.rows||[]).map(function(r){
+    var st = r.status==='جديد'?'<span class="badge bo">جديد</span>':'<span class="badge bg">تم الرد</span>';
+    var btn = r.status==='جديد'? '<button class="btn bp1 bsm" onclick="openTeacherInquiryReply('+r.id+')">رد على الاستفسار</button>'
+           : '<button class="btn bp4 bsm" onclick="viewInqDetails('+r.id+',false)">التفاصيل</button>';
+    return '<tr><td>'+r.inquiry_date+'</td><td>'+r.class_name+'</td><td>'+r.subject+'</td><td>'+r.student_name+'</td><td>'+st+'</td>'+
+    '<td>'+btn+'</td></tr>';
+  }).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--mu)">لا توجد خطابات مرسلة لك</td></tr>';
+}
+
+function openTeacherInquiryReply(id){
+  document.getElementById('tfinq-id').value = id;
+  document.getElementById('tfinq-reasons').value = '';
+  document.getElementById('tfinq-evidence').value = '';
+  document.getElementById('tfinq-file').value = '';
+  document.getElementById('tfinq-st').innerHTML = '';
+  document.getElementById('tfinq-reply-form').style.display = 'block';
+  document.getElementById('tfinq-reply-form').scrollIntoView();
+}
+
+async function submitTeacherInquiryReply(){
+  var id = document.getElementById('tfinq-id').value;
+  var reasons = document.getElementById('tfinq-reasons').value;
+  var evidence = document.getElementById('tfinq-evidence').value;
+  var file_b64 = await toBase64(document.getElementById('tfinq-file').files[0]);
+  
+  if(!reasons){
+      ss('tfinq-st','الرجاء كتابة الأسباب على الأقل','er');return;
+  }
+  
+  var payload = {
+      id: id,
+      reasons: reasons,
+      evidence_text: evidence,
+      evidence_img_b64: file_b64,
+      reply_date: new Date().toISOString().split('T')[0]
+  };
+  
+  ss('tfinq-st','⏳ جارٍ الإرسال...','ai');
+  var r = await fetch('/web/api/reply-academic-inquiry',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  var d = await r.json();
+  if(d.ok){
+      ss('tfinq-st','✅ تم إرسال الرد بنجاح','ok');
+      document.getElementById('tfinq-reply-form').style.display = 'none';
+      loadTeacherInquiries();
+  } else {
+      ss('tfinq-st','❌ '+(d.msg||'خطأ'),'er');
+  }
+}
+
+function viewInqDetails(id, isCounselor){
+  if(typeof showCoModal !== 'function'){
+     alert('تم تسجيل الرد أو الخطاب. يمكنك مراجعته.');
+     return;
+  }
+  fetch('/web/api/academic-inquiries').then(function(r){return r.json();}).then(function(d){
+    if(d.ok){
+      var inq = (d.rows||[]).find(function(x){return x.id==id;});
+      if(inq){
+        var html = '<div style="line-height:1.6;font-size:14px;padding:10px">';
+        html += '<p><strong>التاريخ:</strong> '+inq.inquiry_date+'</p>';
+        html += '<p><strong>المعلم:</strong> '+inq.teacher_name+'</p>';
+        html += '<p><strong>الفصل:</strong> '+inq.class_name+'</p>';
+        html += '<p><strong>المادة:</strong> '+inq.subject+'</p>';
+        html += '<p><strong>الطالب:</strong> '+inq.student_name+'</p>';
+        if(inq.status !== 'جديد'){
+            html += '<hr><p><strong>تاريخ الرد:</strong> '+inq.reply_date+'</p>';
+            html += '<p><strong>أسباب تدني المستوى:</strong> '+(inq.reasons||'-')+'</p>';
+            html += '<p><strong>الشواهد:</strong> '+(inq.evidence_text||'-')+'</p>';
+            if(inq.evidence_file) {
+                 html += '<p><strong>مرفق:</strong> (تم إرفاق صورة/ملف في النظام)</p>';
+            }
+        } else {
+            html += '<hr><p style="color:red">لم يتم الرد من المعلم بعد.</p>';
+        }
+        html += '</div>';
+        showCoModal('تفاصيل الاستفسار الأكاديمي', html, '#1565C0', '#0D47A1');
+      }
+    }
+  });
 }
 """
 
@@ -3756,6 +4522,32 @@ async def web_counselor_list(request: Request):
                 "date":         ref["date"],
                 "status":       ref.get("status") or "جديد",
             })
+            
+        # ── إضافة تحويلات المعلمين (student_referrals) غير المغلقة ──
+        cur.execute("SELECT * FROM student_referrals WHERE status != 'resolved' ORDER BY created_at DESC")
+        stu_refs = [dict(r) for r in cur.fetchall()]
+        status_lbl = {
+            "pending": "بانتظار الوكيل",
+            "with_deputy": "مع الوكيل",
+            "with_counselor": "للموجّه",
+        }
+        for sr in stu_refs:
+            st = sr["status"]
+            lbl = status_lbl.get(st, st)
+            action = f"{lbl} | {sr.get('teacher_name', '')}"
+            rows.append({
+                "student_id":   sr["student_id"],
+                "student_name": sr["student_name"],
+                "class_name":   sr["class_name"],
+                "absences":     0,
+                "tardiness":    0,
+                "last_action":  action,
+                "referral_type": "تحويل معلم",  # لتمييزها في القائمة
+                "date":         (sr.get("ref_date") or sr.get("created_at") or "")[:10],
+                "status":       st,
+                "ref_id":       sr["id"],
+            })
+            
         con.close()
         return JSONResponse({"ok": True, "rows": rows})
     except Exception as e:
@@ -4287,6 +5079,228 @@ async def web_counselor_contract_pdf(request: Request):
         return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
 
 
+# ==================== المسارات الجديدة (التحويلات ونماذج المعلم) ====================
+
+@router.post("/web/api/create-referral", response_class=JSONResponse)
+async def web_create_referral(request: Request):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
+    try:
+        data = await request.json()
+        data["teacher_name"] = user.get("full_name", user.get("username", ""))
+        data["teacher_username"] = user.get("username", "")
+        data["ref_date"] = now_riyadh_date()
+        
+        # التوافقية مع الـ Desktop app
+        if "action1" in data and "teacher_action1" not in data:
+            data["teacher_action1"] = data.pop("action1")
+        if "action2" in data and "teacher_action2" not in data:
+            data["teacher_action2"] = data.pop("action2")
+            
+        ref_id = create_student_referral(data)
+        
+        # Notify Deputy
+        try:
+            from database import get_deputy_phones
+            phones = get_deputy_phones()
+            cfg = load_config()
+            if not phones and cfg.get("principal_phone"):
+                phones = [cfg.get("principal_phone")]
+            
+            msg = (
+                f"🔔 *تنبيه: تحويل طالب جديد*\n\n"
+                f"الطالب: {data.get('student_name', '')}\n"
+                f"الفصل: {data.get('class_name', '')}\n"
+                f"المعلم: {data['teacher_name']}\n"
+                f"التاريخ: {now_riyadh_date()}\n"
+                f"رقم التحويل: {ref_id}\n\n"
+                f"يرجى مراجعة نظام درب لاتخاذ الإجراء المناسب."
+            )
+            for ph in phones:
+                try: send_whatsapp_message(ph, msg)
+                except: pass
+        except Exception:
+            pass
+            
+        return JSONResponse({"ok": True, "ref_id": ref_id})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/referral-history", response_class=JSONResponse)
+async def web_referral_history(request: Request):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
+    try:
+        rows = get_referrals_for_teacher(user.get("username", ""))
+        return JSONResponse({"ok": True, "referrals": rows})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/all-referrals", response_class=JSONResponse)
+async def web_all_referrals(request: Request, status: str = None):
+    user = _get_current_user(request)
+    if not user or user.get("role") not in ["admin", "deputy", "supervisor", "counselor"]:
+        return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
+    try:
+        rows = get_all_referrals(status)
+        return JSONResponse({"ok": True, "referrals": rows})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/referral/{ref_id}", response_class=JSONResponse)
+async def web_get_referral(request: Request, ref_id: int):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
+    try:
+        row = get_referral_by_id(ref_id)
+        return JSONResponse({"ok": True, "referral": row})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.post("/web/api/update-referral/{ref_id}", response_class=JSONResponse)
+async def web_update_referral(request: Request, ref_id: int):
+    user = _get_current_user(request)
+    if not user or user.get("role") not in ["admin", "deputy", "supervisor"]:
+        return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
+    try:
+        data = await request.json()
+        data["deputy_name"] = user.get("full_name", user.get("username", ""))
+        data["deputy_date"] = now_riyadh_date()
+        if data.get("refer_to_counselor"):
+            data["status"] = "with_counselor"
+            data["deputy_referred_date"] = now_riyadh_date()
+            # Notify counselor
+            try:
+                from database import get_counselor_phones
+                c_phones = get_counselor_phones()
+                msg = f"🧠 *تحويل جديد للموجّه*\n\nالتحويل رقم: {ref_id}\nيرجى مراجعة نظام درب."
+                for p in c_phones:
+                    try: send_whatsapp_message(p, msg)
+                    except: pass
+            except: pass
+        else:
+            data["status"] = "with_deputy"
+        update_referral_deputy(ref_id, data)
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.post("/web/api/close-referral/{ref_id}", response_class=JSONResponse)
+async def web_close_referral(request: Request, ref_id: int):
+    user = _get_current_user(request)
+    if not user or user.get("role") not in ["admin", "deputy", "supervisor"]:
+        return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
+    try:
+        close_referral(ref_id)
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.post("/web/api/update-counselor-referral/{ref_id}", response_class=JSONResponse)
+async def web_update_counselor_referral(request: Request, ref_id: int):
+    user = _get_current_user(request)
+    if not user:
+        return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
+    try:
+        data = await request.json()
+        close_it = bool(data.get("close_it", False))
+        
+        # We enforce "resolved" or "with_counselor"
+        data["status"] = "resolved" if close_it else "with_counselor"
+        
+        from database import update_referral_counselor, close_referral
+        update_referral_counselor(ref_id, data)
+        if close_it:
+            close_referral(ref_id)
+            
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.post("/web/api/generate-teacher-form")
+async def web_generate_teacher_form(request: Request):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
+    try:
+        from fastapi.responses import Response
+        data = await request.json()
+        data["teacher_name"] = user.get("full_name", user.get("username", "معلم"))
+        
+        # معالجة الشواهد كـ Base64
+        import base64, tempfile
+        temp_files = []
+        for key_b64, key_path in [("evidence_img_b64", "evidence_img"), ("img1_b64", "img1"), ("img2_b64", "img2")]:
+            if data.get(key_b64):
+                try:
+                    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+                    tmp.write(base64.b64decode(data[key_b64]))
+                    tmp.close()
+                    data[key_path] = tmp.name
+                    temp_files.append(tmp.name)
+                except Exception: pass
+        
+        if data.get("form_type") == "lesson":
+            pdf_bytes = generate_lesson_pdf(data)
+        else:
+            pdf_bytes = generate_program_pdf(data)
+            
+        for tf in temp_files:
+            try: os.unlink(tf)
+            except Exception: pass
+            
+        fname = f"نموذج_معلم_({data.get('form_type')}).pdf"
+        from urllib.parse import quote
+        fname_enc = quote(fname, safe="")
+        return Response(content=pdf_bytes, media_type="application/pdf", headers={"Content-Disposition": f"inline; filename*=UTF-8''{fname_enc}"})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.post("/web/api/send-teacher-form", response_class=JSONResponse)
+async def web_send_teacher_form(request: Request):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
+    try:
+        data = await request.json()
+        teacher_name = user.get("full_name", user.get("username", "معلم"))
+        data["teacher_name"] = teacher_name
+        
+        # معالجة الشواهد كـ Base64
+        import base64, tempfile
+        temp_files = []
+        for key_b64, key_path in [("evidence_img_b64", "evidence_img"), ("img1_b64", "img1"), ("img2_b64", "img2")]:
+            if data.get(key_b64):
+                try:
+                    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+                    tmp.write(base64.b64decode(data[key_b64]))
+                    tmp.close()
+                    data[key_path] = tmp.name
+                    temp_files.append(tmp.name)
+                except Exception: pass
+        
+        if data.get("form_type") == "lesson":
+            pdf_bytes = generate_lesson_pdf(data)
+            caption = f"📘 نموذج تحضير درس\nالمعلم: {teacher_name}\nالمادة: {data.get('subject','')}\nالتاريخ: {data.get('date','')}"
+        else:
+            pdf_bytes = generate_program_pdf(data)
+            caption = f"📊 تقرير تنفيذ تقوية\nالمنفذ: {data.get('executor','')}\nالتاريخ: {data.get('date','')}"
+            
+        for tf in temp_files:
+            try: os.unlink(tf)
+            except Exception: pass
+            
+        cfg = load_config()
+        principal_phone = cfg.get("principal_phone", "").strip()
+        if not principal_phone:
+            return JSONResponse({"ok": False, "msg": "لم يُسجّل جوال مدير المدرسة في الإعدادات"})
+            
+        fname = f"form_{data.get('form_type')}.pdf"
+        ok, res = send_whatsapp_pdf(principal_phone, pdf_bytes, fname, caption)
+        if ok:
+            return JSONResponse({"ok": True, "msg": "تم الإرسال لمدير المدرسة بنجاح"})
+        else:
+            return JSONResponse({"ok": False, "msg": "فشل إرسال رسالة الواتساب"})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
 # ===================== main =====================
-# ===================== main =====================
-# ===================== main =====================
+

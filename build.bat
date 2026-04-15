@@ -25,12 +25,12 @@ if errorlevel 1 (
 )
 
 :: ─── 3. تنظيف البناء السابق ──────────────────────────────────────────────────
-echo [1/6] تنظيف البناء السابق...
+echo [1/7] تنظيف البناء السابق...
 if exist "dist\DarbStu" rmdir /s /q "dist\DarbStu"
 if exist "build"        rmdir /s /q "build"
 
 :: ─── 4. بناء الـ EXE ─────────────────────────────────────────────────────────
-echo [2/6] بناء DarbStu.exe ... (قد يأخذ 2-5 دقائق)
+echo [2/7] بناء DarbStu.exe ... (قد يأخذ 2-5 دقائق)
 pyinstaller DarbStu.spec --noconfirm
 if errorlevel 1 (
     echo [خطأ] فشل PyInstaller. راجع الأخطاء أعلاه.
@@ -39,7 +39,7 @@ if errorlevel 1 (
 echo       ✓ تم بناء DarbStu.exe
 
 :: ─── 5. نسخ ملفات واتساب سيرفر ──────────────────────────────────────────────
-echo [3/6] نسخ ملفات واتساب سيرفر...
+echo [3/7] نسخ ملفات واتساب سيرفر...
 if exist "my-whatsapp-server" (
     xcopy "my-whatsapp-server" "dist\DarbStu\my-whatsapp-server\" /E /I /Q /Y /EXCLUDE:build_exclude.txt
     echo       ✓ تم نسخ my-whatsapp-server
@@ -48,7 +48,7 @@ if exist "my-whatsapp-server" (
 )
 
 :: ─── 6. نسخ node.exe ─────────────────────────────────────────────────────────
-echo [4/6] نسخ node.exe...
+echo [4/7] نسخ node.exe...
 set NODE_FOUND=0
 for %%P in (
     "C:\Program Files\nodejs\node.exe"
@@ -67,8 +67,34 @@ if "%NODE_FOUND%"=="0" (
     echo       الرجاء نسخ node.exe يدوياً إلى dist\DarbStu\
 )
 
-:: ─── 7. نسخ الملفات المساعدة ─────────────────────────────────────────────────
-echo [5/6] نسخ الملفات المساعدة...
+:: ─── 7. نسخ cloudflared.exe ──────────────────────────────────────────────────
+echo [5/7] نسخ cloudflared.exe...
+set CF_FOUND=0
+for %%P in (
+    "C:\Program Files (x86)\cloudflared\cloudflared.exe"
+    "C:\Program Files\cloudflared\cloudflared.exe"
+    "C:\Windows\System32\cloudflared.exe"
+) do (
+    if exist %%P (
+        copy %%P "dist\DarbStu\cloudflared.exe" /Y >nul
+        echo       ✓ تم نسخ cloudflared.exe من %%P
+        set CF_FOUND=1
+        goto :cf_done
+    )
+)
+:cf_done
+if "%CF_FOUND%"=="0" (
+    echo       [تحذير] cloudflared.exe غير موجود على هذا الجهاز
+    echo       حمّله من: https://github.com/cloudflare/cloudflared/releases
+    echo       ثم ضعه في dist\DarbStu\cloudflared.exe
+)
+
+:: ─── 8. نسخ الملفات المساعدة ─────────────────────────────────────────────────
+echo [6/7] نسخ الملفات المساعدة (api, icons, version)...
+if exist "api" (
+    xcopy "api" "dist\DarbStu\api\" /E /I /Q /Y >nul
+    echo       ✓ تم نسخ مجلد api
+)
 copy "icon.ico" "dist\DarbStu\icon.ico" /Y >nul 2>&1
 copy "version.json" "dist\DarbStu\version.json" /Y >nul 2>&1
 
@@ -85,10 +111,10 @@ if exist "data\config.json" (
     copy "data\config.json" "dist\DarbStu\data\config.json" /Y >nul
 )
 
-echo       ✓ تم إعداد الملفات المساعدة
+echo       ✓ تم إعداد كافة الملفات المساعدة
 
-:: ─── 8. بناء الإنستولر ───────────────────────────────────────────────────────
-echo [6/6] بناء الإنستولر...
+:: ─── 9. بناء الإنستولر ───────────────────────────────────────────────────────
+echo [7/7] بناء الإنستولر...
 set INNO=""
 for %%P in (
     "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"

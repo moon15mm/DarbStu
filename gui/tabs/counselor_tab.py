@@ -69,15 +69,46 @@ class CounselorTabMixin:
 
 
     # ─── تبويب الموجّه الطلابي ─────────────────────────────────────────
-    # ─── تبويب الموجّه الطلابي ─────────────────────────────────────────
     def _build_counselor_tab(self):
-        """بناء واجهة الموجّه الطلابي."""
-        frame = self.counselor_frame
+        """بناء واجهة الموجّه الطلابي (قابلة للتمرير)."""
+        main_frame = self.counselor_frame
+        
+        # 1. إعداد منطقة السكرول (Canvas + Scrollbar)
+        canvas = tk.Canvas(main_frame, bg="#f8fafc", highlightthickness=0)
+        scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, bg="#f8fafc")
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas_frame = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        
+        # ضبط عرض الإطار الداخلي ليناسب عرض الكانفس
+        def _on_canvas_configure(e):
+            canvas.itemconfig(canvas_frame, width=e.width)
+        canvas.bind("<Configure>", _on_canvas_configure)
+
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+
+        # دعم عجلة الفأرة للتمرير
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        
+        # تفعيل التمرير عند وجود المؤشر داخل الكانفس
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
+        # نستخدم الإطار الداخلي (scrollable_frame) كأصل لكافة العناصر بدلاً من frame
+        frame = scrollable_frame
 
         # رأس التبويب
         hdr = tk.Frame(frame, bg="#7c3aed", height=60)
         hdr.pack(fill="x"); hdr.pack_propagate(False)
-        tk.Label(hdr, text="👨\u200d🏫 مكتب الموجّه الطلابي", bg="#7c3aed", fg="white",
+        tk.Label(hdr, text="👨‍🏫 مكتب الموجّه الطلابي", bg="#7c3aed", fg="white",
                  font=("Tahoma", 14, "bold")).pack(side="right", padx=20, pady=15)
 
         # ── شريط اختيار الموجّه النشط ──────────────────────────────
@@ -168,6 +199,13 @@ class CounselorTabMixin:
         ttk.Button(btn_fr, text="🔔 إرسال تنبيه (واتساب)", command=lambda: self._send_counselor_alert("تنبيه")).pack(side="right", padx=5)
         ttk.Button(btn_fr, text="✉️ توجيه استدعاء رسمي", command=lambda: self._send_counselor_alert("استدعاء")).pack(side="right", padx=5)
         ttk.Button(btn_fr, text="📊 سجل الطالب الإرشادي", command=self._show_student_counseling_history).pack(side="right", padx=5)
+        
+        # الزر المفقود: اتخاذ إجراء على التحويل (للحالات السلوكية)
+        self._btn_referral_action = ttk.Button(btn_fr, text="⚡ اتخاذ إجراء على التحويل", 
+                                                command=self._open_referral_action_dialog)
+        self._btn_referral_action.pack(side="right", padx=15)
+        self._btn_referral_action.state(["disabled"])
+        
         ttk.Button(btn_fr, text="🔄 تحديث القائمة", command=self._refresh_counselor_data).pack(side="left", padx=5)
         # ── زر إضافة طالب يدوياً للموجّه ─────────────────────────
         tk.Button(btn_fr, text="➕ إضافة طالب يدوياً",
@@ -178,34 +216,128 @@ class CounselorTabMixin:
         tk.Button(btn_fr, text="🗑️ حذف الطالب",
                   bg="#dc2626", fg="white", font=("Tahoma", 10, "bold"),
                   relief="flat", cursor="hand2", padx=10, pady=4,
-                  command=self._delete_student_from_counselor).pack(side="left", padx=4)
+                  command=self._delete_student_from_counselor).pack(side="left", padx=8)
 
-        # ── شريط أرشيف الجلسات ──────────────────────────────────
-        arch_bar = tk.Frame(frame, bg="#f5f3ff", pady=6, relief="groove", bd=1)
-        arch_bar.pack(fill="x", padx=20, pady=(4, 4))
-        tk.Label(arch_bar, text="📚 أرشيف الجلسات الإرشادية:", bg="#f5f3ff",
-                 font=("Tahoma", 10, "bold"), fg="#5b21b6").pack(side="right", padx=10)
-        tk.Button(arch_bar, text="🗂️ عرض جميع الجلسات القديمة",
-                  bg="#7c3aed", fg="white", font=("Tahoma", 10, "bold"),
-                  relief="flat", cursor="hand2", padx=12, pady=4,
-                  command=self._open_sessions_archive).pack(side="right", padx=8)
-        tk.Label(arch_bar, text="اضغط لاسترجاع أي جلسة وطباعتها أو إرسالها",
+        # ────────────────────────────────────────────────────────
+        # أرشيف الجلسات والعقود لمراجعتها
+        # ────────────────────────────────────────────────────────
+        archive_fr = tk.Frame(frame, bg="white", pady=10)
+        archive_fr.pack(fill="x", padx=20)
+
+        # أرشيف الجلسات
+        session_bar = tk.Frame(archive_fr, bg="#f5f3ff", pady=6)
+        session_bar.pack(fill="x", pady=2)
+        tk.Label(session_bar, text="📚 أرشيف الجلسات الإرشادية",
+                 bg="#f5f3ff", font=("Tahoma", 10, "bold"), fg="#5b21b6").pack(side="right", padx=10)
+        tk.Button(session_bar, text="عرض جميع الجلسات القديمة",
+                  bg="#5b21b6", fg="white", font=("Tahoma", 9, "bold"),
+                  relief="flat", cursor="hand2", padx=10,
+                  command=self._open_sessions_archive).pack(side="right", padx=10)
+        tk.Label(session_bar, text="اضغط لاسترجاع أي جلسة وطباعتها أو إرسالها",
                  bg="#f5f3ff", font=("Tahoma", 9), fg="#7c3aed").pack(side="right", padx=4)
 
-        # ── شريط أرشيف العقود السلوكية ──────────────────────────
-        contract_bar = tk.Frame(frame, bg="#fef3c7", pady=6, relief="groove", bd=1)
-        contract_bar.pack(fill="x", padx=20, pady=(2, 8))
-        tk.Label(contract_bar, text="📄 أرشيف العقود السلوكية:", bg="#fef3c7",
-                 font=("Tahoma", 10, "bold"), fg="#92400e").pack(side="right", padx=10)
-        tk.Button(contract_bar, text="🗂️ عرض جميع العقود السلوكية",
-                  bg="#d97706", fg="white", font=("Tahoma", 10, "bold"),
-                  relief="flat", cursor="hand2", padx=12, pady=4,
-                  command=self._open_contracts_archive).pack(side="right", padx=8)
+        # أرشيف العقود
+        contract_bar = tk.Frame(archive_fr, bg="#fef3c7", pady=6)
+        contract_bar.pack(fill="x", pady=2)
+        tk.Label(contract_bar, text="📜 أرشيف العقود السلوكية",
+                 bg="#fef3c7", font=("Tahoma", 10, "bold"), fg="#92400e").pack(side="right", padx=10)
+        tk.Button(contract_bar, text="عرض جميع العقود السلوكية",
+                  bg="#d97706", fg="white", font=("Tahoma", 9, "bold"),
+                  relief="flat", cursor="hand2", padx=10,
+                  command=self._open_contracts_archive).pack(side="right", padx=10)
         tk.Label(contract_bar, text="اضغط لاسترجاع أي عقد وطباعته أو إرساله",
                  bg="#fef3c7", font=("Tahoma", 9), fg="#92400e").pack(side="right", padx=4)
         # ────────────────────────────────────────────────────────
 
+        # ══════════════════════════════════════════════════════════
+        # قسم خطابات الاستفسار الأكاديمي
+        # ══════════════════════════════════════════════════════════
+        inq_lf = tk.LabelFrame(frame, text=" 📩 خطابات الاستفسار الأكاديمي ",
+                               font=("Tahoma", 11, "bold"), fg="#7E22CE",
+                               bg="#FAF5FF", padx=10, pady=8)
+        inq_lf.pack(fill="both", expand=True, padx=20, pady=(6, 10))
+
+        # ── نموذج إرسال استفسار جديد ──────────────────────────────
+        inq_form = tk.Frame(inq_lf, bg="#FAF5FF")
+        inq_form.pack(fill="x", padx=5, pady=5)
+
+        # صف 0: المعلم + الفصل
+        tk.Label(inq_form, text="المعلم:", bg="#FAF5FF").grid(row=0, column=4, padx=5, pady=2, sticky="e")
+        self.coun_inq_teacher_var = tk.StringVar()
+        self.coun_inq_teacher_cb = ttk.Combobox(inq_form, textvariable=self.coun_inq_teacher_var, state="readonly", width=24)
+        self.coun_inq_teacher_cb.grid(row=0, column=3, padx=5, pady=2)
+
+        tk.Label(inq_form, text="الفصل:", bg="#FAF5FF").grid(row=0, column=2, padx=5, pady=2, sticky="e")
+        self.coun_inq_class_var = tk.StringVar()
+        self.coun_inq_class_cb = ttk.Combobox(inq_form, textvariable=self.coun_inq_class_var, state="readonly", width=15)
+        self.coun_inq_class_cb.grid(row=0, column=1, padx=5, pady=2)
+        try:
+            _tmp_store = load_students()
+            self.coun_inq_class_cb['values'] = [c["name"] for c in _tmp_store.get("list", [])]
+        except: pass
+
+        # صف 1: المادة + الطالب
+        tk.Label(inq_form, text="المادة:", bg="#FAF5FF").grid(row=1, column=4, padx=5, pady=2, sticky="e")
+        self.coun_inq_subject_var = tk.StringVar()
+        tk.Entry(inq_form, textvariable=self.coun_inq_subject_var, width=27).grid(row=1, column=3, padx=5, pady=2)
+
+        tk.Label(inq_form, text="الطالب:", bg="#FAF5FF").grid(row=1, column=2, padx=5, pady=2, sticky="e")
+        self.coun_inq_student_var = tk.StringVar(value="الكل")
+        self.coun_inq_student_cb = ttk.Combobox(inq_form, textvariable=self.coun_inq_student_var, state="readonly", width=15)
+        self.coun_inq_student_cb.grid(row=1, column=1, padx=5, pady=2)
+
+
+        # تحديث قائمة الطلاب عند تغيير الفصل
+        def _on_inq_class_change(event=None):
+            chosen = self.coun_inq_class_var.get()
+            if not chosen:
+                return
+            st_data = []
+            try:
+                store = load_students()
+                for c in store.get("list", []):
+                    if c["name"] == chosen:
+                        st_data = c.get("students", [])
+                        break
+            except: pass
+            vals = ["الكل"] + [s["name"] for s in st_data]
+            self.coun_inq_student_cb['values'] = vals
+            self.coun_inq_student_var.set("الكل")
+
+        self.coun_inq_class_cb.bind("<<ComboboxSelected>>", _on_inq_class_change)
+
+        # زر الإرسال
+        tk.Button(inq_form, text="📤 إرسال الاستفسار", bg="#7E22CE", fg="white", font=("Tahoma", 9, "bold"),
+                  relief="flat", cursor="hand2", padx=15, command=self._send_academic_inquiry).grid(row=0, column=0, rowspan=2, padx=15, pady=5)
+
+        # ── جدول الخطابات ─────────────────────────────────────────
+        inq_list_fr = tk.Frame(inq_lf, bg="white")
+        inq_list_fr.pack(fill="both", expand=True, padx=5, pady=5)
+
+        inq_tool = tk.Frame(inq_list_fr, bg="white")
+        inq_tool.pack(fill="x", pady=5)
+        tk.Label(inq_tool, text="سجل الاستفسارات الأكاديمية:", bg="white", font=("Tahoma", 10, "bold")).pack(side="right")
+        tk.Button(inq_tool, text="🔄 تحديث", command=self._load_academic_inquiries, bg="#E2E8F0", relief="flat", padx=8).pack(side="left", padx=5)
+        tk.Button(inq_tool, text="🖨️ طباعة", command=self._print_academic_inquiry, bg="#10B981", fg="white", relief="flat", padx=8).pack(side="left")
+        tk.Button(inq_tool, text="عرض الرد", command=self._view_academic_inquiry_reply, bg="#3B82F6", fg="white", relief="flat", padx=8).pack(side="left", padx=5)
+
+        inq_cols = ("id", "date", "teacher", "class", "subject", "student", "status")
+        self._coun_inq_tree = ttk.Treeview(inq_list_fr, columns=inq_cols, show="headings", height=8)
+        for c, h, w in zip(inq_cols, ["#", "التاريخ", "المعلم", "الفصل", "المادة", "الطالب", "الحالة"], [35, 90, 160, 100, 100, 140, 110]):
+            self._coun_inq_tree.heading(c, text=h)
+            self._coun_inq_tree.column(c, width=w, anchor="center")
+
+        inq_sb = ttk.Scrollbar(inq_list_fr, orient="vertical", command=self._coun_inq_tree.yview)
+        self._coun_inq_tree.configure(yscrollcommand=inq_sb.set)
+        self._coun_inq_tree.pack(side="left", fill="both", expand=True)
+        inq_sb.pack(side="right", fill="y")
+        self._coun_inq_tree.bind("<Double-1>", lambda e: self._view_academic_inquiry_reply())
+
+        self._load_academic_inquirers_teachers()
+        self._load_academic_inquiries()
+
         self._load_counselor_data()
+
 
     def _get_active_counselor_name(self) -> str:
         """يُرجع اسم الموجّه النشط حالياً."""
@@ -375,26 +507,41 @@ class CounselorTabMixin:
             messagebox.showerror("خطأ", f"فشل الحذف:\n{e}")
 
     def _load_counselor_data(self):
-        """تحميل الطلاب المحوّلين من وكيل شؤون الطلاب فقط."""
+        """تحميل الطلاب المحوّلين من وكيل شؤون الطلاب (غياب + سلوك)."""
         # حذف جميع العناصر بشكل آمن (بما فيها المخفية بـ detach)
         self.tree_counselor.delete(*self.tree_counselor.get_children())
 
         con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
 
-        # جلب المحوّلين من جدول counselor_referrals (مرتبين بالأحدث أولاً)
+        # 1. جلب محولي الغياب والتأخر
         cur.execute("""
-            SELECT student_id, student_name, class_name,
+            SELECT id, student_id, student_name, class_name,
                    referral_type, absence_count, tardiness_count,
-                   date, status, notes
+                   date, status, notes, 'attendance' as source
             FROM counselor_referrals
             ORDER BY date DESC
         """)
-        referrals = [dict(r) for r in cur.fetchall()]
+        rows_att = [dict(r) for r in cur.fetchall()]
+
+        # 2. جلب المحولين سلوكياً (من المعلم والوكيل)
+        cur.execute("""
+            SELECT id, student_id, student_name, class_name,
+                   violation_type as referral_type, 0 as absence_count, 0 as tardiness_count,
+                   ref_date as date, status, violation as notes, 'behavior' as source
+            FROM student_referrals
+            WHERE status = 'with_counselor'
+            ORDER BY ref_date DESC
+        """)
+        rows_beh = [dict(r) for r in cur.fetchall()]
+
+        # دمج القائمة والترتيب حسب التاريخ
+        all_referrals = rows_att + rows_beh
+        all_referrals.sort(key=lambda x: x.get("date", ""), reverse=True)
 
         # إزالة التكرار (نفس الطالب قد يُحوَّل أكثر من مرة — نُبقي الأحدث)
         seen = set()
         unique_referrals = []
-        for ref in referrals:
+        for ref in all_referrals:
             if ref["student_id"] not in seen:
                 seen.add(ref["student_id"])
                 unique_referrals.append(ref)
@@ -420,10 +567,16 @@ class CounselorTabMixin:
             last = cur.fetchone()
             last_action = "{} ({})".format(last["type"], last["date"]) if last else "لا يوجد"
 
-            tag = "referred_absence" if ref["referral_type"] == "غياب" else "referred_tardiness"
+            if ref.get("source") == "behavior":
+                tag = "referred_behavioral"
+                item_iid = f"beh_{ref['id']}"
+            else:
+                tag = "referred_absence" if ref["referral_type"] == "غياب" else "referred_tardiness"
+                item_iid = f"att_{sid}"
+            
             row_data = (sid, name, cls, abs_c, tard_c, last_action, tag)
             self._all_counselor_rows.append(row_data)
-            self.tree_counselor.insert("", "end", values=(sid, name, cls, abs_c, tard_c, last_action), tags=(tag,))
+            self.tree_counselor.insert("", "end", iid=item_iid, values=(sid, name, cls, abs_c, tard_c, last_action), tags=(tag,))
 
         con.close()
 
@@ -432,6 +585,8 @@ class CounselorTabMixin:
             background="#FFF0F0", foreground="#991B1B")
         self.tree_counselor.tag_configure("referred_tardiness",
             background="#FFF7ED", foreground="#9A3412")
+        self.tree_counselor.tag_configure("referred_behavioral",
+            background="#F5F3FF", foreground="#5B21B6")
 
     def _filter_counselor_students(self):
         query = self.counselor_search_var.get().strip().lower()
@@ -452,9 +607,138 @@ class CounselorTabMixin:
             background="#FFF0F0", foreground="#991B1B")
         self.tree_counselor.tag_configure("referred_tardiness",
             background="#FFF7ED", foreground="#9A3412")
+        self.tree_counselor.tag_configure("referred_behavioral",
+            background="#F5F3FF", foreground="#5B21B6")
 
     def _on_counselor_student_select(self, event):
-        pass
+        sel = self.tree_counselor.selection()
+        if not sel:
+            self._btn_referral_action.state(["disabled"])
+            return
+        
+        iid = sel[0]
+        if iid.startswith("beh_"):
+            self._btn_referral_action.state(["!disabled"])
+        else:
+            self._btn_referral_action.state(["disabled"])
+
+    def _open_referral_action_dialog(self):
+        """فتح نافذة إجراءات الموجه على التحويلات السلوكية (النموذج المفقود)."""
+        sel = self.tree_counselor.selection()
+        if not sel: return
+        
+        iid = sel[0]
+        if not iid.startswith("beh_"):
+            messagebox.showinfo("تنبيه", "هذا الإجراء مخصص للتحويلات السلوكية فقط.")
+            return
+            
+        ref_id = int(iid.split("_")[1])
+        from database import get_referral_by_id, update_referral_counselor, close_referral
+        ref = get_referral_by_id(ref_id)
+        if not ref:
+            messagebox.showerror("خطأ", "لم يتم العثور على بيانات التحويل.")
+            return
+
+        win = tk.Toplevel(self.root)
+        win.title(f"إجراءات الموجه - {ref.get('student_name','')}")
+        win.geometry("700x850")
+        win.configure(bg="#f8fafc")
+        
+        # حاوية مع سكرول
+        outer = tk.Frame(win, bg="#f8fafc"); outer.pack(fill="both", expand=True)
+        canvas = tk.Canvas(outer, bg="#f8fafc", highlightthickness=0)
+        vsb = ttk.Scrollbar(outer, orient="vertical", command=canvas.yview)
+        scroll_fr = tk.Frame(canvas, bg="#f8fafc")
+        scroll_fr.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0,0), window=scroll_fr, anchor="nw")
+        canvas.configure(yscrollcommand=vsb.set)
+        vsb.pack(side="right", fill="y"); canvas.pack(side="left", fill="both", expand=True)
+
+        def header(txt, bg="#7c3aed"):
+            f = tk.Frame(scroll_fr, bg=bg, pady=5)
+            f.pack(fill="x", padx=10, pady=(10,2))
+            tk.Label(f, text=txt, bg=bg, fg="white", font=("Tahoma", 10, "bold")).pack()
+
+        def row(lbl, val):
+            r = tk.Frame(scroll_fr, bg="white")
+            r.pack(fill="x", padx=10, pady=1)
+            tk.Label(r, text=lbl+":", bg="white", font=("Tahoma", 9, "bold"), width=15, anchor="e").pack(side="right", padx=5)
+            tk.Label(r, text=val or "—", bg="white", font=("Tahoma", 10), anchor="w", justify="right").pack(side="right", padx=5)
+
+        # 1. بيانات التحويل الأساسية (المعلم)
+        header("📤 تفاصيل تحويل المعلم")
+        row("المعلم", ref.get("teacher_name"))
+        row("التاريخ", ref.get("ref_date"))
+        row("المخالفة", f"{ref.get('violation_type')} - {ref.get('violation')}")
+        row("الأسباب", ref.get("problem_causes"))
+        for i in range(1,6):
+            act = ref.get(f"teacher_action{i}")
+            if act: row(f"إجراء المعلم {i}", act)
+
+        # 2. بيانات الوكيل
+        header("📋 إجراءات وكيل شؤون الطلاب", "#0f172a")
+        row("الوكيل", ref.get("deputy_name"))
+        row("تاريخ المقابلة", ref.get("deputy_meeting_date"))
+        for i in range(1,5):
+            act = ref.get(f"deputy_action{i}")
+            if act: row(f"إجراء الوكيل {i}", act)
+
+        # 3. إجراءات الموجه (المدخلات)
+        header("👨‍🏫 إجراءات الموجه الطلابي (نموذج التعامل)", "#1d4ed8")
+        
+        entry_fr = tk.Frame(scroll_fr, bg="white", pady=10)
+        entry_fr.pack(fill="x", padx=10, pady=5)
+
+        tk.Label(entry_fr, text="تاريخ المقابلة:", bg="white").grid(row=0, column=1, sticky="w", padx=5, pady=5)
+        meet_date_var = tk.StringVar(value=ref.get("counselor_meeting_date") or now_riyadh_date())
+        tk.Entry(entry_fr, textvariable=meet_date_var, width=15).grid(row=0, column=0, sticky="e", padx=5)
+
+        tk.Label(entry_fr, text="الحصة:", bg="white").grid(row=1, column=1, sticky="w", padx=5, pady=5)
+        period_var = tk.StringVar(value=ref.get("counselor_meeting_period") or "")
+        ttk.Combobox(entry_fr, textvariable=period_var, values=[str(i) for i in range(1,10)], width=5).grid(row=1, column=0, sticky="e", padx=5)
+
+        action_vars = []
+        action_labels = ["التوجيه والإرشاد الفردي", "أخذ تعهد وإشعار ولي الأمر", "تحويل للهيئة الإدارية", "أخرى / ملاحظات"]
+        for i, lbl in enumerate(action_labels, 1):
+            tk.Label(entry_fr, text=f"الإجراء {i} ({lbl}):", bg="white").grid(row=i+1, column=1, sticky="w", padx=5, pady=5)
+            v = tk.StringVar(value=ref.get(f"counselor_action{i}") or "")
+            action_vars.append(v)
+            tk.Entry(entry_fr, textvariable=v, width=40).grid(row=i+1, column=0, sticky="e", padx=5)
+
+        tk.Label(entry_fr, text="توقيع الموجه:", bg="white").grid(row=6, column=1, sticky="w", padx=5, pady=5)
+        cname_var = tk.StringVar(value=ref.get("counselor_name") or self._get_active_counselor_name())
+        tk.Entry(entry_fr, textvariable=cname_var, width=25).grid(row=6, column=0, sticky="e", padx=5)
+
+        # الأزرار
+        btn_low = tk.Frame(scroll_fr, bg="#f1f5f9", pady=15)
+        btn_low.pack(fill="x", side="bottom")
+
+        def _save_counselor(close=False):
+            data = {
+                "counselor_meeting_date": meet_date_var.get(),
+                "counselor_meeting_period": period_var.get(),
+                "counselor_name": cname_var.get(),
+                "counselor_date": now_riyadh_date(),
+                "status": "resolved" if close else "with_counselor"
+            }
+            for i, v in enumerate(action_vars, 1):
+                data[f"counselor_action{i}"] = v.get()
+            
+            try:
+                update_referral_counselor(ref_id, data)
+                messagebox.showinfo("نجاح", "تم حفظ إجراءات الموجه بنجاح.")
+                win.destroy()
+                self._load_counselor_data()
+            except Exception as e:
+                messagebox.showerror("خطأ", f"فشل الحفظ: {e}")
+
+        tk.Button(btn_low, text="💾 حفظ التعديلات", bg="#1d4ed8", fg="white", font=("Tahoma", 10, "bold"),
+                  command=lambda: _save_counselor(False), padx=15).pack(side="right", padx=10)
+        
+        tk.Button(btn_low, text="✅ إنهاء الإجراء (إغلاق التحويل)", bg="#059669", fg="white", font=("Tahoma", 10, "bold"),
+                  command=lambda: _save_counselor(True), padx=15).pack(side="right", padx=10)
+
+        tk.Button(btn_low, text="إلغاء", bg="#94a3b8", fg="white", command=win.destroy, padx=15).pack(side="left", padx=10)
 
     def _open_session_dialog(self, sid=None, sname=None, sclass=None, sabs=None, stard=None):
         """نافذة جلسة إرشادية فردية وفق نموذج وزارة التعليم — مع خانات اختيار."""
@@ -1792,6 +2076,174 @@ class CounselorTabMixin:
                   bg="#e5e7eb", fg="#374151", font=("Tahoma", 9),
                   relief="flat", cursor="hand2", padx=8, pady=6,
                   command=_load_contracts).pack(side="left", padx=6)
+
+    # ══════════════════════════════════════════════════════════
+    # خطابات الاستفسار الأكاديمي — الدوال
+    # ══════════════════════════════════════════════════════════
+
+    def _load_academic_inquirers_teachers(self):
+        """تحميل قائمة المعلمين في قائمة الاستفسار."""
+        try:
+            from database import get_all_users
+            users = get_all_users()
+            teachers = [u for u in users if u.get("role") == "teacher" and u.get("active")]
+            self._coun_inq_teachers_list = teachers
+            names = [u.get("full_name") or u.get("username") for u in teachers]
+            self.coun_inq_teacher_cb['values'] = names
+        except:
+            pass
+
+    def _load_academic_inquiries(self):
+        """تحميل سجل الاستفسارات الأكاديمية في الجدول."""
+        try:
+            from database import get_academic_inquiries
+            rows = get_academic_inquiries()
+            self._coun_inq_tree.delete(*self._coun_inq_tree.get_children())
+            for r in rows:
+                self._coun_inq_tree.insert("", "end", iid=str(r["id"]), values=(
+                    r["id"], r.get("date", ""), r.get("teacher_name", ""), r.get("class_name", ""),
+                    r.get("subject", ""), r.get("student_name", ""), r.get("status", "")
+                ))
+            self._coun_inquiries_data = rows
+        except Exception as e:
+            print("Error loading inquiries", e)
+
+    def _send_academic_inquiry(self):
+        """إرسال استفسار أكاديمي جديد من الموجه للمعلم."""
+        teacher_name = self.coun_inq_teacher_var.get().strip()
+        class_name = self.coun_inq_class_var.get().strip()
+        subject = self.coun_inq_subject_var.get().strip()
+        student_name = self.coun_inq_student_var.get().strip()
+
+        if not teacher_name or not class_name or not subject or not student_name:
+            messagebox.showerror("خطأ", "يجب إكمال جميع الحقول.", parent=self.root)
+            return
+
+        teacher_username = ""
+        for t in getattr(self, "_coun_inq_teachers_list", []):
+            if (t.get("full_name") or t.get("username")) == teacher_name:
+                teacher_username = t.get("username")
+                break
+
+        if not teacher_username:
+             messagebox.showerror("خطأ", "يجب اختيار المعلم من القائمة.", parent=self.root)
+             return
+
+        try:
+            from database import create_academic_inquiry
+            cfg = load_config()
+            active = self._active_counselor_var.get()
+            c_name = cfg.get(f"counselor{active}_name") or "الموجه الطلابي"
+
+            data = {
+                "date": now_riyadh_date(),
+                "teacher_username": teacher_username,
+                "teacher_name": teacher_name,
+                "counselor_name": c_name,
+                "counselor_username": "counselor",
+                "class_name": class_name,
+                "subject": subject,
+                "student_name": student_name,
+            }
+            create_academic_inquiry(data)
+            messagebox.showinfo("✅ نجاح", "تم إرسال الخطاب بنجاح.", parent=self.root)
+            self._load_academic_inquiries()
+            self.coun_inq_class_var.set("")
+            self.coun_inq_subject_var.set("")
+            self.coun_inq_student_var.set("الكل")
+            self.coun_inq_teacher_var.set("")
+        except Exception as e:
+            messagebox.showerror("خطأ", f"حدث خطأ أثناء الإرسال: {e}", parent=self.root)
+
+    def _print_academic_inquiry(self):
+        """طباعة خطاب الاستفسار الأكاديمي المحدد كـ PDF."""
+        sel = self._coun_inq_tree.selection()
+        if not sel:
+            messagebox.showwarning("تنبيه", "اختر استفساراً أولاً", parent=self.root)
+            return
+        inq_id = int(sel[0])
+        try:
+            from database import get_academic_inquiry
+            from pdf_generator import generate_academic_inquiry_pdf
+            inq = get_academic_inquiry(inq_id)
+            if not inq:
+                messagebox.showerror("خطأ", "لم يتم العثور على الاستفسار", parent=self.root)
+                return
+            pdf_bytes = generate_academic_inquiry_pdf(inq)
+            import tempfile
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf", prefix="inquiry_")
+            tmp.write(pdf_bytes); tmp.close()
+            try:
+                if os.name == "nt": os.startfile(tmp.name)
+                else:
+                    import subprocess; subprocess.Popen(["xdg-open", tmp.name])
+            except: pass
+        except Exception as e:
+            messagebox.showerror("خطأ", f"فشل إنشاء PDF: {e}", parent=self.root)
+
+    def _view_academic_inquiry_reply(self):
+        """عرض رد المعلم على الاستفسار الأكاديمي."""
+        sel = self._coun_inq_tree.selection()
+        if not sel: return
+        inq_id = int(sel[0])
+        try:
+            from database import get_academic_inquiry
+            inq = get_academic_inquiry(inq_id)
+            if not inq:
+                return
+
+            win = tk.Toplevel(self.root)
+            win.title("📋 رد المعلم على الاستفسار")
+            win.geometry("520x400")
+            win.resizable(False, False)
+            win.grab_set()
+
+            tk.Label(win, text="📋 رد المعلم على الاستفسار",
+                     bg="#7E22CE", fg="white", font=("Tahoma", 12, "bold")).pack(fill="x", ipady=8)
+
+            info_fr = tk.Frame(win, bg="#FAF5FF", pady=8)
+            info_fr.pack(fill="x", padx=12, pady=(8, 4))
+
+            def _row(lbl, val):
+                r = tk.Frame(info_fr, bg="#FAF5FF"); r.pack(fill="x", padx=8, pady=2)
+                tk.Label(r, text=lbl + ":", bg="#FAF5FF", font=("Tahoma", 9, "bold"),
+                         width=14, anchor="e").pack(side="right")
+                tk.Label(r, text=val or "—", bg="#FAF5FF", font=("Tahoma", 10),
+                         anchor="w", wraplength=350, justify="right").pack(side="right", padx=4)
+
+            _row("المعلم", inq.get("teacher_name", ""))
+            _row("المادة", inq.get("subject", ""))
+            _row("الفصل", inq.get("class_name", ""))
+            _row("الطالب", inq.get("student_name", ""))
+            _row("نوع الاستفسار", inq.get("inquiry_type", ""))
+            _row("الحالة", inq.get("status", ""))
+
+            if inq.get("status") != "جديد":
+                _row("تاريخ الرد", inq.get("teacher_reply_date", ""))
+                tk.Label(info_fr, text="الأسباب:", bg="#FAF5FF", font=("Tahoma", 10, "bold"),
+                         fg="#7E22CE").pack(anchor="e", padx=12, pady=(8, 2))
+                reasons_txt = tk.Text(info_fr, height=4, font=("Tahoma", 10),
+                                       state="normal", bg="white", relief="sunken", wrap="word")
+                reasons_txt.pack(fill="x", padx=12)
+                reasons_txt.insert("1.0", inq.get("teacher_reply_reasons", "لا يوجد"))
+                reasons_txt.config(state="disabled")
+
+                tk.Label(info_fr, text="الشواهد:", bg="#FAF5FF", font=("Tahoma", 10, "bold"),
+                         fg="#7E22CE").pack(anchor="e", padx=12, pady=(8, 2))
+                evidence_txt = tk.Text(info_fr, height=3, font=("Tahoma", 10),
+                                        state="normal", bg="white", relief="sunken", wrap="word")
+                evidence_txt.pack(fill="x", padx=12)
+                evidence_txt.insert("1.0", inq.get("teacher_reply_evidence", "لا يوجد"))
+                evidence_txt.config(state="disabled")
+            else:
+                tk.Label(info_fr, text="⏳ لم يتم الرد بعد", bg="#FAF5FF",
+                         font=("Tahoma", 11, "bold"), fg="#d97706").pack(pady=20)
+
+            tk.Button(win, text="إغلاق", bg="#6b7280", fg="white", font=("Tahoma", 10, "bold"),
+                      relief="flat", padx=20, pady=6, command=win.destroy).pack(pady=12)
+
+        except Exception as e:
+            messagebox.showerror("خطأ", f"حدث خطأ: {e}", parent=self.root)
 
     # ══════════════════════════════════════════════════════════
     # تبويب الاستئذان

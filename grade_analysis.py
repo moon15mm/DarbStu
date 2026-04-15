@@ -3,7 +3,13 @@
 grade_analysis.py — دوال تحليل النتائج الدراسية (مشتركة بين الويب والمكتبة)
 """
 import os, re, io, json, base64
+import tkinter as tk
+from tkinter import ttk
 from typing import List, Dict, Any, Optional
+try:
+    import pandas as pd
+except ImportError:
+    pd = None
 
 try:
     import openpyxl

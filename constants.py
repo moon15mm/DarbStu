@@ -51,7 +51,7 @@ MY_STATIC_DOMAIN  = 'darbte.uk'
 ngrok = None
 
 APP_TITLE           = 'تسجيل غياب الطلاب'
-APP_VERSION         = '2.8.2'
+APP_VERSION         = '2.8.4'
 UPDATE_URL          = 'https://raw.githubusercontent.com/moon15mm/DarbStu/main/version.json'
 UPDATE_DOWNLOAD_URL = 'https://github.com/moon15mm/DarbStu/archive/refs/heads/main.zip'
 DB_PATH             = 'absences.db'
@@ -65,7 +65,10 @@ CONFIG_JSON         = os.path.join(DATA_DIR, 'config.json')
 HOST                = '127.0.0.1'
 TZ_OFFSET           = datetime.timedelta(hours=3)
 STUDENTS_STORE      = None
-BASE_DIR            = os.path.dirname(os.path.abspath(__file__))
+# عند التشغيل كـ EXE مجمّع → مجلد الـ EXE، وإلا مجلد السكريبت
+BASE_DIR            = (os.path.dirname(sys.executable)
+                       if getattr(sys, 'frozen', False)
+                       else os.path.dirname(os.path.abspath(__file__)))
 WHATS_PATH          = os.path.join(BASE_DIR, 'my-whatsapp-server')
 
 ROLES = {
@@ -79,8 +82,9 @@ ROLE_TABS = {
     'admin':   None,
     'deputy':  ['لوحة القيادة','روابط الفصول','السجلات','إدارة الغياب',
                 'التأخر','الأعذار','التقارير / الطباعة','إرسال رسائل الغياب',
-                'جدولة الروابط','المراقبة الحية','إدارة الطلاب','إضافة طالب','إدارة الواتساب'],
-    'teacher': ['لوحة القيادة','روابط الفصول','المراقبة الحية'],
+                'جدولة الروابط','المراقبة الحية','إدارة الطلاب','إضافة طالب',
+                'إدارة الواتساب','استلام تحويلات'],
+    'teacher': ['لوحة القيادة','تحليل النتائج','تحويل طالب','نماذج المعلم','خطابات الاستفسار'],
     'guard':   ['لوحة القيادة','التأخر','المراقبة الحية'],
 }
 

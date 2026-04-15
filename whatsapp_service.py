@@ -171,7 +171,14 @@ def start_whatsapp_server():
             except Exception:
                 print(f"[WA] المجلد غير موجود: {WHATS_PATH}")
             return
-        cmd = rf'cmd.exe /k "cd /d {WHATS_PATH} && npm start"'
+        # إذا كان البرنامج EXE مجمّع → ابحث عن node.exe بجانبه أولاً
+        _app_dir = (os.path.dirname(sys.executable)
+                    if getattr(sys, 'frozen', False) else BASE_DIR)
+        _node_local = os.path.join(_app_dir, "node.exe")
+        if os.path.isfile(_node_local):
+            cmd = rf'cmd.exe /k "cd /d {WHATS_PATH} && "{_node_local}" server.js"'
+        else:
+            cmd = rf'cmd.exe /k "cd /d {WHATS_PATH} && npm start"'
         subprocess.Popen(cmd, creationflags=subprocess.CREATE_NEW_CONSOLE)
         try:
             from tkinter import messagebox

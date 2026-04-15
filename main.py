@@ -29,6 +29,21 @@ import uvicorn
 import tkinter as tk
 from ttkthemes import ThemedTk
 from tkinter import messagebox
+import traceback
+
+# ─── ملف السجلات لالتقاط الأخطاء الصامتة ────────────────────────────────────
+_LOG_FILE = os.path.join(
+    (os.path.dirname(sys.executable) if getattr(sys, 'frozen', False)
+     else os.path.dirname(os.path.abspath(__file__))),
+    'error.log'
+)
+
+def _write_log(msg: str):
+    try:
+        with open(_LOG_FILE, 'a', encoding='utf-8') as _f:
+            _f.write(f"[{datetime.datetime.now()}] {msg}\n{'='*60}\n")
+    except Exception:
+        pass
 
 def main():
     # --- START: CLOUDFLARE TUNNEL CONFIGURATION ---
@@ -123,9 +138,24 @@ def main():
         print(f"\n{'='*60}")
         print(f"  ✅ الرابط العام: {public_url}")
         print(f"{'='*60}\n")
+        # حفظ الرابط في الإعدادات لعرضه في واجهة المشرف
+        from config_manager import load_config, save_config
+        _c = load_config()
+        _c["cloud_url_internal"] = public_url # استخدم مسمى داخلي لا يتعارض مع cloud_url الخاص بالعميل
+        save_config(_c)
     else:
         print(f"\n[CLOUDFLARE] يعمل محلياً فقط — http://localhost:{PORT}\n")
     root = ThemedTk(theme="arc"); root.set_theme("arc")
+
+    # ─── التقط كل استثناء Tkinter صامت وأظهره ─────────────────────────────
+    def _tk_exc_hook(exc_type, exc_val, exc_tb):
+        tb_str = ''.join(traceback.format_exception(exc_type, exc_val, exc_tb))
+        _write_log(tb_str)
+        messagebox.showerror(
+            "خطأ غير متوقع",
+            f"{exc_val}\n\nالتفاصيل محفوظة في:\n{_LOG_FILE}"
+        )
+    root.report_callback_exception = _tk_exc_hook
 
     def on_closing():
         try:
@@ -136,14 +166,28 @@ def main():
 
     def launch_main_app():
         """يُشغَّل بعد تسجيل الدخول الناجح."""
-        # امسح نافذة تسجيل الدخول وابن التطبيق الرئيسي
-        for w in root.winfo_children():
-            w.destroy()
-        # ← إصلاح: أعد تفعيل تغيير الحجم الذي أوقفه LoginWindow
-        root.resizable(True, True)
-        root.geometry("1280x800")
-        root.state("zoomed")   # تكبير كامل عند البدء
-        gui = AppGUI(root, public_url)
+        try:
+            # امسح نافذة تسجيل الدخول وابن التطبيق الرئيسي
+            for w in root.winfo_children():
+                w.destroy()
+            # ← إصلاح: أعد تفعيل تغيير الحجم الذي أوقفه LoginWindow
+            root.resizable(True, True)
+            root.geometry("1280x800")
+            root.update()
+            root.state("zoomed")   # تكبير كامل عند البدء
+            gui = AppGUI(root, public_url)
+            root.update()
+        except Exception as _e:
+            tb_str = traceback.format_exc()
+            _write_log(tb_str)
+            # أظهر آخر 4 أسطر من الـ traceback (الأكثر فائدة)
+            tb_lines = tb_str.strip().splitlines()
+            tb_short = '\n'.join(tb_lines[-6:]) if len(tb_lines) > 6 else tb_str
+            messagebox.showerror(
+                "خطأ في تشغيل البرنامج",
+                f"{tb_short}\n\n(الملف الكامل: {_LOG_FILE})"
+            )
+            return
         # جدول النسخ الاحتياطية التلقائية
         schedule_auto_backup(root, interval_hours=24)
         # جدول إرسال رابط التأخر تلقائياً عند بداية الدوام
@@ -195,6 +239,15 @@ if __name__ == "__main__":
     try: main()
     except SystemExit: pass
     except Exception as e:
-        print(f"Fatal: {e}")
+        tb_str = traceback.format_exc()
+        _write_log(tb_str)
+        try:
+            import tkinter as _tk
+            _r = _tk.Tk(); _r.withdraw()
+            from tkinter import messagebox as _mb
+            _mb.showerror("خطأ فادح", f"{e}\n\nالتفاصيل في:\n{_LOG_FILE}")
+            _r.destroy()
+        except Exception:
+            pass
         try: stop_cloudflare_tunnel()
         except: pass
