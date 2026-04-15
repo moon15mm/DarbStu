@@ -1,4 +1,4 @@
 @echo off
 cd /d "%~dp0"
-python _publish_helper.py
+python DarbPublish.py
 pause
