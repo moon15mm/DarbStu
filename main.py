@@ -5,6 +5,15 @@ main.py — نقطة دخول DarbStu
 """
 import os, sys, threading, time, datetime, sqlite3
 
+# ─── تجاوز الملفات المدمجة في EXE (تفعيل التحديثات الخارجية) ────────
+if getattr(sys, 'frozen', False):
+    _BASE = os.path.dirname(sys.executable)
+else:
+    _BASE = os.path.dirname(os.path.abspath(__file__))
+if _BASE not in sys.path:
+    sys.path.insert(0, _BASE)
+# ──────────────────────────────────────────────────────────────────
+
 # ─── نقطة الدخول الرئيسية ────────────────────────────
 from constants import (PORT, DB_PATH, DATA_DIR, CLOUDFLARE_DOMAIN,
                        MY_STATIC_DOMAIN, BASE_DIR, APP_VERSION,

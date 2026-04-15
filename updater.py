@@ -145,19 +145,23 @@ def _auto_update(latest, dl_url, win, status_lbl, btn):
         _ui(f"✅  تم تحديث {updated} ملف — سيُعاد التشغيل...", "green")
         time.sleep(2)
 
-        # ٤. إعادة التشغيل من main.py
-        main_file = os.path.join(BASE_DIR, "main.py")
+        # ٤. إعادة التشغيل
+        # إذا كان برنامج مجمع (EXE)، نعيد تشغيل الملف التنفيذي نفسه
+        # بفضل sys.path.insert في main.py سيقرأ الملفات الجديدة تلقائياً
+        if getattr(sys, 'frozen', False):
+            cmd = [sys.executable] + sys.argv[1:]
+        else:
+            main_file = os.path.join(BASE_DIR, "main.py")
+            cmd = [sys.executable, main_file] + sys.argv[1:]
+
         if sys.platform == "win32":
             subprocess.Popen(
-                [sys.executable, main_file] + sys.argv[1:],
+                cmd,
                 creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
                 cwd=BASE_DIR
             )
         else:
-            subprocess.Popen(
-                [sys.executable, main_file] + sys.argv[1:],
-                cwd=BASE_DIR
-            )
+            subprocess.Popen(cmd, cwd=BASE_DIR)
 
         time.sleep(1)
 

@@ -14,7 +14,7 @@ def run(cmd):
 def get_current_version():
     try:
         r = subprocess.run(
-            'python -c "from constants import APP_VERSION; print(APP_VERSION)"',
+            f'"{sys.executable}" -c "from constants import APP_VERSION; print(APP_VERSION)"',
             shell=True, cwd=BASE, capture_output=True, text=True)
         return r.stdout.strip()
     except Exception:
@@ -25,7 +25,7 @@ def update_files(new_ver, notes):
     path = os.path.join(BASE, "constants.py")
     with open(path, "r", encoding="utf-8") as f:
         txt = f.read()
-    txt = re.sub(r"APP_VERSION\s*=\s*'[^']+'", f"APP_VERSION         = '{new_ver}'", txt)
+    txt = re.sub(r"APP_VERSION\s*=\s*['\"].*?['\"]", f"APP_VERSION         = '{new_ver}'", txt)
     with open(path, "w", encoding="utf-8") as f:
         f.write(txt)
 
