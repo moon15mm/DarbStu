@@ -4,7 +4,7 @@ api/web_routes.py — مسارات لوحة التحكم الويب /web/*
 """
 import datetime, json, base64, os, io, hashlib, hmac, re, sqlite3, subprocess, zipfile, urllib.request
 from typing import List, Dict, Any, Optional
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, File, UploadFile, Form
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 from constants import (DB_PATH, DATA_DIR, HOST, PORT, TZ_OFFSET,
@@ -26,14 +26,16 @@ from database import (get_db, load_students, load_teachers,
                       create_backup, get_backup_list, get_all_users,
                       create_user, delete_user, toggle_user_active,
                       authenticate, hash_password, save_user_allowed_tabs,
-                      get_user_allowed_tabs,
+                      delete_circular, get_user_allowed_tabs, get_user_info,
                       import_students_from_excel_sheet2_format,
                       import_teachers_from_excel,
                       create_student_referral, get_referrals_for_teacher,
                       get_all_referrals, get_referral_by_id,
                       update_referral_deputy, close_referral,
                       create_academic_inquiry, get_academic_inquiries,
-                      get_academic_inquiry, reply_academic_inquiry)
+                      get_academic_inquiry, reply_academic_inquiry,
+                      create_circular, get_circulars, mark_circular_as_read,
+                      get_unread_circulars_count, delete_circular)
 from whatsapp_service import (send_whatsapp_message, send_whatsapp_pdf,
                                check_whatsapp_server_status)
 from alerts_service import (log_message_status, run_smart_alerts,
@@ -150,9 +152,9 @@ async def web_dashboard(request: Request):
         content=html,
         headers={
             "Content-Security-Policy":
-                "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;",
+                "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; script-src * 'unsafe-inline' 'unsafe-eval'; style-src * 'unsafe-inline';",
             "X-Content-Security-Policy":
-                "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;",
+                "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; script-src * 'unsafe-inline' 'unsafe-eval'; style-src * 'unsafe-inline';",
         }
     )
 
@@ -169,6 +171,55 @@ async def web_dashboard_data(request: Request, date: str = None):
         tard = query_tardiness(date_filter=d)
         metrics["totals"]["tardiness"] = len(tard)
         return JSONResponse({"ok": True, "date": d, "metrics": metrics})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+# --- Analytics Endpoints ---
+
+@router.get("/web/api/analytics/dashboard", response_class=JSONResponse)
+async def api_analytics_dashboard(request: Request, date: str = None):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False, "msg": "Unauthenticated"}, status_code=401)
+    try:
+        d = date or now_riyadh_date()
+        metrics = compute_today_metrics(d)
+        weekly = get_week_comparison()
+        tard = query_tardiness(date_filter=d)
+        metrics["totals"]["tardiness"] = len(tard)
+        return JSONResponse({
+            "ok": True,
+            "metrics": metrics,
+            "weekly": weekly
+        })
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/analytics/weekly-comparison", response_class=JSONResponse)
+async def api_weekly_comparison(request: Request):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    try:
+        return JSONResponse({"ok": True, "data": get_week_comparison()})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/analytics/top-absent", response_class=JSONResponse)
+async def api_top_absent(request: Request, month: str = None, limit: int = 10):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    try:
+        rows = get_top_absent_students(month=month, limit=limit)
+        return JSONResponse({"ok": True, "rows": rows})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/analytics/absence-by-dow", response_class=JSONResponse)
+async def api_absence_by_dow(request: Request):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    try:
+        data = get_absence_by_day_of_week()
+        return JSONResponse({"ok": True, "data": data})
     except Exception as e:
         return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
 
@@ -486,19 +537,27 @@ async def web_permissions(request: Request, date: str = None):
 
 @router.get("/web/api/me", response_class=JSONResponse)
 async def web_me(request: Request):
-    user = _get_current_user(request)
-    if not user: return JSONResponse({"error": "غير مصرح"}, status_code=401)
-    cfg    = load_config()
-    gender = cfg.get("school_gender", "boys")
-    school = cfg.get("school_name", "المدرسة")
-    return JSONResponse({
-        "ok":      True,
-        "username": user["sub"],
-        "role":     user["role"],
-        "school":   school,
-        "gender":   gender,
-        "is_girls": gender == "girls",
-    })
+    try:
+        user = _get_current_user(request)
+        if not user: return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
+        cfg    = load_config()
+        gender = cfg.get("school_gender", "boys")
+        school = cfg.get("school_name", "المدرسة")
+        user_info = get_user_info(user["sub"])
+        full_name = user_info.get("full_name") if user_info and user_info.get("full_name") else user["sub"]
+        
+        return JSONResponse({
+            "ok":      True,
+            "username": user["sub"],
+            "name":     full_name,
+            "role":     user["role"],
+            "school":   school,
+            "gender":   gender,
+            "is_girls": gender == "girls",
+        })
+    except Exception as e:
+        print(f"[API-ME-ERROR] {e}")
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
 
 @router.get("/web/api/teachers", response_class=JSONResponse)
 async def web_get_teachers(request: Request):
@@ -615,6 +674,116 @@ async def web_referral_close(req: Request):
     except Exception as e:
         return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
 
+# ─── التعاميم الرسمية (Circulars) ───────────────────────────
+
+@router.post("/web/api/circulars/create", response_class=JSONResponse)
+async def web_create_circular(
+    request: Request,
+    title: str = Form(...),
+    content: str = Form(""),
+    target_role: str = Form("all"),
+    file: UploadFile = File(None)
+):
+    user = _get_current_user(request)
+    if not user or user["role"] != "admin":
+        return JSONResponse({"error": "غير مصرح للمدير فقط"}, status_code=401)
+    
+    try:
+        attachment_path = ""
+        if file:
+            circ_dir = os.path.join(DATA_DIR, "attachments", "circulars")
+            os.makedirs(circ_dir, exist_ok=True)
+            # توليد اسم فريد للملف
+            fext = os.path.splitext(file.filename)[1]
+            fname = f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{hash(file.filename) % 10000}{fext}"
+            fpath = os.path.join(circ_dir, fname)
+            with open(fpath, "wb") as f:
+                f.write(await file.read())
+            attachment_path = os.path.join("attachments", "circulars", fname)
+        
+        data = {
+            "title": title,
+            "content": content,
+            "target_role": target_role,
+            "attachment_path": attachment_path,
+            "created_by": user["sub"],
+            "date": now_riyadh_date()
+        }
+        cid = create_circular(data)
+        
+        # إرسال تنبيهات واتساب اختيارية
+        cfg = load_config()
+        if cfg.get("whatsapp_circular_alerts", True):
+            threading.Thread(target=lambda: _send_circular_wa_alerts(data), daemon=True).start()
+            
+        return JSONResponse({"ok": True, "id": cid})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+def _send_circular_wa_alerts(circ_data):
+    """إرسال تنبيهات واتساب للمعلمين عند صدور تعميم."""
+    try:
+        from database import get_all_users
+        users = get_all_users()
+        target = circ_data.get("target_role", "all")
+        msg = f"🔔 *تعميم جديد من إدارة المدرسة*\n\n*العنوان:* {circ_data['title']}\n\nيرجى فتح التطبيق للاطلاع على التفاصيل."
+        
+        for u in users:
+            if not u.get("active"): continue
+            if target != "all" and u["role"] != target: continue
+            if u["role"] == "admin": continue # لا نرسل للمرسل
+            
+            phone = u.get("phone")
+            if phone:
+                send_whatsapp_message(phone, msg)
+    except Exception as e:
+        print("[Circular-WA-Error]", e)
+
+@router.get("/web/api/circulars/list", response_class=JSONResponse)
+async def web_list_circulars(request: Request):
+    try:
+        user = _get_current_user(request)
+        if not user: return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
+        print(f"[API] 📜 طلب قائمة التعاميم للمستخدم: {user['sub']} ({user['role']})")
+        rows = get_circulars(username=user["sub"], role=user["role"])
+        print(f"[API] ✅ تم جلب {len(rows)} تعميم بنجاح")
+        return JSONResponse({"ok": True, "rows": rows})
+    except Exception as e:
+        import traceback
+        print(f"[API-CIRC-ERROR] {e}")
+        traceback.print_exc()
+        return JSONResponse({"ok": False, "msg": f"خطأ داخلي: {str(e)}"}, status_code=500)
+
+@router.post("/web/api/circulars/mark-read", response_class=JSONResponse)
+async def web_mark_read(req: Request):
+    user = _get_current_user(req)
+    if not user: return JSONResponse({"error": "غير مصرح"}, status_code=401)
+    try:
+        data = await req.json()
+        mark_circular_as_read(int(data["id"]), user["sub"])
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/circulars/unread-count", response_class=JSONResponse)
+async def web_unread_count(request: Request):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"error": "غير مصرح"}, status_code=401)
+    count = get_unread_circulars_count(user["sub"], user["role"])
+    return JSONResponse({"ok": True, "count": count})
+
+# ─── خدمة المرفقات (Static) ──────────────────────────────────
+@router.get("/web/api/circulars/attachment/{filename}")
+async def get_circular_attachment(filename: str):
+    fpath = os.path.join(DATA_DIR, "attachments", "circulars", filename)
+    if not os.path.exists(fpath):
+        return Response(status_code=404)
+    
+    import mimetypes
+    mtype, _ = mimetypes.guess_type(fpath)
+    with open(fpath, "rb") as f:
+        return Response(content=f.read(), media_type=mtype or "application/octet-stream")
+
 # ═══════════════════════════════════════════════════════════════
 # HTML صفحات الويب
 # ═══════════════════════════════════════════════════════════════
@@ -695,57 +864,58 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
     # ── قائمة التبويبات مع مجموعاتها ──────────────────────────
     SIDEBAR_GROUPS = [
         ("الرئيسية", [
-            ("لوحة المراقبة",      "dashboard",            "📊"),
-            ("روابط الفصول",        "links",                "🔗"),
-            ("المراقبة الحية",      "live_monitor",         "📡"),
+            ("لوحة المراقبة",      "dashboard",            "fas fa-chart-line"),
+            ("روابط الفصول",        "links",                "fas fa-link"),
+            ("المراقبة الحية",      "live_monitor",         "fas fa-satellite-dish"),
         ]),
         ("التسجيل اليومي", [
-            ("تسجيل الغياب",        "reg_absence",          "✏️"),
-            ("تسجيل التأخر",        "reg_tardiness",        "⏱️"),
-            ("طلب استئذان",         "new_permission",       "🔔"),
+            ("تسجيل الغياب",        "reg_absence",          "fas fa-user-check"),
+            ("تسجيل التأخر",        "reg_tardiness",        "fas fa-stopwatch"),
+            ("طلب استئذان",         "new_permission",       "fas fa-bell"),
         ]),
         ("السجلات", [
-            ("سجل الغياب",          "absences",             "🔴"),
-            ("سجل التأخر",          "tardiness",            "⏰"),
-            ("الأعذار",             "excuses",              "📋"),
-            ("الاستئذان",           "permissions",          "🚪"),
-            ("السجلات / التصدير",   "logs",                 "🗂️"),
-            ("إدارة الغياب",        "absence_mgmt",         "⚙️"),
+            ("سجل الغياب",          "absences",             "fas fa-history"),
+            ("سجل التأخر",          "tardiness",            "fas fa-clock"),
+            ("الأعذار",             "excuses",              "fas fa-file-medical"),
+            ("الاستئذان",           "permissions",          "fas fa-door-open"),
+            ("السجلات / التصدير",   "logs",                 "fas fa-file-export"),
+            ("إدارة الغياب",        "absence_mgmt",         "fas fa-users-cog"),
         ]),
         ("التقارير والتحليل", [
-            ("التقارير / الطباعة",  "reports_print",        "📈"),
-            ("تقرير الفصل",         "term_report",          "📄"),
-            ("تحليل النتائج",       "grade_analysis",       "📉"),
-            ("تقرير الإدارة",       "admin_report",         "📃"),
-            ("تحليل طالب",          "student_analysis",     "🔍"),
-            ("أكثر الطلاب غياباً", "top_absent",           "🏆"),
-            ("الإشعارات الذكية",    "alerts",               "⚠️"),
+            ("التقارير / الطباعة",  "reports_print",        "fas fa-print"),
+            ("تقرير الفصل",         "term_report",          "fas fa-file-alt"),
+            ("تحليل النتائج",       "grade_analysis",       "fas fa-chart-bar"),
+            ("تقرير الإدارة",       "admin_report",         "fas fa-user-tie"),
+            ("تحليل طالب",          "student_analysis",     "fas fa-search"),
+            ("أكثر الطلاب غياباً", "top_absent",           "fas fa-award"),
+            ("الإشعارات الذكية",    "alerts",               "fas fa-exclamation-triangle"),
         ]),
         ("الرسائل والتواصل", [
-            ("إرسال رسائل الغياب",  "send_absence",         "📨"),
-            ("إرسال رسائل التأخر",  "send_tardiness",       "📩"),
-            ("مستلمو التأخر",       "tardiness_recipients", "👥"),
-            ("جدولة الروابط",       "schedule_links",       "📅"),
+            ("إرسال رسائل الغياب",  "send_absence",         "fas fa-envelope-open-text"),
+            ("إرسال رسائل التأخر",  "send_tardiness",       "fas fa-paper-plane"),
+            ("التعاميم والنشرات",   "circulars",            "fas fa-scroll"),
+            ("مستلمو التأخر",       "tardiness_recipients", "fas fa-users"),
+            ("جدولة الروابط",       "schedule_links",       "fas fa-calendar-alt"),
         ]),
         ("إدارة البيانات", [
-            ("إدارة الطلاب",        "student_mgmt",         "🎓"),
-            ("إضافة طالب",          "add_student",          "➕"),
-            ("إدارة الفصول",        "class_naming",         "🏫"),
-            ("إدارة الجوالات",      "phones",               "📱"),
-            ("تصدير نور",           "noor_export",          "📤"),
-            ("نشر النتائج",         "results",              "🏅"),
-            ("الموجّه الطلابي",     "counselor",            "🧠"),
-            ("استلام تحويلات",      "referral_deputy",      "📥"),
+            ("إدارة الطلاب",        "student_mgmt",         "fas fa-graduation-cap"),
+            ("إضافة طالب",          "add_student",          "fas fa-user-plus"),
+            ("إدارة الفصول",        "class_naming",         "fas fa-school"),
+            ("إدارة الجوالات",      "phones",               "fas fa-mobile-alt"),
+            ("تصدير نور",           "noor_export",          "fas fa-cloud-upload-alt"),
+            ("نشر النتائج",         "results",              "fas fa-medal"),
+            ("الموجّه الطلابي",     "counselor",            "fas fa-brain"),
+            ("استلام تحويلات",      "referral_deputy",      "fas fa-inbox"),
         ]),
         ("أدوات المعلم", [
-            ("تحويل طالب",          "referral_teacher",     "📋"),
-            ("نماذج المعلم",        "teacher_forms",        "📝"),
+            ("تحويل طالب",          "referral_teacher",     "fas fa-clipboard-list"),
+            ("نماذج المعلم",        "teacher_forms",        "fas fa-file-contract"),
         ]),
         ("الإعدادات", [
-            ("إعدادات المدرسة",     "school_settings",      "🏛️"),
-            ("المستخدمون",          "users",                "👥"),
-            ("النسخ الاحتياطية",    "backup",               "💾"),
-            ("ملاحظات سريعة",       "quick_notes",          "📝"),
+            ("إعدادات المدرسة",     "school_settings",      "fas fa-university"),
+            ("المستخدمون",          "users",                "fas fa-user-shield"),
+            ("النسخ الاحتياطية",    "backup",               "fas fa-hdd"),
+            ("ملاحظات سريعة",       "quick_notes",          "fas fa-sticky-note"),
         ]),
     ]
 
@@ -760,7 +930,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
         for name, key, icon in visible:
             sidebar_html += (
                 '<button class="tab-btn" data-key="' + key + '" onclick="showTab(\'' + key + '\')">'
-                '<span class="ti">' + icon + '</span>' + name + '</button>'
+                '<i class="ti ' + icon + '"></i>' + name + '</button>'
             )
         sidebar_html += '<div class="sb-div"></div>'
 
@@ -797,7 +967,8 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
         '.tab-btn{display:flex;align-items:center;gap:9px;width:100%;text-align:right;padding:9px 14px;border:none;'
         'background:none;cursor:pointer;font-family:Tajawal,Arial;font-size:13px;color:#475569;'
         'border-right:3px solid transparent;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:all .15s}'
-        '.tab-btn .ti{font-size:15px;flex-shrink:0}'
+        '.tab-btn .ti{font-size:16px;flex-shrink:0;width:24px;text-align:center;color:var(--mu);transition:color .15s}'
+        '.tab-btn:hover .ti,.tab-btn.active .ti{color:var(--pr)}'
         '.tab-btn:hover{background:var(--pr-lt);color:var(--pr)}'
         '.tab-btn.active{background:var(--pr-lt);color:var(--pr);font-weight:700;border-right-color:var(--pr)}'
         '.sb-div{height:1px;background:var(--bd);margin:6px 10px}'
@@ -832,6 +1003,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
         '.bg{background:#DCFCE7;color:#166534}'
         '.bo{background:#FEF3C7;color:#92400E}'
         '.bb{background:#DBEAFE;color:#1565C0}'
+        '@keyframes slideUp{from{opacity:0;transform:translateY(15px)}to{opacity:1;transform:translateY(0)}}'
         '.bp{background:#F3E8FF;color:#7C3AED}'
         # Forms
         '.fg{display:flex;flex-direction:column;gap:5px}'
@@ -910,7 +1082,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
     content_html = '''
 <div id="tab-dashboard">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-    <h2 class="pt">📊 لوحة المراقبة</h2>
+    <h2 class="pt"><i class="fas fa-chart-line"></i> لوحة المراقبة</h2>
     <input type="date" id="dash-date" onchange="loadDashboard()" style="width:auto">
   </div>
   <div class="stat-cards" id="dash-cards"><div class="loading">⏳ جارٍ التحميل...</div></div>
@@ -920,17 +1092,17 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 </div>
 
 <div id="tab-links">
-  <h2 class="pt">🔗 روابط الفصول</h2>
+  <h2 class="pt"><i class="fas fa-link"></i> روابط الفصول</h2>
   <div class="ab ai">💡 شارك الرابط مع المعلم ليسجّل الغياب مباشرة من هاتفه</div>
   <div id="links-list" class="loading">⏳ جارٍ التحميل...</div>
 </div>
 
 <div id="tab-live_monitor">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-    <h2 class="pt" style="margin:0">📡 المراقبة الحية</h2>
+    <h2 class="pt" style="margin:0"><i class="fas fa-satellite-dish"></i> المراقبة الحية</h2>
     <div style="display:flex;gap:8px;align-items:center">
       <input type="date" id="lm-date" style="width:auto">
-      <button class="btn bp1" onclick="loadLiveMonitor()">🔄 تحديث</button>
+      <button class="btn bp1" onclick="loadLiveMonitor()"><i class="fas fa-sync-alt"></i> تحديث</button>
     </div>
   </div>
   <div class="stat-cards" id="lm-cards"></div>
@@ -940,7 +1112,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 </div>
 
 <div id="tab-reg_absence">
-  <h2 class="pt">✏️ تسجيل الغياب</h2>
+  <h2 class="pt"><i class="fas fa-user-check"></i> تسجيل الغياب</h2>
   <div class="section">
     <div class="fg2">
       <div class="fg"><label class="fl">التاريخ</label><input type="date" id="ra-date"></div>
@@ -961,7 +1133,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 </div>
 
 <div id="tab-reg_tardiness">
-  <h2 class="pt">⏱️ تسجيل التأخر</h2>
+  <h2 class="pt"><i class="fas fa-stopwatch"></i> تسجيل التأخر</h2>
   <div class="section">
     <div class="fg2">
       <div class="fg"><label class="fl">التاريخ</label><input type="date" id="rt-date"></div>
@@ -973,7 +1145,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 </div>
 
 <div id="tab-new_permission">
-  <h2 class="pt">🔔 تسجيل طلب استئذان</h2>
+  <h2 class="pt"><i class="fas fa-bell"></i> تسجيل طلب استئذان</h2>
   <div class="section">
     <div class="fg2">
       <div class="fg"><label class="fl">التاريخ</label><input type="date" id="np-date"></div>
@@ -995,7 +1167,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 
 <div id="tab-absences">
   <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
-    <h2 class="pt" style="margin:0">🔴 سجل الغياب</h2>
+    <h2 class="pt" style="margin:0"><i class="fas fa-history"></i> سجل الغياب</h2>
     <input type="date" id="abs-date" style="width:auto">
     <select id="abs-class-filter" style="width:auto"><option value="">كل الفصول</option></select>
     <button class="btn bp1 bsm" onclick="loadAbsences()">تحميل</button>
@@ -1008,7 +1180,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 
 <div id="tab-tardiness">
   <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
-    <h2 class="pt" style="margin:0">⏰ سجل التأخر</h2>
+    <h2 class="pt" style="margin:0"><i class="fas fa-clock"></i> سجل التأخر</h2>
     <input type="date" id="tard-date" style="width:auto">
     <button class="btn bp1 bsm" onclick="loadTardiness()">تحميل</button>
     <button class="btn bp2 bsm" onclick="exportTbl('tard-table','تأخر')">⬇️ تصدير</button>
@@ -1020,7 +1192,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 
 <div id="tab-excuses">
   <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
-    <h2 class="pt" style="margin:0">📋 الأعذار</h2>
+    <h2 class="pt" style="margin:0"><i class="fas fa-file-medical"></i> الأعذار</h2>
     <input type="date" id="exc-date" onchange="loadExcuses()" style="width:auto">
     <button class="btn bp1 bsm" onclick="showAddExc()">+ إضافة عذر</button>
   </div>
@@ -1045,7 +1217,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 
 <div id="tab-permissions">
   <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
-    <h2 class="pt" style="margin:0">🚪 الاستئذان</h2>
+    <h2 class="pt" style="margin:0"><i class="fas fa-door-open"></i> الاستئذان</h2>
     <input type="date" id="perm-date" onchange="loadPermissions()" style="width:auto">
   </div>
   <div id="perm-ind" style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap"></div>
@@ -1055,7 +1227,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 </div>
 
 <div id="tab-logs">
-  <h2 class="pt">🗂️ السجلات والتصدير</h2>
+  <h2 class="pt"><i class="fas fa-file-export"></i> السجلات والتصدير</h2>
   <div class="it">
     <button class="itb active" onclick="si('logs','lg-abs')">الغياب</button>
     <button class="itb" onclick="si('logs','lg-tard')">التأخر</button>
@@ -1086,7 +1258,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 </div>
 
 <div id="tab-absence_mgmt">
-  <h2 class="pt">⚙️ إدارة الغياب</h2>
+  <h2 class="pt"><i class="fas fa-users-cog"></i> إدارة الغياب</h2>
   <div class="it">
     <button class="itb active" onclick="si('absence_mgmt','am-srch')">بحث وتعديل</button>
     <button class="itb" onclick="si('absence_mgmt','am-bulk')">حذف مجمّع</button>
@@ -1116,7 +1288,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 </div>
 
 <div id="tab-reports_print">
-  <h2 class="pt">📈 التقارير والطباعة</h2>
+  <h2 class="pt"><i class="fas fa-print"></i> التقارير والطباعة</h2>
   <div class="it">
     <button class="itb active" onclick="si('reports_print','rp-mo')">الشهرية</button>
     <button class="itb" onclick="si('reports_print','rp-cl')">حسب الفصل</button>
@@ -1153,7 +1325,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 </div>
 
 <div id="tab-term_report">
-  <h2 class="pt">📄 تقرير الفصل الدراسي</h2>
+  <h2 class="pt"><i class="fas fa-file-alt"></i> تقرير الفصل الدراسي</h2>
   <div class="section">
     <div class="fg2">
       <div class="fg"><label class="fl">الفصل الدراسي</label><select id="tr-sem"><option value="1">الأول</option><option value="2">الثاني</option><option value="3">الثالث</option></select></div>
@@ -1168,7 +1340,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 </div>
 
 <div id="tab-grade_analysis">
-  <h2 class="pt">📊 تحليل نتائج الطلاب</h2>
+  <h2 class="pt"><i class="fas fa-chart-bar"></i> تحليل نتائج الطلاب</h2>
   <div class="section">
     <div class="ab ai">📌 ارفع ملف نتائج الطلاب (PDF من نور / Excel / CSV) للحصول على تحليل تفصيلي بنفس محرّك التطبيق المكتبي</div>
     <div class="fg2">
@@ -1186,7 +1358,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 </div>
 
 <div id="tab-admin_report">
-  <h2 class="pt">📃 تقرير الإدارة اليومي</h2>
+  <h2 class="pt"><i class="fas fa-user-tie"></i> تقرير الإدارة اليومي</h2>
   <div class="section">
     <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">
       <div class="fg"><label class="fl">التاريخ</label><input type="date" id="ar-date" style="width:auto"></div>
@@ -1200,7 +1372,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 </div>
 
 <div id="tab-student_analysis">
-  <h2 class="pt">🔍 تحليل طالب</h2>
+  <h2 class="pt"><i class="fas fa-search"></i> تحليل طالب</h2>
   <div class="section">
     <div class="fg2">
       <div class="fg"><label class="fl">الفصل</label><select id="an-class" onchange="loadClsForAn()"><option value="">اختر فصلاً</option></select></div>
@@ -1212,14 +1384,14 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 </div>
 
 <div id="tab-top_absent">
-  <h2 class="pt">🏆 أكثر الطلاب غياباً</h2>
+  <h2 class="pt"><i class="fas fa-award"></i> أكثر الطلاب غياباً</h2>
   <div class="section"><div class="tw"><table>
     <thead><tr><th>#</th><th>الطالب</th><th>الفصل</th><th>أيام الغياب</th><th>آخر غياب</th></tr></thead>
     <tbody id="top-table"></tbody></table></div></div>
 </div>
 
 <div id="tab-alerts">
-  <h2 class="pt">⚠️ الإشعارات الذكية</h2>
+  <h2 class="pt"><i class="fas fa-exclamation-triangle"></i> الإشعارات الذكية</h2>
   <div class="it">
     <button class="itb active" onclick="si('alerts','al-abs');loadAlerts();">🔴 الغياب</button>
     <button class="itb" onclick="si('alerts','al-tard');loadAlertsTard();">🟠 التأخر</button>
@@ -1251,7 +1423,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 </div>
 
 <div id="tab-send_absence">
-  <h2 class="pt">📨 إرسال رسائل الغياب</h2>
+  <h2 class="pt"><i class="fas fa-envelope-open-text"></i> إرسال رسائل الغياب</h2>
   <div class="section">
     <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">
       <div class="fg"><label class="fl">التاريخ</label><input type="date" id="sa-date" style="width:auto"></div>
@@ -1271,7 +1443,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 </div>
 
 <div id="tab-send_tardiness">
-  <h2 class="pt">📩 إرسال رسائل التأخر</h2>
+  <h2 class="pt"><i class="fas fa-paper-plane"></i> إرسال رسائل التأخر</h2>
   <div class="section">
     <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">
       <div class="fg"><label class="fl">التاريخ</label><input type="date" id="st-date" style="width:auto"></div>
@@ -1286,8 +1458,39 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
   </div>
 </div>
 
+<div id="tab-circulars">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+    <h2 class="pt" style="margin:0"><i class="fas fa-scroll"></i> التعاميم والنشرات</h2>
+    ''' + ('<button class="btn bp1 bsm" onclick="si(\'circulars\',\'circ-add\')">+ إصدار تعميم</button>' if role == 'admin' else '') + '''
+    <button class="btn bp2 bsm" onclick="loadCirculars()"><i class="fas fa-sync-alt"></i> تحديث</button>
+  </div>
+  
+  <div id="circ-add" class="ip" style="display:none">
+    <div class="section">
+      <div class="st">إصدار تعميم جديد</div>
+      <div class="fg2">
+        <div class="fg"><label class="fl">العنوان</label><input type="text" id="ci-title" placeholder="..."></div>
+        <div class="fg"><label class="fl">موجه إلى</label><select id="ci-target">
+          <option value="all">الكل</option><option value="teacher">المعلمين</option>
+          <option value="deputy">الوكلاء</option><option value="counselor">الموجهين</option></select></div>
+        <div class="fg" style="grid-column:span 2"><label class="fl">نص التعميم / الملاحظات</label><textarea id="ci-content" rows="3" style="width:100%;padding:8px;border:1px solid #E2E8F0;border-radius:6px"></textarea></div>
+        <div class="fg"><label class="fl">إرفاق ملف (PDF/صورة)</label><input type="file" id="ci-file"></div>
+      </div>
+      <div class="bg-btn">
+        <button class="btn bp1" onclick="submitCircular()">🚀 إصدار ونشر</button>
+        <button class="btn bp3" onclick="si(\'circulars\',\'circ-list\')">إلغاء</button>
+      </div>
+      <div id="ci-status" style="margin-top:10px"></div>
+    </div>
+  </div>
+
+  <div id="circ-list" class="ip active">
+    <div id="circ-container" class="loading">⏳ جارٍ التحميل...</div>
+  </div>
+</div>
+
 <div id="tab-tardiness_recipients">
-  <h2 class="pt">👥 مستلمو رسائل التأخر</h2>
+  <h2 class="pt"><i class="fas fa-users"></i> مستلمو رسائل التأخر</h2>
   <div class="section">
     <div id="recipients-list"><div class="loading">⏳</div></div>
     <div style="margin-top:14px" class="fg2">
@@ -1301,7 +1504,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 </div>
 
 <div id="tab-schedule_links">
-  <h2 class="pt">📅 جدولة الروابط التلقائية</h2>
+  <h2 class="pt"><i class="fas fa-calendar-alt"></i> جدولة الروابط التلقائية</h2>
   <div class="ab ai">💡 الروابط تُرسل تلقائياً للمعلمين في بداية كل حصة</div>
   <div class="section">
     <div class="fg2">
@@ -1317,7 +1520,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 </div>
 
 <div id="tab-student_mgmt">
-  <h2 class="pt">🎓 إدارة الطلاب</h2>
+  <h2 class="pt"><i class="fas fa-graduation-cap"></i> إدارة الطلاب</h2>
   <div class="section">
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px">
       <div class="fg" style="flex:1;min-width:200px"><label class="fl">بحث</label><input type="text" id="sm-q" placeholder="اسم أو رقم الطالب..." oninput="filterStudents()"></div>
@@ -1331,7 +1534,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 </div>
 
 <div id="tab-add_student">
-  <h2 class="pt">➕ إضافة طالب</h2>
+  <h2 class="pt"><i class="fas fa-user-plus"></i> إضافة طالب</h2>
   <div class="it">
     <button class="itb active" onclick="si('add_student','as-man')">يدوي</button>
     <button class="itb" onclick="si('add_student','as-xl')">Excel</button>
@@ -1369,12 +1572,12 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 </div>
 
 <div id="tab-class_naming">
-  <h2 class="pt">🏫 إدارة الفصول</h2>
+  <h2 class="pt"><i class="fas fa-school"></i> إدارة الفصول</h2>
   <div class="section"><div id="cn-list"><div class="loading">⏳</div></div></div>
 </div>
 
 <div id="tab-phones">
-  <h2 class="pt">📱 إدارة أرقام الجوالات</h2>
+  <h2 class="pt"><i class="fas fa-mobile-alt"></i> إدارة أرقام الجوالات</h2>
   <div class="section">
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px">
       <div class="fg" style="flex:1"><label class="fl">بحث</label><input type="text" id="ph-q" placeholder="اسم أو جوال..." oninput="filterStudents()"></div>
@@ -1387,14 +1590,14 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 </div>
 
 <div id="tab-noor_export">
-  <h2 class="pt">📤 تصدير نور</h2>
+  <h2 class="pt"><i class="fas fa-cloud-upload-alt"></i> تصدير نور</h2>
   <div class="section">
     <div class="fg2">
       <div class="fg"><label class="fl">التاريخ</label><input type="date" id="noor-date"></div>
       <div class="fg"><label class="fl">الفصل</label><select id="noor-cls"><option value="">كل الفصول</option></select></div>
     </div>
     <div class="bg-btn">
-      <button class="btn bp4" onclick="exportNoor()">⬇️ تصدير Excel لنور</button>
+      <button class="btn bp4" onclick="exportNoor()"><i class="fas fa-file-download"></i> تصدير Excel لنور</button>
     </div>
     <div id="noor-st" style="margin-top:10px"></div>
   </div>
@@ -1411,7 +1614,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 </div>
 
 <div id="tab-results">
-  <h2 class="pt">🏅 نشر نتائج الطلاب</h2>
+  <h2 class="pt"><i class="fas fa-medal"></i> نشر نتائج الطلاب</h2>
   <div class="it">
     <button class="itb active" onclick="si('results','res-up')">رفع النتائج</button>
     <button class="itb" onclick="si('results','res-ls');loadResults()">قائمة النتائج</button>
@@ -1437,7 +1640,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 </div>
 
 <div id="tab-counselor">
-  <h2 class="pt">🧠 الموجّه الطلابي</h2>
+  <h2 class="pt"><i class="fas fa-brain"></i> الموجّه الطلابي</h2>
   <div class="it">
     <button class="itb active" onclick="si('counselor','co-main');loadCounselorList();">📋 قائمة المحوّلين</button>
     <button class="itb" onclick="si('counselor','co-ses')">📝 تسجيل جلسة</button>
@@ -1450,8 +1653,8 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
     <div class="section">
       <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px">
         <input type="text" id="co-search" placeholder="🔍 ابحث باسم/فصل/رقم..." oninput="filterCounselorList()" style="flex:1;min-width:200px">
-        <button class="btn bp1 bsm" onclick="loadCounselorList()">🔄 تحديث</button>
-        <button class="btn bp4 bsm" onclick="exportTbl('co-main-tbl','الموجّه_الطلابي')">⬇️ Excel</button>
+        <button class="btn bp1 bsm" onclick="loadCounselorList()"><i class="fas fa-sync-alt"></i> تحديث</button>
+        <button class="btn bp4 bsm" onclick="exportTbl('co-main-tbl','الموجّه_الطلابي')"><i class="fas fa-file-download"></i> Excel</button>
       </div>
       <div id="co-main-info" style="margin-bottom:10px"></div>
       <div id="co-main-st" style="margin-bottom:8px"></div>
@@ -1524,7 +1727,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 </div>
 
 <div id="tab-school_settings">
-  <h2 class="pt">🏛️ إعدادات المدرسة</h2>
+  <h2 class="pt"><i class="fas fa-university"></i> إعدادات المدرسة</h2>
   <div class="it">
     <button class="itb active" onclick="si('school_settings','ss-gen')">عام</button>
     <button class="itb" onclick="si('school_settings','ss-msg')">الرسائل</button>
@@ -1576,7 +1779,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 </div>
 
 <div id="tab-users">
-  <h2 class="pt">👥 إدارة المستخدمين</h2>
+  <h2 class="pt"><i class="fas fa-user-shield"></i> إدارة المستخدمين</h2>
   <div class="section">
     <div class="st">إضافة مستخدم جديد</div>
     <div class="fg2">
@@ -1594,7 +1797,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 </div>
 
 <div id="tab-backup">
-  <h2 class="pt">💾 النسخ الاحتياطية</h2>
+  <h2 class="pt"><i class="fas fa-hdd"></i> النسخ الاحتياطية</h2>
   <div class="section">
     <div class="bg-btn" style="margin-bottom:16px">
       <button class="btn bp1" onclick="createBackup()">💾 إنشاء نسخة الآن</button>
@@ -1608,7 +1811,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 </div>
 
 <div id="tab-quick_notes">
-  <h2 class="pt">📝 ملاحظات سريعة</h2>
+  <h2 class="pt"><i class="fas fa-sticky-note"></i> ملاحظات سريعة</h2>
   <div class="section">
     <textarea id="qn-text" rows="3" placeholder="اكتب ملاحظتك هنا..." style="width:100%;margin-bottom:8px"></textarea>
     <div class="bg-btn" style="margin-bottom:16px">
@@ -1620,7 +1823,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 </div>
 
 <div id="tab-referral_teacher">
-  <h2 class="pt">📋 تحويل طالب إلى الوكيل</h2>
+  <h2 class="pt"><i class="fas fa-exchange-alt"></i> تحويل طالب إلى الوكيل</h2>
   <div class="it">
     <button class="itb active" onclick="si('referral_teacher','rt-new');loadRefStudents()">➕ تحويل جديد</button>
     <button class="itb" onclick="si('referral_teacher','rt-hist');loadRefHistory()">📜 سجل تحويلاتي</button>
@@ -1655,7 +1858,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 </div>
 
 <div id="tab-referral_deputy">
-  <h2 class="pt">📥 إدارة تحويلات الطلاب</h2>
+  <h2 class="pt"><i class="fas fa-inbox"></i> إدارة تحويلات الطلاب</h2>
   <div class="section">
     <div style="display:flex;gap:8px;margin-bottom:12px">
       <select id="rd-filter" onchange="loadDeputyReferrals()"><option value="all">الكل</option><option value="pending">بانتظار الوكيل</option><option value="with_deputy">مع الوكيل</option><option value="with_counselor">مع الموجه</option><option value="resolved">مغلق</option></select>
@@ -1669,17 +1872,17 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 </div>
 
 <div id="tab-teacher_forms">
-  <h2 class="pt">📋 نماذج المعلم</h2>
+  <h2 class="pt"><i class="fas fa-file-contract"></i> نماذج المعلم</h2>
   <div class="ab ai">اختر النموذج المراد تعبئته، وسيقوم النظام بتوليد ملف PDF وإرساله للمدير. (يتطلب اتصال واتساب للرسائل)</div>
   <div class="stat-cards">
     <div class="sc" onclick="si('teacher_forms','tf-lesson')" style="cursor:pointer;background:#F0FDF4;border-color:#BBF7D0">
-      <div class="v" style="color:#166534">📘</div><div class="l">نموذج تحضير الدرس</div>
+      <div class="v" style="color:#166534"><i class="fas fa-book"></i></div><div class="l">نموذج تحضير الدرس</div>
     </div>
     <div class="sc" onclick="si('teacher_forms','tf-prog')" style="cursor:pointer;background:#EFF6FF;border-color:#BFDBFE">
-      <div class="v" style="color:#1D4ED8">📊</div><div class="l">تقرير تنفيذ البرنامج</div>
+      <div class="v" style="color:#1D4ED8"><i class="fas fa-chart-line"></i></div><div class="l">تقرير تنفيذ البرنامج</div>
     </div>
     <div class="sc" onclick="si('teacher_forms','tf-inq');loadTeacherInquiries()" style="cursor:pointer;background:#FAF5FF;border-color:#E9D5FF">
-      <div class="v" style="color:#7E22CE">📬</div><div class="l">استفسارات الموجّه</div>
+      <div class="v" style="color:#7E22CE"><i class="fas fa-envelope-open-text"></i></div><div class="l">استفسارات الموجّه</div>
     </div>
   </div>
   
@@ -1796,8 +1999,12 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 
     # ── JavaScript الكامل المضغوط ─────────────────────────────
     js = r"""
+window.onerror = function(msg, url, line, col, error) {
+    alert("❌ حصل خطأ في المتصفح:\n" + msg + "\n\nالمكان: " + url + ":" + line);
+    return false;
+};
 var today=new Date().toISOString().split('T')[0];
-var _gender='boys';var _notes=[];
+var _gender='boys', _me=null, _notes=[];
 try{_notes=JSON.parse(localStorage.getItem('darb_notes')||'[]');}catch(e){}
 
 window.onload=function(){setDates();loadMe();showTab('dashboard');};
@@ -1809,14 +2016,29 @@ function setDates(){
 }
 
 async function api(url,opts){
-  try{var r=await fetch(url,opts);if(r.status===401){location.href='/web/login';return null;}return r.json();}
-  catch(e){return null;}
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), 15000); 
+  try{
+    // إضافة قيمة عشوائية لمنع التخزين المؤقت (Cache Busting)
+    var sep = url.indexOf('?') >= 0 ? '&' : '?';
+    var finalUrl = url + sep + '_t=' + Date.now();
+    
+    var r = await fetch(finalUrl,{...opts, signal: controller.signal});
+    clearTimeout(id);
+    if(r.status===401){location.href='/web/login';return null;}
+    return r.json();
+  } catch(e){
+    console.warn('API Error/Timeout:', url, e);
+    return null;
+  }
 }
 
 async function loadMe(){
   var d=await api('/web/api/me');if(!d)return;
+  _me=d;
   if(d.school)document.getElementById('sc-name').textContent=d.school;
-  if(d.name||d.username)document.getElementById('user-name').textContent=d.name||d.username;
+  if(d.name)document.getElementById('user-name').textContent='أهلاً بعودتك، ' + d.name;
+  else if(d.username)document.getElementById('user-name').textContent='أهلاً بعودتك، ' + d.username;
   if(d.gender)_gender=d.gender;
   if(d.is_girls)document.documentElement.style.setProperty('--pr','#7C3AED');
   loadClasses();
@@ -1847,6 +2069,7 @@ function showTab(key){
     'noor_export':function(){fillSel('noor-cls');},
     'results':function(){},
     'counselor':function(){fillSel('co-cls');fillSel('coa-cls');loadCoSessions();loadCounselorList();},
+    'circulars': loadCirculars,
     'school_settings':loadSettings,
     'users':loadUsers,'backup':loadBackups,
     'quick_notes':renderNotes,
@@ -1886,6 +2109,105 @@ function toggleSidebar(){var sb=document.getElementById('sb');var ov=document.ge
 function closeSidebar(){document.getElementById('sb').classList.remove('open');document.getElementById('ov').classList.remove('show');
   document.getElementById('mt').classList.remove('open');document.body.style.overflow='';}
 
+/* ── CIRCULARS ── */
+async function loadCirculars(){
+  try {
+    var cont=document.getElementById('circ-list'); if(!cont)return;
+    if(!_me || !_me.username) {
+       var me_data = await api('/web/api/me');
+       if(me_data && me_data.ok) { _me = me_data; }
+    }
+    console.log('loadCirculars: fetching list...');
+    var d = await api('/web/api/circulars/list');
+    if(!d || !d.ok){
+      console.error('loadCirculars: API failed', d);
+      cont.innerHTML='<div class="section" style="color:#b91c1c;text-align:center;padding:30px">❌ فشل تحميل القائمة: '+(d?d.msg:'انقطع الاتصال بالسيرفر')+'</div>';
+      return;
+    }
+    
+    var circs = d.rows || [];
+    if(circs.length===0){
+      cont.innerHTML='<div class="section" style="color:var(--mu);text-align:center;padding:80px 0;background:rgba(255,255,255,0.5)">' + 
+                     '<div style="font-size:48px;margin-bottom:15px">📭</div>' +
+                     '<div style="font-size:18px;font-weight:bold;color:#64748b">لا توجد تعاميم أو نشرات حالياً</div>' +
+                     '<div style="font-size:13px;margin-top:5px">سيظهر هنا ما يتم نشره من قبل الإدارة</div></div>';
+      return;
+    }
+    
+    var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:24px;animation:slideUp 0.5s ease-out">';
+    for (var i = 0; i < circs.length; i++) {
+        var c = circs[i];
+        try {
+          var myRole = (_me && _me.role) ? _me.role : 'teacher';
+          var isAdmin = (myRole === 'admin');
+          var isRead = isAdmin ? true : (c.is_read > 0);
+          
+          var statusBadge = isRead ? 
+              '<span style="background:#f1f5f9;color:#64748b;font-size:11px;padding:3px 10px;border-radius:20px;font-weight:600">مقروء</span>' : 
+              '<span style="background:#fff7ed;color:#ea580c;border:1px solid #ffedd5;font-size:11px;padding:3px 10px;border-radius:20px;font-weight:700">جديد ✨</span>';
+          
+          if(isAdmin) statusBadge = '<span style="background:#f0f9ff;color:#0369a1;font-size:11px;padding:3px 10px;border-radius:20px;font-weight:600">📊 '+ (c.read_count||0) +' قراءات</span>';
+  
+          var attBtn = c.attachment_path ? 
+              '<a href="/data/'+c.attachment_path+'" target="_blank" class="btn" style="background:#f8fafc;color:#1e293b;border:1px solid #e2e8f0;margin-top:16px;display:flex;align-items:center;justify-content:center;gap:8px;font-weight:bold;width:100%;transition:0.2s;text-decoration:none"><i class="fas fa-paperclip"></i> فتح المرفق</a>' : '';
+          
+          var delBtn = isAdmin ? 
+              '<button class="btn" style="background:transparent;color:#ef4444;padding:4px;border:none;cursor:pointer;opacity:0.6" onclick="deleteCirc('+c.id+')" title="حذف التعميم"><i class="fas fa-trash-alt"></i></button>' : '';
+  
+          html += '<div class="section" style="border:none;border-top:5px solid '+(isRead?'#e2e8f0':'#f97316')+';display:flex;flex-direction:column;min-height:220px;transition:transform 0.2s;box-shadow:0 4px 12px rgba(0,0,0,0.05)">'+
+            '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">'+
+              '<div><div style="font-size:10px;color:var(--mu);margin-bottom:4px;display:flex;align-items:center;gap:4px"><i class="fas fa-calendar-day"></i> '+ (c.date||'---') +'</div>'+
+              '<strong style="font-size:17px;color:#1e293b;line-height:1.4">'+(c.title||'بدون عنوان')+'</strong></div>'+
+              '<div style="display:flex;align-items:center;gap:10px">'+delBtn+statusBadge+'</div>'+
+            '</div>'+
+            '<div style="flex-grow:1;font-size:14px;line-height:1.7;color:#475569;margin-bottom:15px;white-space:pre-wrap">'+ (c.content||'') +'</div>'+
+            '<div style="border-top:1px solid #f1f5f9;margin:0 -15px;padding:0 15px">' + attBtn + '</div>' + 
+            (!isRead && !isAdmin ? '<button class="btn" style="background:#f97316;color:#fff;margin-top:10px;width:100%;border:none;font-weight:bold" onclick="markCircRead('+c.id+')">تحديد كمقروء ✅</button>' : '')+
+            '</div>';
+        } catch(err) { console.error('Render error:', err); }
+    }
+    html += '</div>';
+    cont.innerHTML = html;
+    console.log('loadCirculars: Render complete');
+  } catch(e) {
+    console.error('loadCirculars EXCEPTION:', e);
+    cont.innerHTML='<div class="section" style="color:#b91c1c">❌ خطأ تقني في معالجة القائمة. يرجى تحديث الصفحة.</div>';
+  }
+}
+
+async function deleteCirc(id){
+  if(!confirm('هل أنت متأكد من حذف هذا التعميم نهائياً؟')) return;
+  try {
+    var r = await fetch('/web/api/circulars/delete/'+id, {method:'POST'});
+    var d = await r.json();
+    if(d.ok) { loadCirculars(); } else { alert('❌ فشل الحذف: ' + d.msg); }
+  } catch(e) { alert('❌ خطأ في الاتصال بالسيرفر'); }
+}
+
+async function submitCircular(){
+  var title=document.getElementById('ci-title').value.trim();
+  var target=document.getElementById('ci-target').value;
+  var content=document.getElementById('ci-content').value.trim();
+  var fileInput=document.getElementById('ci-file');
+  if(!title){ss('ci-status','أدخل عنوان التعميم أو النشرة','er');return;}
+  ss('ci-status','⏳ جارٍ النشر...','in');
+  var fd=new FormData();fd.append('title',title);fd.append('target_role',target);fd.append('content',content);
+  if(fileInput.files.length)fd.append('file',fileInput.files[0]);
+  try{
+    var r=await fetch('/web/api/circulars/create',{method:'POST',body:fd});
+    var d=await r.json();
+    if(d.ok){ss('ci-status','✅ تم النشر بنجاح','ok');loadCirculars();si('circulars','circ-list');}
+    else ss('ci-status','❌ '+(d.msg||'فشل'),'er');
+  }catch(e){ss('ci-status','❌ خطأ اتصال بالسيرفر','er');}
+}
+
+async function markCircRead(id){
+  try {
+    var r=await fetch('/web/api/circulars/mark-read',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id})});
+    var d=await r.json();if(d.ok){loadCirculars(); if(_me) loadMe();}
+  } catch(e) { console.error('markCircRead error:', e); }
+}
+
 /* ── STATUS ── */
 function ss(id,msg,type){var el=document.getElementById(id);if(!el)return;
   el.className='sm s'+(type||'in');el.textContent=msg;el.style.display='block';}
@@ -1898,9 +2220,9 @@ async function loadDashboard(){
     document.getElementById('dash-classes').innerHTML='<tr><td colspan="4" style="color:#9CA3AF">لا يوجد بيانات</td></tr>';return;}
   var t=d.metrics.totals;var pct=t.students>0?(t.absent/t.students*100).toFixed(1):0;
   document.getElementById('dash-cards').innerHTML=
-    crd(t.students,'#1565C0','إجمالي الطلاب','👨‍🎓')+crd(t.present,'#2E7D32','الحضور','✅')+
-    crd(t.absent,'#C62828','الغياب ('+pct+'%)','🔴')+crd(t.tardiness||0,'#E65100','التأخر','⏰')+
-    crd(t.excused||0,'#0277BD','الأعذار','📋')+crd(t.permissions||0,'#7C3AED','الاستئذان','🚪');
+    crd(t.students,'#1565C0','إجمالي الطلاب','<i class="fas fa-graduation-cap"></i>')+crd(t.present,'#2E7D32','الحضور','<i class="fas fa-check-circle"></i>')+
+    crd(t.absent,'#C62828','الغياب ('+pct+'%)','<i class="fas fa-user-times"></i>')+crd(t.tardiness||0,'#E65100','التأخر','<i class="fas fa-clock"></i>')+
+    crd(t.excused||0,'#0277BD','الأعذار','<i class="fas fa-file-medical"></i>')+crd(t.permissions||0,'#7C3AED','الاستئذان','<i class="fas fa-door-open"></i>');
   var cls=d.metrics.by_class||[];
   document.getElementById('dash-classes').innerHTML=
     cls.sort(function(a,b){return b.absent-a.absent;}).slice(0,10).map(function(c){
@@ -1909,7 +2231,7 @@ async function loadDashboard(){
     }).join('')||'<tr><td colspan="4" style="color:#9CA3AF">لا يوجد</td></tr>';
 }
 function crd(v,c,l,ic){return '<div class="sc"><div class="v" style="color:'+c+'">'+ic+'<br>'+v+'</div><div class="l">'+l+'</div></div>';}
-function demoCrd(){return crd(0,'#1565C0','إجمالي الطلاب','👨‍🎓')+crd(0,'#2E7D32','الحضور','✅')+crd(0,'#C62828','الغياب','🔴')+crd(0,'#E65100','التأخر','⏰');}
+function demoCrd(){return crd(0,'#1565C0','إجمالي الطلاب','<i class="fas fa-graduation-cap"></i>')+crd(0,'#2E7D32','الحضور','<i class="fas fa-check-circle"></i>')+crd(0,'#C62828','الغياب','<i class="fas fa-user-times"></i>')+crd(0,'#E65100','التأخر','<i class="fas fa-clock"></i>');}
 
 /* ── LINKS ── */
 async function loadLinks(){
@@ -3606,12 +3928,14 @@ function viewInqDetails(id, isCounselor){
     }
   });
 }
+
 """
 
     return (
         '<!DOCTYPE html><html lang="ar" dir="rtl"><head>'
         '<meta charset="UTF-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">'
         '<title>' + school + ' — لوحة التحكم</title>'
         '<style>' + css + '</style>'
         '</head><body>'
@@ -3619,10 +3943,10 @@ function viewInqDetails(id, isCounselor){
         '<div class="tb-l">'
         '<button id="mt" onclick="toggleSidebar()" aria-label="القائمة">'
         '<span></span><span></span><span></span></button>'
-        '<h1>🏫 <span id="sc-name">' + school + '</span></h1>'
+        '<h1><i class="fas fa-university" style="margin-left:8px;font-size:18px"></i> <span id="sc-name">' + school + '</span></h1>'
         '</div>'
         '<div class="tb-r">'
-        '<div class="ub">👤 <span id="user-name">' + username + '</span></div>'
+        '<div class="ub"><i class="fas fa-user-circle" style="margin-left:6px"></i> <span id="user-name">أهلاً بك...</span></div>'
         '<a href="/web/logout" class="lo">خروج</a>'
         '</div></div>'
         '<div id="ov" onclick="closeSidebar()"></div>'
@@ -5255,6 +5579,94 @@ async def web_generate_teacher_form(request: Request):
     except Exception as e:
         return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
 
+# ─── CIRCULARS API ───────────────────────────────────────────────
+
+@router.post("/web/api/circulars/create", response_class=JSONResponse)
+async def web_create_circular(
+    request: Request,
+    title: str = Form(...),
+    content: str = Form(""),
+    target_role: str = Form("all"),
+    file: UploadFile = File(None)
+):
+    user = _get_current_user(request)
+    if not user or user["role"] != "admin":
+        return JSONResponse({"ok": False, "msg": "غير مصرح - للمدير فقط"}, status_code=401)
+    
+    try:
+        att_path = ""
+        if file and file.filename:
+            # Ensure data/attachments/circulars exists
+            rel_dir = os.path.join("attachments", "circulars")
+            abs_dir = os.path.join(DATA_DIR, rel_dir)
+            os.makedirs(abs_dir, exist_ok=True)
+            
+            ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            safe_name = re.sub(r'[^\w\.-]', '_', file.filename)
+            att_name = f"{ts}_{safe_name}"
+            att_path = os.path.join(rel_dir, att_name)
+            
+            with open(os.path.join(abs_dir, att_name), "wb") as buffer:
+                buffer.write(await file.read())
+        
+        c_id = create_circular({
+            "title": title,
+            "target_role": target_role.lower(), # توحيد الحالة
+            "content": content,
+            "attachment_path": att_path,
+            "created_by": user.get("name") or user["sub"]
+        })
+        return JSONResponse({"ok": True, "id": c_id})
+    except Exception as e:
+        print(f"[ERROR] web_create_circular: {e}")
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/circulars/list", response_class=JSONResponse)
+async def web_list_circulars(request: Request):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
+    try:
+        # جلب التعاميم مع حالة القراءة الصحيحة
+        rows = get_circulars(user["sub"], user["role"])
+        return JSONResponse({"ok": True, "rows": rows})
+    except Exception as e:
+        print(f"[ERROR] web_list_circulars: {e}")
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.post("/web/api/circulars/mark-read", response_class=JSONResponse)
+async def web_mark_read_circular(request: Request):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
+    try:
+        data = await request.json()
+        mark_circular_as_read(int(data["id"]), user["sub"])
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.post("/web/api/circulars/delete/{cid}", response_class=JSONResponse)
+async def web_delete_circular(request: Request, cid: int):
+    user = _get_current_user(request)
+    if not user or user["role"] != "admin":
+        return JSONResponse({"ok": False, "msg": "غير مصرح للمدير فقط"}, status_code=401)
+    try:
+        delete_circular(cid)
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/circulars/unread-count", response_class=JSONResponse)
+async def web_unread_circulars_count(request: Request):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
+    try:
+        # حساب التنبيهات بناءً على التعاميم غير المقروءة
+        circs = get_circulars(user["sub"], user["role"])
+        unread = sum(1 for c in circs if not c.get("is_read") and user["role"] != "admin")
+        return JSONResponse({"ok": True, "count": unread})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
 @router.post("/web/api/send-teacher-form", response_class=JSONResponse)
 async def web_send_teacher_form(request: Request):
     user = _get_current_user(request)
@@ -5304,3 +5716,5 @@ async def web_send_teacher_form(request: Request):
 
 # ===================== main =====================
 
+if __name__ == "__main__":
+    pass

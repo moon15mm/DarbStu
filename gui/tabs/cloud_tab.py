@@ -8,7 +8,8 @@ import json
 import qrcode
 from PIL import ImageTk
 from config_manager import load_config, save_config, invalidate_config_cache
-from constants import CONFIG_JSON
+from constants import CONFIG_JSON, PORT
+from cloudflare_tunnel import find_cloudflared_executable
 
 class CloudTabMixin:
     def _build_cloud_tab(self):
@@ -130,6 +131,11 @@ class CloudTabMixin:
                 tk.Label(qr_frame, text="امسح الرمز للربط السريع (قريباً)", bg="white", fg="#64748b", font=("Tahoma", 8)).pack(pady=5)
             except Exception:
                 pass
+        
+        # إضافة زر التشخيص هنا أيضاً للجهاز الرئيسي
+        tk.Frame(card, bg="#e2e8f0", height=1).pack(fill="x", pady=15)
+        tk.Button(card, text="🔎 تشخيص حالة النفق والاتصال", command=self._run_cloud_diagnostics,
+                  bg="#fff7ed", fg="#c2410c", font=("Tahoma", 10, "bold"), padx=20, pady=5).pack(pady=5)
 
     def _build_client_cloud_ui(self, parent, cfg):
         """واجهة جهاز العميل."""
@@ -163,7 +169,11 @@ class CloudTabMixin:
             except Exception:
                 self.conn_status_lbl.config(text="● تعذر الاتصال", fg="#ef4444")
 
-        tk.Button(card, text="🔄 تحديث حالة الاتصال", command=_check_conn).pack(pady=10)
+        tk.Button(card, text="🔄 تحديث حالة الاتصال", command=_check_conn, 
+                  bg="#f8fafc", font=("Tahoma", 9)).pack(pady=5)
+        
+        tk.Button(card, text="🔎 تشخيص وإصلاح المشاكل", command=self._run_cloud_diagnostics,
+                  bg="#fff7ed", fg="#c2410c", font=("Tahoma", 9, "bold"), padx=15).pack(pady=5)
         
         # زر تغيير الإعدادات
         ttk.Separator(card, orient="horizontal").pack(fill="x", pady=15)
@@ -172,3 +182,78 @@ class CloudTabMixin:
 
         # تشغيل الفحص الأول
         parent.after(1000, _check_conn)
+
+    def _run_cloud_diagnostics(self):
+        """إجراء فحص عميق لمشاكل الاتصال السحابي."""
+        from tkinter import scrolledtext
+        import requests
+        import socket
+
+        diag_win = tk.Toplevel(self.root)
+        diag_win.title("أداة تشخيص الربط السحابي")
+        diag_win.geometry("600x500")
+        diag_win.transient(self.root)
+        diag_win.grab_set()
+
+        lbl = tk.Label(diag_win, text="🔍 جاري فحص حالة الربط السحابي...", font=("Tahoma", 12, "bold"), pady=15)
+        lbl.pack()
+
+        txt = scrolledtext.ScrolledText(diag_win, font=("Consolas", 10), bg="#1e293b", fg="#f1f5f9", padx=10, pady=10)
+        txt.pack(fill="both", expand=True, padx=20, pady=10)
+
+        def log(msg): 
+            txt.insert(tk.END, msg + "\n")
+            txt.see(tk.END)
+            diag_win.update()
+
+        cfg = load_config()
+        
+        # 1. فحص برنامج cloudflared
+        log("--- [1] فحص ملفات النظام ---")
+        cf_path = find_cloudflared_executable()
+        if cf_path:
+            log(f"✅ تم العثور على برنامج النفق: {cf_path}")
+        else:
+            log("❌ خطأ: برنامج cloudflared.exe غير موجود في الجهاز.")
+            log("   الحل: تأكد من وجود ملف cloudflared.exe في مجلد البرنامج.")
+
+        # 2. فحص الخادم المحلي
+        log("\n--- [2] فحص الخادم المحلي (API) ---")
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(2)
+            s.connect(('127.0.0.1', PORT))
+            log(f"✅ الخادم المحلي يعمل على المنفذ {PORT}")
+            s.close()
+            
+            # فحص الـ Health check المحلي
+            resp = requests.get(f"http://127.0.0.1:{PORT}/health", timeout=2)
+            if resp.status_code == 200:
+                log("✅ استجابة مسار الصحة: OK")
+            else:
+                log(f"⚠️ الخادم المحلي استجاب برمز خطأ: {resp.status_code}")
+        except Exception as e:
+            log(f"❌ الخادم المحلي لا يستجيب: {e}")
+            log("   الحل: أعد تشغيل البرنامج بالكامل.")
+
+        # 3. فحص الرابط العام
+        log("\n--- [3] فحص الرابط العام ---")
+        public_url = cfg.get("cloud_url_internal", "").rstrip("/")
+        if not public_url:
+            log("⚠️ لا يوجد رابط عام مسجل حالياً.")
+        else:
+            log(f"فحص الرابط: {public_url}")
+            try:
+                resp = requests.get(f"{public_url}/health", timeout=5)
+                if resp.status_code == 200:
+                    log("✅ الرابط العام متصل ويعمل بشكل ممتاز!")
+                elif resp.status_code == 530:
+                    log("❌ خطأ 530: النفق متوقف أو غير متصل بـ Cloudflare.")
+                    log("   الحل: تأكد من جودة الإنترنت أو أعد تشغيل النفق.")
+                else:
+                    log(f"⚠️ الرابط العام أعاد رمز: {resp.status_code}")
+            except Exception as e:
+                log(f"❌ تعذر الوصول للرابط العام: {e}")
+
+        log("\n--- تم الفحص بنجاح ---")
+        lbl.config(text="✅ اكتمل الفحص")

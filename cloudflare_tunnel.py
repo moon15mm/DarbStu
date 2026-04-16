@@ -33,6 +33,29 @@ def _has_named_tunnel_config() -> bool:
                     pass
     return False
 
+
+def find_cloudflared_executable():
+    """يبحث عن مسار ملف cloudflared.exe في المسارات المحتملة."""
+    import sys as _sys
+    import shutil
+    from typing import Optional
+    
+    _app_dir = (os.path.dirname(_sys.executable)
+                if getattr(_sys, 'frozen', False)
+                else os.path.dirname(os.path.abspath(__file__)))
+
+    _candidates = [
+        os.path.join(_app_dir, "cloudflared.exe"),
+        r"C:\Program Files (x86)\cloudflared\cloudflared.exe",
+        r"C:\Program Files\cloudflared\cloudflared.exe",
+        r"C:\Windows\System32\cloudflared.exe",
+    ]
+    for _p in _candidates:
+        if os.path.isfile(_p):
+            return _p
+    
+    return shutil.which("cloudflared.exe") or shutil.which("cloudflared")
+
 def start_cloudflare_tunnel(port: int, domain: str):
     """
     يُشغّل cloudflared tunnel ويعيد الرابط العام.
@@ -40,37 +63,12 @@ def start_cloudflare_tunnel(port: int, domain: str):
     - إذا لم يوجد → يستخدم Quick Tunnel ويلتقط الرابط العشوائي تلقائياً
     """
     global _cf_process
-    # مجلد البرنامج نفسه (يعمل سواء Python مباشر أو EXE مجمّع)
-    import sys as _sys
-    _app_dir = (os.path.dirname(_sys.executable)
-                if getattr(_sys, 'frozen', False)
-                else os.path.dirname(os.path.abspath(__file__)))
-
-    # ابحث عن cloudflared.exe — الأولوية لمجلد البرنامج ثم المسارات المعروفة
-    _cf_candidates = [
-        os.path.join(_app_dir, "cloudflared.exe"),          # ← مجلد البرنامج (EXE مجمّع)
-        r"C:\Program Files (x86)\cloudflared\cloudflared.exe",
-        r"C:\Program Files\cloudflared\cloudflared.exe",
-        r"C:\Windows\System32\cloudflared.exe",
-    ]
-    cloudflared = None
-    for _p in _cf_candidates:
-        if os.path.isfile(_p):
-            cloudflared = _p
-            break
-    if not cloudflared:
-        # fallback: shutil.which مع تفضيل .exe
-        cloudflared = shutil.which("cloudflared.exe") or shutil.which("cloudflared")
+    cloudflared = find_cloudflared_executable()
     if not cloudflared:
         print("[CLOUDFLARE] ⚠️ cloudflared غير مثبّت — يعمل محلياً فقط")
         return None
-    # تحقق أن الملف قابل للتنفيذ فعلاً (وليس ملف بدون امتداد)
-    if not cloudflared.lower().endswith(".exe") and os.name == "nt":
-        alt = shutil.which("cloudflared.exe")
-        if alt:
-            cloudflared = alt
-    print(f"[CLOUDFLARE] مسار cloudflared: {cloudflared}")
 
+    print(f"[CLOUDFLARE] مسار cloudflared: {cloudflared}")
     has_named = _has_named_tunnel_config()
 
     try:

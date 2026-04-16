@@ -23,4 +23,13 @@ from alerts_service import (log_message_status, query_permissions,
 
 router = APIRouter()
 
+@router.get("/health")
+async def health_check():
+    """مسار اختبار صحة الاتصال بالسيرفر."""
+    return {
+        "status": "ok",
+        "timestamp": datetime.datetime.now().isoformat(),
+        "version": "1.0.0"
+    }
+
 # مسارات إضافية ستُضاف هنا

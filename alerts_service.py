@@ -7,7 +7,7 @@ from typing import List, Dict, Any, Optional
 from constants import DB_PATH, DATA_DIR, TZ_OFFSET, CONFIG_JSON, now_riyadh_date
 from config_manager import load_config, get_terms, render_message
 from database import (get_db, query_absences, query_tardiness,
-                      _apply_class_name_fix, load_students)
+                      _apply_class_name_fix, load_students, get_cloud_client)
 from whatsapp_service import send_whatsapp_message, check_whatsapp_server_status
 # تأجيل استيراد report_builder لتجنّب الدورة (circular import)
 def _get_compute_today_metrics():
@@ -144,6 +144,11 @@ def get_week_comparison() -> Dict:
     this_sat  = this_sun + datetime.timedelta(days=6)
     last_sat  = last_sun + datetime.timedelta(days=6)
 
+    client = get_cloud_client()
+    if client.is_active():
+        res = client.get("/web/api/analytics/weekly-comparison")
+        return res.get("data", {}) if res.get("ok") else {}
+
     con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
 
     def count_week(start, end):
@@ -181,6 +186,11 @@ def get_week_comparison() -> Dict:
 
 def get_top_absent_students(month: str = None, limit: int = 10) -> List[Dict]:
     """أكثر الطلاب غياباً هذا الشهر."""
+    client = get_cloud_client()
+    if client.is_active():
+        res = client.get("/web/api/analytics/top-absent", params={"month": month, "limit": limit})
+        return res.get("rows", []) if res.get("ok") else []
+
     if not month:
         month = datetime.datetime.now().strftime("%Y-%m")
     con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
@@ -199,6 +209,11 @@ def get_top_absent_students(month: str = None, limit: int = 10) -> List[Dict]:
 
 def get_absence_by_day_of_week(months_back: int = 2) -> Dict:
     """يحسب متوسط الغياب لكل يوم من أيام الأسبوع."""
+    client = get_cloud_client()
+    if client.is_active():
+        res = client.get("/web/api/analytics/absence-by-dow")
+        return res.get("data", {}) if res.get("ok") else {}
+
     since = (datetime.date.today() - datetime.timedelta(days=months_back*30)).isoformat()
     con   = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
     cur.execute("""
@@ -229,6 +244,12 @@ def get_student_absence_count(student_id: str, month: str = None) -> Dict[str, A
     يُرجع عدد أيام غياب الطالب + آخر يوم غياب + الفصل + الاسم.
     month: بصيغة "YYYY-MM" — إذا None يحسب كل السجلات.
     """
+    client = get_cloud_client()
+    if client.is_active():
+        # This can be handled by the general query_absences or a specific endpoint
+        # For now, let's use the local logic since it relies on query_absences which is already cloud-aware
+        pass
+
     con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
     if month:
         cur.execute("""SELECT COUNT(DISTINCT date) as cnt, MAX(date) as last_date,
@@ -420,6 +441,11 @@ def schedule_daily_alerts(root_widget, run_hour: int = 14):
 
 def get_student_full_analysis(student_id: str) -> Dict:
     """يجمع كل بيانات الطالب: غياب + تأخر + أعذار + إحصائيات."""
+    client = get_cloud_client()
+    if client.is_active():
+        res = client.get(f"/web/api/student-analysis/{student_id}")
+        return res.get("data", {}) if res.get("ok") else {}
+
     con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
 
     # اسم الطالب وفصله
@@ -607,6 +633,15 @@ PERM_REJECTED = "مرفوض"
 def insert_permission(date_str, student_id, student_name,
                       class_id, class_name, parent_phone,
                       reason="", approved_by="") -> int:
+    client = get_cloud_client()
+    if client.is_active():
+        res = client.post("/web/api/add-permission", {
+            "date": date_str, "student_id": student_id, "student_name": student_name,
+            "class_id": class_id, "class_name": class_name, "parent_phone": parent_phone,
+            "reason": reason
+        })
+        return res.get("id", 0) if res.get("ok") else 0
+
     created = datetime.datetime.utcnow().isoformat()
     con = get_db(); cur = con.cursor()
     cur.execute("""INSERT INTO permissions
@@ -619,6 +654,13 @@ def insert_permission(date_str, student_id, student_name,
     return rid
 
 def update_permission_status(pid, status, exit_time=None):
+    client = get_cloud_client()
+    if client.is_active():
+        res = client.post("/web/api/update-permission", {
+            "id": pid, "status": status
+        })
+        return res.get("ok", False)
+
     approved = datetime.datetime.utcnow().isoformat()
     con = get_db(); cur = con.cursor()
     if exit_time:
@@ -630,6 +672,11 @@ def update_permission_status(pid, status, exit_time=None):
     con.commit(); con.close()
 
 def query_permissions(date_filter=None, status=None):
+    client = get_cloud_client()
+    if client.is_active():
+        res = client.get("/web/api/permissions", params={"date": date_filter, "status": status})
+        return res.get("rows", []) if res.get("ok") else []
+
     con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
     q,p = "SELECT * FROM permissions WHERE 1=1", []
     if date_filter: q += " AND date=?";   p.append(date_filter)

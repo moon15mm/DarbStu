@@ -9,7 +9,8 @@ from typing import List, Dict, Any, Optional
 from constants import DB_PATH, DATA_DIR, TZ_OFFSET, BACKUP_DIR, now_riyadh_date
 from config_manager import load_config, logo_img_tag_from_config, get_terms
 from database import (get_db, query_absences, _apply_class_name_fix,
-                      query_tardiness, query_excuses, load_students, load_teachers)
+                      query_tardiness, query_excuses, load_students, load_teachers,
+                      get_cloud_client)
 
 def build_daily_report_df(date_str):
     rows = _apply_class_name_fix(query_absences(date_filter=date_str))
@@ -34,6 +35,13 @@ def build_total_absences_with_dates_by_class() -> dict:
 
 def compute_today_metrics(date_str: Optional[str] = None) -> Dict[str, Any]:
     date_str = date_str or now_riyadh_date()
+    
+    client = get_cloud_client()
+    if client.is_active():
+        # Fetch pre-calculated metrics from server to ensure accuracy and speed
+        res = client.get("/web/api/analytics/dashboard", params={"date": date_str})
+        if res.get("ok"):
+            return res.get("metrics", {})
     store = load_students()
     total_students = len({s["id"] for c in store["list"] for s in c["students"]})
     rows_today = _apply_class_name_fix(query_absences(date_filter=date_str))

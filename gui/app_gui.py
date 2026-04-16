@@ -43,6 +43,7 @@ from gui.tabs.referral_teacher_tab import TeacherReferralTabMixin
 from gui.tabs.referral_deputy_tab  import DeputyReferralTabMixin
 from gui.tabs.teacher_forms_tab    import TeacherFormsTabMixin
 from gui.tabs.teacher_inquiries_tab import TeacherInquiriesTabMixin
+from gui.tabs.circulars_tab        import CircularsTabMixin
 
 # ─── استيراد كل الوحدات اللازمة ───────────────────────
 from constants import (APP_TITLE, APP_VERSION, DB_PATH, DATA_DIR, HOST, PORT,
@@ -53,15 +54,18 @@ from constants import (APP_TITLE, APP_VERSION, DB_PATH, DATA_DIR, HOST, PORT,
 
 # ── استيراد المكتبات الثقيلة بشكل مباشر (تُحمَّل مرة واحدة عند أول استخدام) ──
 try:
+    import matplotlib
+    matplotlib.use('TkAgg')  # تحديد المحرك قبل استيراد أي شيء آخر
     from matplotlib.figure import Figure
     from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-    import matplotlib
     try:
         import arabic_reshaper
         from bidi.algorithm import get_display
     except ImportError:
         arabic_reshaper = get_display = None
-except ImportError:
+except ImportError as e:
+    # طباعة الخطأ لتسهيل التشخيص في حال فشل التحميل في النسخة التنفيذية
+    print(f"CRITICAL: Matplotlib import failed: {e}")
     Figure = FigureCanvasTkAgg = matplotlib = arabic_reshaper = get_display = None
 
 try:
@@ -90,7 +94,7 @@ from database import (get_db, init_db, load_students, load_teachers,
                       level_name_from_value, import_students_from_excel_sheet2_format,
                       import_teachers_from_excel, insert_absences,
                       _cleanup_old_backups, schedule_auto_backup,
-                      EXCUSE_REASONS)
+                      EXCUSE_REASONS, get_unread_circulars_count)
 from report_builder import (build_daily_report_df, build_total_absences_with_dates_by_class,
                              compute_today_metrics, get_live_monitor_status,
                              export_to_noor_excel, generate_report_html,
@@ -162,6 +166,7 @@ class AppGUI(
     DeputyReferralTabMixin,
     TeacherFormsTabMixin,
     TeacherInquiriesTabMixin,
+    CircularsTabMixin,
 ):
     """الواجهة الرئيسية للتطبيق — تجمع كل Mixins في class واحد."""
     def __init__(self, root, public_url=None):
@@ -224,6 +229,7 @@ class AppGUI(
             "استلام تحويلات":       "_build_deputy_referral_tab",
             "نماذج المعلم":         "_build_teacher_forms_tab",
             "خطابات الاستفسار":    "_build_teacher_inquiries_tab",
+            "التعاميم والنشرات":    "_build_circulars_tab",
         }
 
         # مجموعات القائمة الجانبية
@@ -241,6 +247,7 @@ class AppGUI(
                 "التقارير / الطباعة","تقرير الفصل","نشر النتائج","تحليل النتائج","تصدير نور","الإشعارات الذكية"] if _vis(t)]),
             ("⬤  الرسائل", [t for t in [
                 "إرسال رسائل الغياب","رسائل التأخر",
+                "التعاميم والنشرات",
                 "مستلمو التأخر","جدولة الروابط","إدارة الواتساب"] if _vis(t)]),
             ("⬤  البيانات", [t for t in [
                 "إدارة الطلاب","إضافة طالب",
@@ -341,8 +348,10 @@ class AppGUI(
                 btn.bind("<Leave>", lambda e, b=btn: b.config(bg="#f0f0f0") if self._current_tab.get() != b.cget("text") else None)
                 self._nav_buttons[tab_name] = btn
 
-            # فاصل بين المجموعات
-            tk.Frame(sidebar, bg="#d8d8d8", height=1).pack(fill="x", padx=8, pady=2)
+        # ─── تنبيهات التعاميم (Badge) ────────────────────────────
+        self.unread_circ_lbl = tk.Label(sidebar, text="", bg="#f0f0f0", fg="red", font=("Tahoma", 9, "bold"))
+        self._check_unread_circulars()
+        tk.Frame(sidebar, bg="#d8d8d8", height=1).pack(fill="x", padx=8, pady=2)
 
         # ── إنشاء frames للتبويبات (باستخدام place للتحكم الكامل) ──
         for tab_name, builder_name in self.tabs_config.items():
@@ -406,6 +415,27 @@ class AppGUI(
         root.after(5000, lambda: check_for_updates(root, silent=True))
 
         self._build_menu(root)
+
+    def _check_unread_circulars(self):
+        """فحص التعاميم غير المقروءة لتحديث التنبيه."""
+        def _task():
+            try:
+                count = get_unread_circulars_count(CURRENT_USER.get("username"), CURRENT_USER.get("role"))
+                if count > 0:
+                    self.root.after(0, lambda: self._update_circular_badge(count))
+                else:
+                    self.root.after(0, lambda: self.unread_circ_lbl.place_forget())
+            except: pass
+            # فحص كل 5 دقائق
+            self.root.after(300000, self._check_unread_circulars)
+        threading.Thread(target=_task, daemon=True).start()
+
+    def _update_circular_badge(self, count):
+        btn = self._nav_buttons.get("التعاميم والنشرات")
+        if btn:
+            # وضع التنبيه بجانب الزر
+            self.unread_circ_lbl.config(text=str(count))
+            self.unread_circ_lbl.place(in_=btn, relx=0.1, rely=0.5, anchor="center")
 
     def _build_menu(self, root):
         m = tk.Menu(root); root.config(menu=m)
@@ -525,26 +555,35 @@ class AppGUI(
         # دائرة الحضور/الغياب
         pie_lf = ttk.LabelFrame(right, text=" نسبة الحضور/الغياب اليوم ", padding=4)
         pie_lf.grid(row=0, column=0, sticky="nsew", pady=(0,4))
-        self.fig_pie = Figure(figsize=(4, 2.5), dpi=90)
-        self.ax_pie  = self.fig_pie.add_subplot(111)
-        self.canvas_pie = FigureCanvasTkAgg(self.fig_pie, pie_lf)
-        self.canvas_pie.get_tk_widget().pack(fill="both", expand=True)
+        if Figure:
+            self.fig_pie = Figure(figsize=(4, 2.5), dpi=90)
+            self.ax_pie  = self.fig_pie.add_subplot(111)
+            self.canvas_pie = FigureCanvasTkAgg(self.fig_pie, pie_lf)
+            self.canvas_pie.get_tk_widget().pack(fill="both", expand=True)
+        else:
+            ttk.Label(pie_lf, text="الرسوم البيانية غير متوفرة حالياً").pack(pady=10)
 
         # مقارنة الأسبوعين
         week_lf = ttk.LabelFrame(right, text=" مقارنة هذا الأسبوع بالماضي ", padding=4)
         week_lf.grid(row=1, column=0, sticky="nsew", pady=(0,4))
-        self.fig_week = Figure(figsize=(4, 2.3), dpi=90)
-        self.ax_week  = self.fig_week.add_subplot(111)
-        self.canvas_week = FigureCanvasTkAgg(self.fig_week, week_lf)
-        self.canvas_week.get_tk_widget().pack(fill="both", expand=True)
+        if Figure:
+            self.fig_week = Figure(figsize=(4, 2.3), dpi=90)
+            self.ax_week  = self.fig_week.add_subplot(111)
+            self.canvas_week = FigureCanvasTkAgg(self.fig_week, week_lf)
+            self.canvas_week.get_tk_widget().pack(fill="both", expand=True)
+        else:
+            ttk.Label(week_lf, text="الرسوم البيانية غير متوفرة حالياً").pack(pady=10)
 
         # أكثر الأيام غياباً
         dow_lf = ttk.LabelFrame(right, text=" أكثر أيام الأسبوع غياباً ", padding=4)
         dow_lf.grid(row=2, column=0, sticky="nsew")
-        self.fig_dow = Figure(figsize=(4, 2.3), dpi=90)
-        self.ax_dow  = self.fig_dow.add_subplot(111)
-        self.canvas_dow = FigureCanvasTkAgg(self.fig_dow, dow_lf)
-        self.canvas_dow.get_tk_widget().pack(fill="both", expand=True)
+        if Figure:
+            self.fig_dow = Figure(figsize=(4, 2.3), dpi=90)
+            self.ax_dow  = self.fig_dow.add_subplot(111)
+            self.canvas_dow = FigureCanvasTkAgg(self.fig_dow, dow_lf)
+            self.canvas_dow.get_tk_widget().pack(fill="both", expand=True)
+        else:
+            ttk.Label(dow_lf, text="الرسوم البيانية غير متوفرة حالياً").pack(pady=10)
 
 
     def _start_dashboard_tick(self):
@@ -2368,6 +2407,7 @@ class AppGUI(
             "إدارة أرقام الجوالات",
             # أدوات المعلم
             "تحويل طالب",            "نماذج المعلم",          "خطابات الاستفسار",
+            "التعاميم والنشرات",
             # الإعدادات
             "إعدادات المدرسة",       "المستخدمون",            "النسخ الاحتياطية",
         ]

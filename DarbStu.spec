@@ -28,6 +28,12 @@ try:
     matplotlib_datas, matplotlib_bins, matplotlib_hidden = collect_all('matplotlib')
 except Exception:
     matplotlib_datas = []; matplotlib_bins = []; matplotlib_hidden = []
+
+try:
+    numpy_datas, numpy_bins, numpy_hidden = collect_all('numpy')
+except Exception:
+    numpy_datas = []; numpy_bins = []; numpy_hidden = []
+
 try:
     tkinterweb_tkhtml_datas = collect_data_files('tkinterweb_tkhtml')
 except Exception:
@@ -50,13 +56,14 @@ for d in ['tcl8.6', 'tk8.6']:
 a = Analysis(
     ['main.py'],
     pathex=['.'],
-    binaries=tk_bins + tkhtml_bin + matplotlib_bins,
+    binaries=tk_bins + tkhtml_bin + matplotlib_bins + numpy_bins,
     datas=[
         ('icon.ico', '.'),
         ('api', 'api'),
         *tk_datas,
         *ttkthemes_datas,
         *matplotlib_datas,
+        *numpy_datas,
         *tkinterweb_datas,
         *tkinterweb_tkhtml_datas,
         *arabic_reshaper_datas,
@@ -76,7 +83,7 @@ a = Analysis(
         'uvicorn.lifespan', 'uvicorn.lifespan.on',
         'starlette', 'starlette.routing', 'starlette.responses',
         'starlette.requests', 'starlette.middleware',
-        'fastapi', 'fastapi.routing', 'fastapi.responses',
+        'fastapi', 'fastapi.routing', 'fastapi.responses', 'multipart',
         'anyio', 'anyio._backends', 'anyio._backends._asyncio',
         'anyio._backends._trio',
         'h11',
@@ -109,6 +116,7 @@ a = Analysis(
         'sqlite3',
         'zipfile', 'hashlib', 'hmac',
         *matplotlib_hidden,
+        *numpy_hidden,
     ],
     hookspath=[],
     hooksconfig={},

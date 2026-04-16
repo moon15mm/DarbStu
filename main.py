@@ -58,6 +58,10 @@ def main():
     # --- START: CLOUDFLARE TUNNEL CONFIGURATION ---
     MY_STATIC_DOMAIN = CLOUDFLARE_DOMAIN  # النطاق الثابت: darbte.uk
     # --- END: CLOUDFLARE TUNNEL CONFIGURATION ---
+    
+    # ─── تأمين السيرفر من الدوران اللانهائي ───────────────
+    os.environ["DARB_SERVER_MODE"] = "1"
+    # ──────────────────────────────────────────────────
 
     ensure_dirs(); init_db()
 
@@ -96,6 +100,7 @@ def main():
             # إذا الـ UNIQUE يشمل class_id → يمنع التسجيل → أعد البناء
             if "class_id" in _sql and "UNIQUE" in _sql:
                 print("[MIGRATE] جارٍ إصلاح جدول tardiness...")
+                _cur.execute("DROP TABLE IF EXISTS _tard_bak") # تنظيف في حال وجود محاولة سابقة فاشلة
                 _cur.execute("ALTER TABLE tardiness RENAME TO _tard_bak")
                 _cur.execute("""CREATE TABLE tardiness (
                     id           INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -3,6 +3,7 @@
 api/app.py — إنشاء تطبيق FastAPI وإضافة الـ Middleware والـ Routers
 """
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -32,6 +33,12 @@ from api.web_routes    import router as _web_router
 app.include_router(_mobile_router)
 app.include_router(_misc_router)
 app.include_router(_web_router)
+
+# ── خدمة الملفات الثابتة (المرفقات وغيرها) ──
+from constants import DATA_DIR
+import os
+os.makedirs(DATA_DIR, exist_ok=True)
+app.mount("/data", StaticFiles(directory=DATA_DIR), name="data")
 
 def register_routers():
     """متوافق مع الاستدعاء القديم — الـ Routers مُسجَّلة مسبقاً."""

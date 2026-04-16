@@ -16,6 +16,12 @@ from constants import (DB_PATH, DATA_DIR, BACKUP_DIR, STUDENTS_JSON,
 from config_manager import load_config
 import requests
 
+# ─── حالة التشغيل (سيرفر أم عميل) ───────────────────────────
+# نستخدم متغير بيئة لضمان ثبات القيمة عبر جميع العمليات (Processes)
+def is_server_side():
+    return os.environ.get("DARB_SERVER_MODE") == "1"
+# ────────────────────────────────────────────────────────────
+
 class CloudDBClient:
     """عميل للتواصل مع السيرفر السحابي بدلاً من قاعدة البيانات المحلية."""
     def __init__(self):
@@ -25,6 +31,9 @@ class CloudDBClient:
         self.enabled = cfg.get("cloud_mode", False)
 
     def is_active(self):
+        # لا نستخدم وضع السحابة إذا كنا بالفعل داخل السيرفر (منعاً للدوران اللانهائي)
+        if is_server_side():
+            return False
         return self.enabled and self.url
 
     def _get_headers(self):
@@ -448,7 +457,45 @@ def init_db():
     cur.execute("CREATE INDEX IF NOT EXISTS idx_referrals_teacher ON student_referrals(teacher_username)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_referrals_status  ON student_referrals(status)")
 
+    # ─── جدول التعاميم الرسمية ────────────────────────────
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS circulars (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        date             TEXT NOT NULL,
+        title            TEXT NOT NULL,
+        content          TEXT,
+        attachment_path  TEXT,
+        created_by       TEXT NOT NULL,
+        target_role      TEXT DEFAULT 'all',
+        created_at       TEXT NOT NULL
+    )""")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_circulars_date ON circulars(date)")
+
+    # ─── جدول قراءة التعاميم ─────────────────────────────
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS circular_reads (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        circular_id      INTEGER NOT NULL,
+        username         TEXT NOT NULL,
+        read_at          TEXT NOT NULL,
+        UNIQUE(circular_id, username)
+    )""")
+
+    migrate_circulars_permission(cur)
     con.commit(); con.close()
+
+def migrate_circulars_permission(cur):
+    """تتأكد من تفعيل تبويب التعاميم لجميع المعلمين والوكلاء الذين لديهم صلاحيات مخصصة."""
+    cur.execute("SELECT id, role, allowed_tabs FROM users WHERE allowed_tabs IS NOT NULL AND allowed_tabs != ''")
+    rows = cur.fetchall()
+    for rid, role, allowed_tabs_json in rows:
+        try:
+            tabs = json.loads(allowed_tabs_json)
+            if isinstance(tabs, list) and "التعاميم والنشرات" not in tabs:
+                tabs.append("التعاميم والنشرات")
+                cur.execute("UPDATE users SET allowed_tabs=? WHERE id=?", (json.dumps(tabs, ensure_ascii=False), rid))
+        except:
+            pass
 
 
 
@@ -905,6 +952,18 @@ def authenticate(username: str, password: str):
     if row["password"] != hash_password(password): return None
     return dict(row)
 
+def get_user_info(username: str):
+    """يُرجع معلومات المستخدم من لقاعدة البيانات."""
+    client = get_cloud_client()
+    if client.is_active():
+        # في وضع السحاب، قد نحتاج لإضافة نقطة نهاية لهذا أو استخدام authenticate
+        return {"username": username, "role": "teacher", "full_name": username}
+
+    con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
+    cur.execute("SELECT username, role, full_name, active FROM users WHERE username=?", (username,))
+    row = cur.fetchone(); con.close()
+    return dict(row) if row else None
+
 def get_user_allowed_tabs(username: str):
     """يُرجع قائمة التبويبات المسموحة للمستخدم، أو None إذا كان admin."""
     con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
@@ -1163,11 +1222,19 @@ def load_students(force_reload: bool = False) -> Dict[str, Any]:
         with open(STUDENTS_JSON, "r", encoding="utf-8") as f: data = json.load(f)
         classes = data.get("classes", [])
     else:
+        # إذا لم يكن الملف موجوداً، لا تجبر المستخدم على الاستيراد إذا كان في وضع السحاب
+        if client.is_active():
+            return {"list": [], "by_id": {}}
+            
         root = tk.Tk(); root.withdraw()
-        messagebox.showinfo("استيراد الطلاب", "ملف الطلاب غير موجود. الرجاء اختيار ملف Excel للطلاب.")
+        confirm = messagebox.askyesno("بيانات الطلاب مفقودة", 
+                                     "ملف الطلاب غير موجود. هل تريد استيراد ملف Excel الآن؟\n(اختر 'لا' إذا كنت تنوي المزامنة مع السحاب لاحقاً)")
+        if not confirm:
+            return {"list": [], "by_id": {}}
+            
         path = filedialog.askopenfilename(title="اختر ملف Excel (طلاب)", filetypes=[("Excel files","*.xlsx *.xls")])
         if not path: 
-            messagebox.showerror("لم يتم الاختيار", "لا يمكن المتابعة بدون ملف الطلاب."); sys.exit(1)
+            return {"list": [], "by_id": {}}
         data = import_students_from_excel_sheet2_format(path)
         classes = data.get("classes", [])
     STUDENTS_STORE = {"list": classes, "by_id": {c["id"]: c for c in classes}}
@@ -1269,10 +1336,18 @@ def load_teachers() -> Dict[str, Any]:
     if os.path.exists(TEACHERS_JSON):
         with open(TEACHERS_JSON, "r", encoding="utf-8") as f: return json.load(f)
     else:
+        if client.is_active():
+            return {"teachers": []}
+            
         root = tk.Tk(); root.withdraw()
-        messagebox.showinfo("استيراد المعلمين", "ملف المعلمين غير موجود. الرجاء اختيار ملف Excel للمعلمين.")
+        confirm = messagebox.askyesno("بيانات المعلمين مفقودة", 
+                                     "ملف المعلمين غير موجود. هل تريد استيراد الملف الآن؟")
+        if not confirm:
+            return {"teachers": []}
+            
         path = filedialog.askopenfilename(title="اختر ملف Excel (معلمون)", filetypes=[("Excel files","*.xlsx *.xls")])
-        if not path: messagebox.showerror("لم يتم الاختيار", "لا يمكن المتابعة بدون ملف المعلمين."); sys.exit(1)
+        if not path: 
+            return {"teachers": []}
         return import_teachers_from_excel(path)
 
 def _apply_class_name_fix(rows: List[Dict[str,Any]]) -> List[Dict[str,Any]]:
@@ -1490,3 +1565,112 @@ def reply_academic_inquiry(inq_id: int, data: dict):
     con.commit(); con.close()
 
 # ===================== بناء التقارير HTML =====================
+
+# ─── وظائف التعاميم الرسمية ──────────────────────────────────────────
+
+def create_circular(data: Dict[str, Any]) -> int:
+    """يُنشئ تعميماً جديداً بحرفية عالية."""
+    client = get_cloud_client()
+    if client.is_active():
+        res = client.post("/web/api/circulars/create", data)
+        return res.get("id", 0)
+
+    con = get_db(); cur = con.cursor()
+    now = datetime.datetime.now().isoformat()
+    cur.execute("""
+        INSERT INTO circulars (date, title, content, attachment_path, created_by, target_role, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (data.get("date", now[:10]), data["title"], data.get("content", ""),
+          data.get("attachment_path", ""), data["created_by"],
+          data.get("target_role", "all"), now))
+    new_id = cur.lastrowid
+    con.commit(); con.close()
+    return new_id
+
+def get_circulars(username: str = None, role: str = None) -> List[Dict[str, Any]]:
+    """يجلب التعاميم الموجهة للمستخدم، مع حالة القراءة بشكل صحيح وموحد."""
+    client = get_cloud_client()
+    if client.is_active():
+        res = client.get("/web/api/circulars/list")
+        if res and isinstance(res, dict) and res.get("ok"):
+            return res.get("rows", [])
+        return []
+
+    con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
+    # ضمان أن الدور في حالة صغيرة للمقارنة
+    role = str(role).lower() if role else ""
+    
+    if role == "admin":
+        # المدير يرى كل شيء مع عدد القراءات
+        cur.execute("""
+            SELECT c.*, 
+                   (SELECT COUNT(*) FROM circular_reads r WHERE r.circular_id = c.id) as read_count,
+                   1 as is_read
+            FROM circulars c
+            ORDER BY c.date DESC, c.id DESC
+        """)
+    else:
+        # المستخدم العادي يرى الموجه له فقط (all أو دوره المحدد) + هل قرأه هو
+        cur.execute("""
+            SELECT c.*, 
+                   (SELECT COUNT(*) FROM circular_reads r WHERE r.circular_id = c.id AND r.username = ?) as is_read
+            FROM circulars c
+            WHERE LOWER(c.target_role) = 'all' OR LOWER(c.target_role) = ?
+            ORDER BY c.date DESC, c.id DESC
+        """, (username, role))
+    
+    rows = [dict(r) for r in cur.fetchall()]
+    con.close()
+    return rows
+
+def delete_circular(circular_id: int):
+    """يحذف التعميم وسجلاته وملفه المرفق."""
+    con = get_db(); cur = con.cursor()
+    # جلب مسار الملف قبل الحذف
+    cur.execute("SELECT attachment_path FROM circulars WHERE id=?", (circular_id,))
+    row = cur.fetchone()
+    att_path = row[0] if row else ""
+    
+    # حذف سجلات القراءة والتعميم
+    cur.execute("DELETE FROM circular_reads WHERE circular_id=?", (circular_id,))
+    cur.execute("DELETE FROM circulars WHERE id=?", (circular_id,))
+    con.commit(); con.close()
+    
+    # حذف الملف الفعلي إن وجد
+    if att_path:
+        full_path = os.path.join(DATA_DIR, att_path)
+        if os.path.exists(full_path):
+            try: os.remove(full_path)
+            except: pass
+
+def mark_circular_as_read(circular_id: int, username: str):
+    """يسجل أن المستخدم قد قرأ التعميم."""
+    client = get_cloud_client()
+    if client.is_active():
+        client.post("/web/api/circulars/mark-read", {"id": circular_id, "username": username})
+        return
+
+    con = get_db(); cur = con.cursor()
+    now = datetime.datetime.now().isoformat()
+    cur.execute("INSERT OR IGNORE INTO circular_reads (circular_id, username, read_at) VALUES (?, ?, ?)",
+                (circular_id, username, now))
+    con.commit(); con.close()
+
+def get_unread_circulars_count(username: str, role: str) -> int:
+    """يحسب عدد التعاميم غير المقروءة الموجهة للمستخدم."""
+    if role == "admin": return 0 # المدير لا يحتاج تنبيه لتعاميمه
+    
+    client = get_cloud_client()
+    if client.is_active():
+        res = client.get("/web/api/circulars/unread-count")
+        return res.get("count", 0)
+
+    con = get_db(); cur = con.cursor()
+    cur.execute("""
+        SELECT COUNT(*) FROM circulars c
+        WHERE (c.target_role = 'all' OR c.target_role = ?)
+        AND NOT EXISTS (SELECT 1 FROM circular_reads r WHERE r.circular_id = c.id AND r.username = ?)
+    """, (role, username))
+    count = cur.fetchone()[0]
+    con.close()
+    return count
