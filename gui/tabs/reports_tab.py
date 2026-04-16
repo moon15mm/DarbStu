@@ -9,10 +9,7 @@ from report_builder import (export_to_noor_excel, generate_daily_report,
                              parent_portal_html)
 from database import load_students
 
-try:
-    from tkinterweb import HtmlFrame
-except ImportError:
-    HtmlFrame = None
+from gui.lib_loader import HtmlFrame
 
 class ReportsTabMixin:
     """Mixin: ReportsTabMixin"""

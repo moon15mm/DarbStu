@@ -77,18 +77,32 @@ def build_absent_groups(date_str: str) -> Dict[str, Dict[str, Any]]:
         v["students"].sort(key=lambda s: s["name"])
     return grouped
 
-def log_message_status(date_str: str, student_id: str, student_name: str, class_id: str, class_name: str, phone: str, status: str, template_used: str):
+def log_message_status(date_str: str, student_id: str, student_name: str, class_id: str, class_name: str, phone: str, status: str, template_used: str, message_type: str = 'absence'):
+    client = get_cloud_client()
+    if client.is_active():
+        client.post("/web/api/messages-log/create", {
+            "date": date_str, "student_id": student_id, "student_name": student_name,
+            "class_id": class_id, "class_name": class_name, "phone": phone, "status": status,
+            "template_used": template_used, "message_type": message_type
+        })
+        return
+
     con = get_db(); cur = con.cursor()
     cur.execute("""
-        INSERT INTO messages_log(date, student_id, student_name, class_id, class_name, phone, status, template_used, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO messages_log(date, student_id, student_name, class_id, class_name, phone, status, template_used, message_type, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         date_str, student_id, student_name, class_id, class_name, phone, status,
-        template_used, datetime.datetime.utcnow().isoformat()
+        template_used, message_type, datetime.datetime.utcnow().isoformat()
     ))
     con.commit(); con.close()
 
 def query_today_messages(date_str: str) -> List[Dict[str, Any]]:
+    client = get_cloud_client()
+    if client.is_active():
+        res = client.get("/web/api/messages-log", params={"date": date_str})
+        return res.get("rows", []) if res.get("ok") else []
+
     con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
     cur.execute("SELECT * FROM messages_log WHERE date = ? ORDER BY class_id, student_name", (date_str,))
     rows = [dict(r) for r in cur.fetchall()]
@@ -97,6 +111,11 @@ def query_today_messages(date_str: str) -> List[Dict[str, Any]]:
 
 def save_schedule(day_of_week: int, schedule_data: List[Dict[str, Any]]):
     """Saves the class schedule for a specific day of the week."""
+    client = get_cloud_client()
+    if client.is_active():
+        client.post("/web/api/schedule/save", {"day_of_week": day_of_week, "schedule": schedule_data})
+        return
+
     con = get_db()
     cur = con.cursor()
     cur.execute("DELETE FROM schedule WHERE day_of_week = ?", (day_of_week,))
@@ -113,6 +132,14 @@ def save_schedule(day_of_week: int, schedule_data: List[Dict[str, Any]]):
 
 def load_schedule(day_of_week: int) -> Dict[tuple, str]:
     """Reads the class schedule for a specific day of the week."""
+    client = get_cloud_client()
+    if client.is_active():
+        res = client.get("/web/api/schedule", params={"day_of_week": day_of_week})
+        if res.get("ok"):
+            rows = res.get("rows", [])
+            return {(row['class_id'], row['period']): row['teacher_name'] for row in rows}
+        return {}
+
     try:
         con = get_db()
         con.row_factory = sqlite3.Row
@@ -246,9 +273,8 @@ def get_student_absence_count(student_id: str, month: str = None) -> Dict[str, A
     """
     client = get_cloud_client()
     if client.is_active():
-        # This can be handled by the general query_absences or a specific endpoint
-        # For now, let's use the local logic since it relies on query_absences which is already cloud-aware
-        pass
+        res = client.get("/web/api/student-absence-count", params={"student_id": student_id, "month": month})
+        return res.get("data", {"count": 0, "last_date": "", "name": "", "class_name": ""}) if res.get("ok") else {"count": 0, "last_date": "", "name": "", "class_name": ""}
 
     con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
     if month:
@@ -686,6 +712,11 @@ def query_permissions(date_filter=None, status=None):
     return rows
 
 def delete_permission(pid):
+    client = get_cloud_client()
+    if client.is_active():
+        client.delete(f"/web/api/permissions/{pid}")
+        return
+
     con = get_db(); cur = con.cursor()
     cur.execute("DELETE FROM permissions WHERE id=?", (pid,))
     con.commit(); con.close()

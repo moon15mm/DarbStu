@@ -6,7 +6,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import os, json, base64
 from constants import APP_VERSION, CURRENT_USER, ROLES, DATA_DIR
-from database import authenticate, get_user_allowed_tabs, refresh_cloud_client
+from database import authenticate, get_user_allowed_tabs, refresh_cloud_client, force_sync_cloud_data
 from config_manager import load_config, save_config
 
 # ملف حفظ بيانات الدخول
@@ -201,8 +201,16 @@ class LoginWindow:
             CURRENT_USER["role"]     = user["role"]
             CURRENT_USER["label"]    = ROLES.get(user["role"], {}).get("label", user["role"])
             CURRENT_USER["name"]     = user.get("full_name", user["username"])
+            
+            # مزامنة البيانات تلقائياً عند الدخول في وضع السحاب
+            from config_manager import load_config
+            if load_config().get("cloud_mode"):
+                import threading
+                threading.Thread(target=force_sync_cloud_data, daemon=True).start()
+
             self.root.unbind("<Return>")
             self.on_success()
+
         else:
             self.attempts += 1
             if self.attempts >= 5:
@@ -251,7 +259,13 @@ class LoginWindow:
             cfg["cloud_token"] = token_var.get().strip()
             save_config(cfg)
             refresh_cloud_client()
-            messagebox.showinfo("تم الحفظ", "تم تحديث إعدادات المزامنة.")
+            
+            if cfg["cloud_mode"]:
+                import threading
+                threading.Thread(target=force_sync_cloud_data, daemon=True).start()
+                messagebox.showinfo("تم الحفظ", "تم تحديث الإعدادات. جاري جلب البيانات من السيرفر في الخلفية...")
+            else:
+                messagebox.showinfo("تم الحفظ", "تم تحديث إعدادات المزامنة.")
             dialog.destroy()
 
         tk.Button(container, text="حفظ الإعدادات", bg="#2E7D32", fg="white", font=("Tahoma", 10, "bold"), command=save).pack(fill="x")

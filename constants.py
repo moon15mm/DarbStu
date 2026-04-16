@@ -44,6 +44,11 @@ def _ensure_tkcalendar():
     from tkcalendar import DateEntry as _DE
     DateEntry = _DE
 
+# عند التشغيل كـ EXE مجمّع → مجلد الـ EXE، وإلا مجلد السكريبت
+BASE_DIR            = (os.path.dirname(sys.executable)
+                       if getattr(sys, 'frozen', False)
+                       else os.path.dirname(os.path.abspath(__file__)))
+
 PORT           = int(os.environ.get('ABSENTEE_PORT', '8000'))
 STATIC_DOMAIN  = 'https://darbte.uk'
 CLOUDFLARE_DOMAIN = 'darbte.uk'
@@ -51,11 +56,11 @@ MY_STATIC_DOMAIN  = 'darbte.uk'
 ngrok = None
 
 APP_TITLE           = 'تسجيل غياب الطلاب'
-APP_VERSION         = '2.9.2'
+APP_VERSION         = '2.9.3'
 UPDATE_URL          = 'https://raw.githubusercontent.com/moon15mm/DarbStu/main/version.json'
 UPDATE_DOWNLOAD_URL = 'https://github.com/moon15mm/DarbStu/archive/refs/heads/main.zip'
-DB_PATH             = 'absences.db'
-DATA_DIR            = 'data'
+DB_PATH             = os.path.join(BASE_DIR, 'absences.db')
+DATA_DIR            = os.path.join(BASE_DIR, 'data')
 STUDENTS_JSON       = os.path.join(DATA_DIR, 'students.json')
 USERS_JSON          = os.path.join(DATA_DIR, 'users.json')
 TARDINESS_JSON      = os.path.join(DATA_DIR, 'tardiness.db')
@@ -65,10 +70,6 @@ CONFIG_JSON         = os.path.join(DATA_DIR, 'config.json')
 HOST                = '127.0.0.1'
 TZ_OFFSET           = datetime.timedelta(hours=3)
 STUDENTS_STORE      = None
-# عند التشغيل كـ EXE مجمّع → مجلد الـ EXE، وإلا مجلد السكريبت
-BASE_DIR            = (os.path.dirname(sys.executable)
-                       if getattr(sys, 'frozen', False)
-                       else os.path.dirname(os.path.abspath(__file__)))
 WHATS_PATH          = os.path.join(BASE_DIR, 'my-whatsapp-server')
 
 ROLES = {

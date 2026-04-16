@@ -60,7 +60,8 @@ def main():
     # --- END: CLOUDFLARE TUNNEL CONFIGURATION ---
     
     # ─── تأمين السيرفر من الدوران اللانهائي ───────────────
-    os.environ["DARB_SERVER_MODE"] = "1"
+    # سيتم الاعتماد على منطق البرنامج للتمييز بين السيرفر والعميل
+    # os.environ["DARB_SERVER_MODE"] = "1"
     # ──────────────────────────────────────────────────
 
     ensure_dirs(); init_db()

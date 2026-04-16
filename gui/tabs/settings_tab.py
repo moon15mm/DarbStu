@@ -9,7 +9,7 @@ from constants import (CURRENT_USER, BACKUP_DIR, CONFIG_JSON, DATA_DIR,
 from config_manager import invalidate_config_cache, load_config, get_window_title
 from database import (authenticate, create_backup, get_backup_list,
                        get_db, load_students, import_students_from_excel_sheet2_format,
-                       import_teachers_from_excel)
+                       import_teachers_from_excel, clear_yearly_data)
 from whatsapp_service import send_whatsapp_message
 
 class SettingsTabMixin:
@@ -306,7 +306,7 @@ class SettingsTabMixin:
         year_lf.pack(fill="x", pady=(0, 10))
 
         tk.Label(year_lf,
-            text="يُرقّي الطلاب: أول→ثاني، ثاني→ثالث، ثالث يُحذفون. ثم يحذف الغياب والتأخر.",
+            text="يُرقّي الطلاب: أول→ثاني، ثاني→ثالث، ثالث يُحذفون. ثم يحذف كافة البيانات المستجدة (غياب، تأخر، حالات سلوكية، تحويلات، استفسارات، نتائج).",
             font=("Tahoma", 9), fg="#555", wraplength=650, justify="right"
         ).pack(anchor="e", pady=(0, 8))
 
@@ -410,21 +410,14 @@ class SettingsTabMixin:
             messagebox.showerror("خطأ", "فشل إنشاء النسخة الاحتياطية:\n" + str(path))
             return
 
-        # حذف الغياب والتأخر
+        # حذف بيانات الفصل
         try:
-            con = get_db(); cur = con.cursor()
-            cur.execute("DELETE FROM absences")
-            cur.execute("DELETE FROM tardiness")
-            try:
-                cur.execute("DELETE FROM message_log")
-            except Exception:
-                pass
-            con.commit(); con.close()
+            clear_yearly_data(reset_type='term')
 
             global STUDENTS_STORE
             STUDENTS_STORE = None
 
-            messagebox.showinfo("تم", "✅ تم إنهاء الفصل الدراسي بنجاح.\nالنسخة الاحتياطية: " + os.path.basename(path))
+            messagebox.showinfo("تم", "✅ تم إنهاء الفصل الدراسي وتصفير البيانات (الغياب، التأخر، السلوك، التحويلات، الاستفسارات) بنجاح.\nالنسخة الاحتياطية: " + os.path.basename(path))
             self._load_term_backups()
         except Exception as e:
             messagebox.showerror("خطأ", f"فشل الحذف:\n{e}")
@@ -505,17 +498,10 @@ class SettingsTabMixin:
             global STUDENTS_STORE
             STUDENTS_STORE = None
 
-            # احذف الغياب والتأخر
-            con = get_db(); cur = con.cursor()
-            cur.execute("DELETE FROM absences")
-            cur.execute("DELETE FROM tardiness")
-            try:
-                cur.execute("DELETE FROM message_log")
-            except Exception:
-                pass
-            con.commit(); con.close()
+            # احذف بيانات السنة
+            clear_yearly_data(reset_type='year')
 
-            msg = ("✅ تمت إنهاء السنة الدراسية بنجاح.\n\n"
+            msg = ("✅ تمت إنهاء السنة الدراسية بنجاح وتصفير كافة السجلات.\n\n"
                    f"• طلاب مُرقَّون: {upgraded}\n"
                    f"• طلاب محذوفون (ثالث): {deleted}\n"
                    f"• النسخة الاحتياطية: {os.path.basename(path)}")
@@ -686,5 +672,38 @@ class SettingsTabMixin:
 
 
 
-    # ══════════════════════════════════════════════════════════
-    # تبويب رسائل التأخر
+    def _wa_servers_load(self):
+        if not hasattr(self, "_tree_wa_servers"): return
+        for i in self._tree_wa_servers.get_children(): self._tree_wa_servers.delete(i)
+        cfg = load_config()
+        servers = cfg.get("wa_servers", [])
+        for s in servers:
+            self._tree_wa_servers.insert("", "end", values=(s.get("port", 3000), s.get("note", "")))
+
+    def _wa_server_add(self, port, note):
+        try:
+            p = int(port)
+        except: messagebox.showerror("خطأ", "المنفذ يجب أن يكون رقماً"); return
+        cfg = load_config()
+        svs = cfg.get("wa_servers", [])
+        if any(str(s.get("port")) == str(p) for s in svs):
+            messagebox.showwarning("تنبيه", "هذا المنفذ مضاف بالفعل"); return
+        svs.append({"port": p, "note": note})
+        cfg["wa_servers"] = svs
+        save_config(cfg)
+        invalidate_config_cache()
+        self._wa_servers_load()
+
+    def _wa_server_del(self):
+        sel = self._tree_wa_servers.selection()
+        if not sel: return
+        val = self._tree_wa_servers.item(sel[0])["values"]
+        port = str(val[0])
+        if not messagebox.askyesno("تأكيد", f"حذف خادم المنفذ {port}؟"): return
+        cfg = load_config()
+        svs = cfg.get("wa_servers", [])
+        new_svs = [s for s in svs if str(s.get("port")) != port]
+        cfg["wa_servers"] = new_svs
+        save_config(cfg)
+        invalidate_config_cache()
+        self._wa_servers_load()

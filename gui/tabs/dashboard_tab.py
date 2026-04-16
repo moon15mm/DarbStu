@@ -8,11 +8,8 @@ from database import query_tardiness
 from alerts_service import get_top_absent_students, get_week_comparison, get_absence_by_day_of_week
 from report_builder import compute_today_metrics
 
-try:
-    from matplotlib.figure import Figure
-    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-except ImportError:
-    Figure = FigureCanvasTkAgg = None
+# مكتبات الرسم البياني مشتركة لضمان التوافق
+from gui.lib_loader import Figure, FigureCanvasTkAgg
 
 class DashboardTabMixin:
     """Mixin: DashboardTabMixin"""
@@ -272,3 +269,61 @@ class DashboardTabMixin:
         except Exception as e:
             print("[DASH-DOW]", e)
 
+    def _start_msg_polling(self):
+        def _poll():
+            while True:
+                try:
+                    from database import get_cloud_client
+                    c = get_cloud_client()
+                    if c.is_active():
+                        res = c.get("/web/api/sync-info")
+                        if res.get("ok"):
+                           txt = f"متصل بالسيرفر: {c.url}\nآخر مزامنة: {res.get('last_sync','...')}\nعدد السجلات: {res.get('total_records',0)}"
+                           self.root.after(0, lambda t=txt: self._set_sync_info(t))
+                except: pass
+                import time
+                time.sleep(120)
+        import threading
+        threading.Thread(target=_poll, daemon=True).start()
+
+    def _set_sync_info(self, text):
+        if hasattr(self, "sync_info_text"):
+            self.sync_info_text.config(state="normal")
+            self.sync_info_text.delete("1.0", "end")
+            self.sync_info_text.insert("1.0", text)
+            self.sync_info_text.config(state="disabled")
+
+    def _start_dashboard_tick(self):
+        self._dashboard_tick()
+
+    def _on_dash_dblclick(self, event):
+        item = self.tree_dash.focus()
+        if not item: return
+        vals = self.tree_dash.item(item, "values")
+        class_id = vals[0]
+        self._switch_tab("إدارة الغياب")
+        if hasattr(self, "abs_class_var"):
+            self.abs_class_var.set(class_id)
+            self.abs_query()
+
+    def _on_top_absent_dblclick(self, event):
+        item = self.tree_top_absent.focus()
+        if not item: return
+        vals = self.tree_top_absent.item(item, "values")
+        # في لوحة المراقبة، student_id غير مخفي في الـ values حالياً
+        # سأقوم بالبحث عن الطالب بالاسم لفتح تحليله
+        # الأفضل هو تعديل الـ Treeview ليحتوي على ID مخفي، لكن سأستخدم البحث الآن لعدم تغيير الـ UI كثيراً
+        student_name = vals[0]
+        
+        # ابحث عن الـ ID من STUDENTS_STORE
+        import constants
+        store = constants.STUDENTS_STORE
+        if store and "list" in store:
+            for cls in store["list"]:
+                for s in cls.get("students", []):
+                    if s.get("name") == student_name:
+                        self.open_student_analysis(s.get("id"))
+                        return
+        
+        # إذا لم نجد الـ ID، نفتح التبويب على الأقل
+        self._switch_tab("تحليل الطالب")

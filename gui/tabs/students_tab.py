@@ -46,17 +46,31 @@ class StudentsTabMixin:
         self.all_class_names_for_student_mng = all_class_names
 
     def on_double_click_student_class(self, event):
-        if self.tree_student_management.identify("region", event.x, event.y) != "cell" or self.tree_student_management.identify_column(event.x) != "#4":
+        # تحديد العمود المخطوط للتمييز بين فتح التحليل وتعديل الفصل
+        region = self.tree_student_management.identify("region", event.x, event.y)
+        if region != "cell":
             return
-        if not (item_id := self.tree_student_management.focus()): return
+            
+        column = self.tree_student_management.identify_column(event.x) # "#1", "#2", etc.
+        item_id = self.tree_student_management.focus()
+        if not item_id: return
+        
         current_values = list(self.tree_student_management.item(item_id, "values"))
-        combo = ttk.Combobox(self.tree_student_management, values=self.all_class_names_for_student_mng, state="readonly"); combo.set(current_values[3]); combo.focus()
-        if not (bbox := self.tree_student_management.bbox(item_id, column="#4")): return
-        combo.place(x=bbox[0], y=bbox[1], width=bbox[2], height=bbox[3])
-        def save_edit(e=None):
-            selected_class = combo.get(); current_values[3] = selected_class
-            self.tree_student_management.item(item_id, values=current_values); combo.destroy()
-        combo.bind("<<ComboboxSelected>>", save_edit); combo.bind("<FocusOut>", save_edit); combo.bind("<Escape>", lambda e: combo.destroy())
+        student_id = current_values[0]
+
+        # إذا كان الضغط على خانة "الفصل الجديد" (#4)، نقوم بتفعيل التعديل
+        if column == "#4":
+            combo = ttk.Combobox(self.tree_student_management, values=self.all_class_names_for_student_mng, state="readonly"); combo.set(current_values[3]); combo.focus()
+            if not (bbox := self.tree_student_management.bbox(item_id, column="#4")): return
+            combo.place(x=bbox[0], y=bbox[1], width=bbox[2], height=bbox[3])
+            def save_edit(e=None):
+                selected_class = combo.get(); current_values[3] = selected_class
+                self.tree_student_management.item(item_id, values=current_values); combo.destroy()
+            combo.bind("<<ComboboxSelected>>", save_edit); combo.bind("<FocusOut>", save_edit); combo.bind("<Escape>", lambda e: combo.destroy())
+        else:
+            # إذا كان الضغط على أي خانة أخرى (مثل الاسم أو الهوية)، نفتح تبويب التحليل
+            if hasattr(self, "open_student_analysis"):
+                self.open_student_analysis(student_id)
 
     def search_students_for_management(self):
         query = self.student_search_var.get().strip().lower()

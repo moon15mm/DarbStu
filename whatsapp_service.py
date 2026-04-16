@@ -117,9 +117,6 @@ def send_whatsapp_message(phone: str, message_body: str, student_data: dict = No
         print(f"[WHATSAPP] ❌ {error_msg}")
         return False, error_msg
 
-
-
-
 def send_whatsapp_pdf(phone: str, pdf_bytes: bytes, filename: str, caption: str = "") -> tuple:
     """
     يرسل ملف PDF عبر واتساب - endpoint: /send-document
@@ -160,7 +157,6 @@ def send_whatsapp_pdf(phone: str, pdf_bytes: bytes, filename: str, caption: str 
     except Exception as e:
         return False, f"خطأ: {e}"
 
-
 def start_whatsapp_server():
     """يفتح نافذة خادم الواتساب Node.js."""
     try:
@@ -171,20 +167,28 @@ def start_whatsapp_server():
             except Exception:
                 print(f"[WA] المجلد غير موجود: {WHATS_PATH}")
             return
-        # إذا كان البرنامج EXE مجمّع → ابحث عن node.exe بجانبه أولاً
+            
         _app_dir = (os.path.dirname(sys.executable)
                     if getattr(sys, 'frozen', False) else BASE_DIR)
         _node_local = os.path.join(_app_dir, "node.exe")
+        
         if os.path.isfile(_node_local):
-            cmd = rf'cmd.exe /k "cd /d {WHATS_PATH} && "{_node_local}" server.js"'
+            args = [_node_local, "server.js"]
+            use_shell = False
         else:
-            cmd = rf'cmd.exe /k "cd /d {WHATS_PATH} && npm start"'
-        subprocess.Popen(cmd, creationflags=subprocess.CREATE_NEW_CONSOLE)
-        try:
-            from tkinter import messagebox
-            messagebox.showinfo("تم", "تم فتح نافذة الواتساب سيرفر.\nامسح رمز الـ QR من النافذة الجديدة.")
-        except Exception:
-            print("[WA] تم فتح نافذة الواتساب سيرفر.")
+            args = ["npm", "start"]
+            use_shell = True
+            
+        kwargs = {
+            "cwd": WHATS_PATH,
+            "shell": use_shell,
+            "creationflags": subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+            "start_new_session": True
+        }
+        
+        subprocess.Popen(args, **kwargs)
+        print("[WA] بدأ تشغيل خادم الواتساب في الخلفية.")
+
     except Exception as e:
         try:
             from tkinter import messagebox

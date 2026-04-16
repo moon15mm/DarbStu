@@ -32,7 +32,30 @@ class AbsenceTabMixin:
         tree.pack(fill="both", expand=True); self.tree_logs = tree
         self.tree_logs.bind("<Double-1>", self._on_log_dblclick)
         self.refresh_logs()
-    
+
+    def _on_log_dblclick(self, event):
+        item = self.tree_logs.focus()
+        if not item: return
+        vals = self.tree_logs.item(item, "values")
+        student_name = vals[4]
+        # التبديل لتبويب التقارير للبحث عن هذا الطالب
+        self._switch_tab("التقارير / الطباعة")
+        if hasattr(self, "report_student_var"):
+            self.report_type_var.set("student")
+            self._update_report_controls()
+            self.report_student_var.set(student_name)
+            self.on_generate_report()
+
+    def _open_today_messages_report(self):
+        from alerts_service import query_today_messages, build_daily_summary_message
+        msgs = query_today_messages()
+        if not msgs:
+            messagebox.showinfo("تنبيه", "لا توجد رسائل مرسلة اليوم حتى الآن."); return
+        summary = build_daily_summary_message(msgs)
+        win = tk.Toplevel(self.root); win.title("تقرير رسائل اليوم"); win.geometry("600x500")
+        txt = tk.Text(win, font=("Tahoma", 10)); txt.pack(fill="both", expand=True, padx=10, pady=10)
+        txt.insert("1.0", summary); txt.config(state="disabled")
+
     def refresh_logs(self):
         try:
             date_f = self.date_var.get().strip() if hasattr(self, "date_var") else now_riyadh_date()

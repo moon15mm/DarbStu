@@ -51,7 +51,7 @@ class LinksTabMixin:
             link = f"{base_url}/c/{c['id']}"
             self.tree_links.insert("", "end", values=(c["id"], c["name"], len(c["students"] ), link))
         self.teachers_data = load_teachers()
-        teacher_names = [t["اسم المعلم"] for t in self.teachers_data.get("teachers", [])]
+        teacher_names = [t.get("اسم المعلم", "") for t in self.teachers_data.get("teachers", [])]
         self.teacher_combo['values'] = teacher_names
         self.teacher_var.set("")
         self.send_link_button.config(state="disabled")
@@ -78,7 +78,7 @@ class LinksTabMixin:
             messagebox.showwarning("تنبيه", "الرجاء اختيار معلم من القائمة.")
             return
         class_name, link = self.tree_links.item(sel[0])["values"][1], self.tree_links.item(sel[0])["values"][3]
-        teacher = next((t for t in self.teachers_data.get("teachers", []) if t["اسم المعلم"] == teacher_name), None)
+        teacher = next((t for t in self.teachers_data.get("teachers", []) if t.get("اسم المعلم", "") == teacher_name), None)
         if not teacher:
             messagebox.showerror("خطأ", "لم يتم العثور على بيانات المعلم المحدد.")
             return
@@ -95,55 +95,4 @@ class LinksTabMixin:
         messagebox.showinfo("نتيجة الإرسال", message)
         self.send_link_button.config(state="normal")
 
-    def _build_logs_tab(self):
-        top = ttk.Frame(self.logs_frame); top.pack(fill="x", pady=(0,8))
-        ttk.Label(top, text="تاريخ:").pack(side="right")
-        self.date_var = tk.StringVar(value=now_riyadh_date())
-        ttk.Entry(top, textvariable=self.date_var, width=12).pack(side="right", padx=5)
-        ttk.Label(top, text="فصل:").pack(side="right")
-        self.class_var = tk.StringVar()
-        class_ids = ["(الكل)"] + [c["id"] for c in self.store["list"]]
-        cb = ttk.Combobox(top, textvariable=self.class_var, values=class_ids, width=12, state="readonly"); cb.current(0); cb.pack(side="right", padx=5)
-        ttk.Button(top, text="تحديث", command=self.refresh_logs).pack(side="right", padx=5)
-        ttk.Button(top, text="تقرير رسائل اليوم", command=self._open_today_messages_report).pack(side="left", padx=5)
-
-        cols = ("date","class_id","class_name","student_id","student_name","teacher_name","period","created_at")
-        tree = ttk.Treeview(self.logs_frame, columns=cols, show="headings", height=12)
-        for c,h,w in zip(cols, ["التاريخ","المعرّف","الفصل","رقم الطالب","اسم الطالب","المعلم","الحصة","وقت التسجيل"], [90,90,200,120,240,140,60,170]):
-            tree.heading(c, text=h); tree.column(c, width=w, anchor="center")
-        tree.pack(fill="both", expand=True); self.tree_logs = tree
-        self.tree_logs.bind("<Double-1>", self._on_log_dblclick)
-        self.refresh_logs()
-    
-    def refresh_logs(self):
-        try:
-            date_f = self.date_var.get().strip() if hasattr(self, "date_var") else now_riyadh_date()
-            class_id = self.class_var.get() if hasattr(self, "class_var") else None
-            if class_id == "(الكل)":
-                class_id = None
-
-            rows = _apply_class_name_fix(query_absences(date_f or None, class_id))
-
-            if not hasattr(self, "tree_logs"):
-                return
-
-            for i in self.tree_logs.get_children():
-                self.tree_logs.delete(i)
-
-            for r in rows:
-                self.tree_logs.insert(
-                    "", "end",
-                    values=(
-                        r.get("date", ""),
-                        r.get("class_id", ""),
-                        r.get("class_name", ""),
-                        r.get("student_id", ""),
-                        r.get("student_name", ""),
-                        r.get("teacher_name", ""),
-                        r.get("period", ""),
-                        r.get("created_at", "")
-                    )
-                )
-        except Exception as e:
-            messagebox.showerror("خطأ", f"تعذر تحديث السجلات:\n{e}")
 

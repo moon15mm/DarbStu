@@ -6,6 +6,8 @@ import subprocess
 from constants import WHATS_PATH
 from config_manager import invalidate_config_cache, save_config, load_config
 from whatsapp_service import get_wa_servers, start_whatsapp_server
+import qrcode
+from PIL import Image, ImageTk
 
 class WhatsappTabMixin:
     """Mixin: WhatsappTabMixin"""
@@ -28,16 +30,9 @@ class WhatsappTabMixin:
         btn_row = ttk.Frame(wa_lf); btn_row.pack(fill="x", pady=(0, 4))
 
         def _start_wa():
-            if not os.path.isdir(WHATS_PATH):
-                messagebox.showerror("خطأ", "مجلد الواتساب غير موجود:\n" + WHATS_PATH)
-                return
-            try:
-                cmd = rf'cmd.exe /k "cd /d {WHATS_PATH} && npm start"'
-                subprocess.Popen(cmd, creationflags=subprocess.CREATE_NEW_CONSOLE)
-                self._wa_status_text.config(
-                    text="⏳ جارٍ التشغيل... اضغط 'فحص الحالة' بعد 15 ثانية")
-            except Exception as e:
-                messagebox.showerror("خطأ", "تعذّر التشغيل:\n" + str(e))
+            start_whatsapp_server()
+            self._wa_status_text.config(
+                text="⏳ جارٍ التشغيل... تفقد التبويب لإدارة الواتساب")
 
         def _check_once():
             self._wa_status_dot.config(fg="#aaaaaa")
@@ -166,6 +161,28 @@ class WhatsappTabMixin:
         parent_frame.after(600, _load_keywords)
 
 
+    def check_whatsapp_status_ui(self):
+        """وظيفة مساعدة لفحص حالة الواتساب وعرض رسالة للمستخدم (تُستخدم من تبويبات مختلفة)."""
+        def _do():
+            try:
+                import urllib.request, json as _j
+                # فحص الحالة على المنفذ الافتراضي 3000
+                r = urllib.request.urlopen("http://localhost:3000/status", timeout=3)
+                data = _j.loads(r.read())
+                
+                if data.get("ready"):
+                    pending = data.get("pending", 0)
+                    msg = f"✅ الواتساب متصل وجاهز.\nالطلبات المعلقة: {pending}"
+                    self.root.after(0, lambda: messagebox.showinfo("حالة الواتساب", msg))
+                else:
+                    msg = "⏳ خادم الواتساب يعمل، لكن لم يتم ربط الحساب بعد.\nيرجى الذهاب لتبويب 'إدارة الواتساب' لمسح رمز الـ QR."
+                    self.root.after(0, lambda: messagebox.showwarning("حالة الواتساب", msg))
+            except Exception:
+                msg = "🔴 خادم الواتساب غير متصل.\nيرجى الذهاب لتبويب 'إدارة الواتساب' وتشغيل الخادم أولاً."
+                self.root.after(0, lambda: messagebox.showerror("حالة الواتساب", msg))
+        
+        threading.Thread(target=_do, daemon=True).start()
+
     # ═══════════════════════════════════════════════════════════════
     # تبويب إدارة الواتساب
     # ═══════════════════════════════════════════════════════════════
@@ -225,18 +242,11 @@ class WhatsappTabMixin:
         btn_row.pack(fill="x", padx=10, pady=(2, 10))
 
         def _wm_start():
-            if not os.path.isdir(WHATS_PATH):
-                messagebox.showerror("خطأ", "مجلد الواتساب غير موجود:\n" + WHATS_PATH)
-                return
-            try:
-                cmd = r'cmd.exe /k "cd /d ' + WHATS_PATH + r' && npm start"'
-                subprocess.Popen(cmd, creationflags=subprocess.CREATE_NEW_CONSOLE)
-                self._wm_lbl.config(
-                    text="⏳ جارٍ التشغيل... اضغط فحص الحالة بعد 15 ثانية",
-                    fg="#92400e")
-                self._wm_dot.config(fg="#f59e0b")
-            except Exception as ex:
-                messagebox.showerror("خطأ", "تعذّر التشغيل:\n" + str(ex))
+            start_whatsapp_server()
+            self._wm_lbl.config(
+                text="⏳ جارٍ التشغيل في الخلفية... انتظر رمز الـ QR أدناه",
+                fg="#92400e")
+            self._wm_dot.config(fg="#f59e0b")
 
         def _wm_check():
             self._wm_lbl.config(text="⏳ جارٍ الفحص...", fg="#555555")
@@ -287,6 +297,58 @@ class WhatsappTabMixin:
                   bg="#0d47a1", fg="white", font=("Tahoma", 10),
                   relief="flat", cursor="hand2", padx=14, pady=6,
                   command=_wm_check).pack(side="right", padx=(0, 4))
+
+        # ── مساحة عرض الـ QR Code ────────────────────────────
+        qr_frame = tk.Frame(srv_card, bg="#f8fafc", bd=1, relief="sunken")
+        qr_frame.pack(fill="x", padx=10, pady=(4, 10))
+        
+        qr_label = tk.Label(qr_frame, text="بانتظار رمز الـ QR...", font=("Tahoma", 9), 
+                            bg="#f8fafc", fg="#64748b", pady=20)
+        qr_label.pack(expand=True)
+        
+        self._last_qr_img = None # لمنع حذف الصورة من الذاكرة
+
+        def _update_qr_display(qr_text):
+            try:
+                # توليد صورة QR من النص القادم من السيرفر
+                qr = qrcode.QRCode(version=1, box_size=6, border=2)
+                qr.add_data(qr_text)
+                qr.make(fit=True)
+                img = qr.make_image(fill_color="black", back_color="white")
+                
+                # تحويل لمقاس مناسب للعرض
+                img = img.resize((200, 200), Image.Resampling.LANCZOS)
+                
+                tk_img = ImageTk.PhotoImage(img)
+                qr_label.config(image=tk_img, text="")
+                self._last_qr_img = tk_img # حفظ المرجع
+            except Exception as e:
+                print(f"[WA-GUI] خطأ في معالجة الـ QR: {e}")
+
+        def _poll_qr():
+            if not self.whatsapp_manager_frame.winfo_exists(): return
+            try:
+                import urllib.request as _ur, json as _j
+                # نسحب الحالة من رابط /qr الجديد
+                r = _ur.urlopen("http://localhost:3000/qr", timeout=1)
+                data = _j.loads(r.read())
+                
+                if data.get("ready"):
+                    qr_label.config(image="", text="✅ المتصفح متصل وجاهز", fg="#059669")
+                    self._wm_dot.config(fg="#22c55e")
+                    self._wm_lbl.config(text="✅ خادم الواتساب متصل", fg="#166534")
+                elif data.get("qr"):
+                    _update_qr_display(data["qr"])
+                else:
+                    # شغال بس ما فيه QR حالياً (ممكن لسه بيفتح أو متصل)
+                    pass
+            except Exception:
+                pass
+            # كرر الفحص كل 4 ثواني
+            self.root.after(4000, _poll_qr)
+
+        # ابدأ الفحص التلقائي
+        self.root.after(2000, _poll_qr)
 
         # ── بطاقة 2: بوت الغياب ─────────────────────────────────
         abs_card = _card(inner, "📋  بوت رسائل الغياب", "#7c3aed")

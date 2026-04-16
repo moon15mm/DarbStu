@@ -24,11 +24,12 @@ from database import (get_db, load_students, load_teachers,
 from whatsapp_service import send_whatsapp_message, send_whatsapp_pdf
 from report_builder import (generate_report_html, generate_daily_report,
                              generate_monitor_table_html, get_live_monitor_status,
-                             get_live_monitor_status as _get_monitor)
+                             get_live_monitor_status as _get_monitor, parent_portal_html)
 from alerts_service import (log_message_status, query_today_messages,
                              load_schedule, save_schedule,
                              query_permissions, insert_permission,
                              update_permission_status, delete_permission)
+from pdf_generator import (results_portal_html, student_result_html)
 
 router = APIRouter()
 
@@ -2098,8 +2099,8 @@ def start_whatsapp_server():
         if not os.path.isdir(WHATS_PATH):
             messagebox.showerror("خطأ", f"المجلد غير موجود:\n{WHATS_PATH}")
             return
-        cmd = rf'cmd.exe /k "cd /d {WHATS_PATH} && npm start"'
-        subprocess.Popen(cmd, creationflags=subprocess.CREATE_NEW_CONSOLE)
+        from whatsapp_service import start_whatsapp_server
+        start_whatsapp_server()
         messagebox.showinfo("تم", "تم فتح نافذة الواتساب سيرفر.\nامسح رمز الـ QR من النافذة الجديدة.")
     except Exception as e:
         messagebox.showerror("خطأ", f"تعذّر تشغيل السيرفر:\n{e}")

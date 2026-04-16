@@ -90,7 +90,9 @@ def start_cloudflare_tunnel(port: int, domain: str):
             stderr=subprocess.STDOUT,
             text=True,
             encoding="utf-8",
-            errors="replace"
+            errors="replace",
+            creationflags=subprocess.CREATE_NO_WINDOW,
+            shell=True
         )
 
         # ─── خيط يقرأ باقي السجلات بعد الالتقاط ─────────────────

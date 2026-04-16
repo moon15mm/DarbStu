@@ -5,7 +5,10 @@ import os, json, datetime, threading, re, io, csv, base64, time
 import sqlite3, subprocess
 from constants import now_riyadh_date, DB_PATH, CONFIG_JSON, DATA_DIR
 from config_manager import invalidate_config_cache, load_config
-from database import get_db, load_students
+from database import (get_db, load_students, insert_counselor_session, 
+                      get_counselor_sessions, delete_counselor_session,
+                      insert_counselor_alert, insert_behavioral_contract,
+                      get_behavioral_contracts, delete_behavioral_contract)
 from pdf_generator import generate_behavioral_contract_pdf, generate_session_pdf
 from whatsapp_service import send_whatsapp_message, send_whatsapp_pdf
 
@@ -961,13 +964,16 @@ class CounselorTabMixin:
             extra    = notes_txt.get("1.0","end-1c").strip()
             if extra: notes_db += "\nملاحظات: " + extra
             action   = "; ".join(recs) if recs else "تنبيه الطالب"
-            date_db  = datetime.datetime.now().strftime("%Y-%m-%d")
-            con = get_db(); cur = con.cursor()
-            cur.execute("""
-                INSERT INTO counselor_sessions (date, student_id, student_name, class_name, reason, notes, action_taken, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (date_db, sid, sname, sclass, reason, notes_db, action, datetime.datetime.now().isoformat()))
-            con.commit(); con.close()
+            data_to_save = {
+                "date": date_var.get().strip() or datetime.datetime.now().strftime("%Y-%m-%d"),
+                "student_id": sid,
+                "student_name": sname,
+                "class_name": sclass,
+                "reason": reason,
+                "notes": notes_db,
+                "action_taken": action
+            }
+            insert_counselor_session(data_to_save)
             try: self._load_counselor_data()
             except: pass
 
@@ -1149,22 +1155,28 @@ class CounselorTabMixin:
         active_name = self._get_active_counselor_name()
 
         if alert_type == "تنبيه":
-            msg = f"المكرم ولي أمر الطالب: {sname}\nنفيدكم بأن ابنكم قد تكرر غيابه/تأخره ({sabs} أيام غياب / {stard} مرات تأخر). نأمل منكم حثه على الانضباط.\nالموجّه الطلابي"
             msg = f"المكرم ولي أمر الطالب: {sname}\nنفيدكم بأن ابنكم قد تكرر غيابه/تأخره ({sabs} أيام غياب / {stard} مرات تأخر). نأمل منكم حثه على الانضباط.\n{active_name}"
-            msg = f"المكرم ولي أمر الطالب: {sname}\nنظراً لتكرار غياب/تأخر ابنكم بشكل ملحوظ، نرجو منكم مراجعة مكتب التوجيه الطلابي بالمدرسة في أقرب وقت ممكن.\nالموجّه الطلابي"
+        else:
             msg = f"المكرم ولي أمر الطالب: {sname}\nنظراً لتكرار غياب/تأخر ابنكم بشكل ملحوظ، نرجو منكم مراجعة مكتب التوجيه الطلابي بالمدرسة في أقرب وقت ممكن.\n{active_name}"
+        
         if not messagebox.askyesno("تأكيد", f"هل تريد إرسال {alert_type} لولي الأمر عبر الواتساب؟"):
             return
         
         ok, res = send_whatsapp_message(phone, msg)
+        try:
+            data_alert = {
+                "date": now_riyadh_date(),
+                "student_id": sid,
+                "student_name": sname,
+                "type": alert_type,
+                "method": "whatsapp",
+                "status": "تم الإرسال" if ok else f"فشل: {res}"
+            }
+            insert_counselor_alert(data_alert)
+        except:
+            pass
+
         if ok:
-            date = datetime.datetime.now().strftime("%Y-%m-%d")
-            con = get_db(); cur = con.cursor()
-            cur.execute("""
-                INSERT INTO counselor_alerts (date, student_id, student_name, type, method, status, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (date, sid, sname, alert_type, "whatsapp", "sent", datetime.datetime.now().isoformat()))
-            con.commit(); con.close()
             messagebox.showinfo("تم", f"تم إرسال {alert_type} بنجاح")
             self._load_counselor_data()
         else:
@@ -1275,27 +1287,12 @@ class CounselorTabMixin:
         def _load_sessions():
             nonlocal _all_sessions
             tree.delete(*tree.get_children())
-            con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
-            cur.execute("SELECT * FROM counselor_sessions ORDER BY date DESC, created_at DESC")
-            rows = [dict(r) for r in cur.fetchall()]
-            con.close()
-
-            if filter_sid:
-                rows = [r for r in rows if str(r.get("student_id","")) == str(filter_sid)]
-
+            rows = get_counselor_sessions(student_id=filter_sid)
+            
             q = _search_var.get().strip().lower()
             if q:
-                rows = [r for r in rows
-                        if q in str(r.get("student_name","")).lower()
-                        or q in str(r.get("class_name","")).lower()
-                        or q in str(r.get("reason","")).lower()
-                        or q in str(r.get("action_taken","")).lower()]
-
-            df = _date_from.get().strip()
-            dt = _date_to.get().strip()
-            if df: rows = [r for r in rows if str(r.get("date","")) >= df]
-            if dt: rows = [r for r in rows if str(r.get("date","")) <= dt]
-
+                rows = [r for r in rows if q in r.get("student_name","").lower() or q in r.get("reason","").lower()]
+            
             _all_sessions.clear()
             _all_sessions.extend(rows)
             _count_lbl.config(text=f"عدد الجلسات: {len(rows)}")
@@ -1303,11 +1300,8 @@ class CounselorTabMixin:
             for i, r in enumerate(rows):
                 tag = "odd" if i % 2 == 0 else "even"
                 tree.insert("", "end", iid=str(r["id"]),
-                            values=(r["id"], r.get("date",""),
-                                    r.get("student_name",""),
-                                    r.get("class_name",""),
-                                    r.get("reason",""),
-                                    r.get("action_taken","")),
+                            values=(r["id"], r.get("date",""), r.get("student_name",""),
+                                    r.get("class_name",""), r.get("reason","")),
                             tags=(tag,))
 
         _load_sessions()
@@ -1694,16 +1688,7 @@ class CounselorTabMixin:
                 messagebox.showwarning("تنبيه", "الرجاء إدخال تاريخ العقد", parent=win)
                 return
             try:
-                con = get_db(); cur = con.cursor()
-                cur.execute("""INSERT INTO behavioral_contracts
-                    (date, student_id, student_name, class_name, subject,
-                     period_from, period_to, notes, created_at)
-                    VALUES (?,?,?,?,?,?,?,?,?)""",
-                    (d["date"], d["student_id"], d["student_name"],
-                     d["class_name"], d["subject"], d["period_from"],
-                     d["period_to"], d["notes"],
-                     datetime.datetime.utcnow().isoformat()))
-                con.commit(); con.close()
+                insert_behavioral_contract(d)
                 messagebox.showinfo("✅ تم", "تم حفظ العقد السلوكي بنجاح", parent=win)
             except Exception as e:
                 messagebox.showerror("خطأ", str(e), parent=win)
@@ -1893,10 +1878,7 @@ class CounselorTabMixin:
         def _load_contracts():
             nonlocal _all_contracts
             tree.delete(*tree.get_children())
-            con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
-            cur.execute("SELECT * FROM behavioral_contracts ORDER BY date DESC, created_at DESC")
-            rows = [dict(r) for r in cur.fetchall()]
-            con.close()
+            rows = get_behavioral_contracts(student_id=filter_sid)
 
             if filter_sid:
                 rows = [r for r in rows if str(r.get("student_id","")) == str(filter_sid)]
@@ -2045,9 +2027,7 @@ class CounselorTabMixin:
                 parent=win)
             if not confirm: return
             try:
-                con = get_db(); cur = con.cursor()
-                cur.execute("DELETE FROM behavioral_contracts WHERE id=?", (contract["id"],))
-                con.commit(); con.close()
+                delete_behavioral_contract(contract["id"])
                 _load_contracts()
                 _detail_txt.config(state="normal")
                 _detail_txt.delete("1.0", "end")

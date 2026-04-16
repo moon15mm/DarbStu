@@ -7,7 +7,7 @@ from constants import now_riyadh_date, CONFIG_JSON
 from config_manager import DEFAULT_CONFIG, get_message_template, render_message, load_config
 from alerts_service import (build_absent_groups, log_message_status,
                              query_today_messages, safe_send_absence_alert)
-from whatsapp_service import start_whatsapp_server, send_whatsapp_message
+from whatsapp_service import send_whatsapp_message
 
 class MessagesTabMixin:
     """Mixin: MessagesTabMixin"""
@@ -28,7 +28,7 @@ class MessagesTabMixin:
         chk_all.pack(side="right", padx=10)
 
         ttk.Button(top, text="تعديل نص الرسالة", command=self._msg_open_template_editor).pack(side="right", padx=5)
-        ttk.Button(top, text="تشغيل WhatsApp Server", command=start_whatsapp_server).pack(side="right", padx=5)
+        ttk.Button(top, text="🔍 حالة الواتساب", command=self.check_whatsapp_status_ui).pack(side="right", padx=5)
         self.send_button = ttk.Button(top, text="إرسال للمحددين", command=self._msg_send_selected)
         self.send_button.pack(side="right", padx=5)
 

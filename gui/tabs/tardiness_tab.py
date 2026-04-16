@@ -106,7 +106,7 @@ class TardinessTabMixin:
 
         tch_var = tk.StringVar()
         teachers = load_teachers()
-        tch_names = [t["اسم المعلم"] for t in teachers.get("teachers",[])]
+        tch_names = [t.get("اسم المعلم", "") for t in teachers.get("teachers",[])]
         row("المعلم:", lambda p: ttk.Combobox(p, textvariable=tch_var,
                                                values=tch_names, state="readonly"))
 

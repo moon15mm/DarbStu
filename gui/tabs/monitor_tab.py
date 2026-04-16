@@ -5,10 +5,7 @@ import os, json, datetime, threading, re, io, csv, base64, time
 from constants import PORT, now_riyadh_date, local_ip, STATIC_DOMAIN
 from report_builder import generate_monitor_table_html, get_live_monitor_status
 
-try:
-    from tkinterweb import HtmlFrame
-except ImportError:
-    HtmlFrame = None
+from gui.lib_loader import HtmlFrame
 
 class MonitorTabMixin:
     """Mixin: MonitorTabMixin"""

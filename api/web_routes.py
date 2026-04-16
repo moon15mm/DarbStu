@@ -31,11 +31,16 @@ from database import (get_db, load_students, load_teachers,
                       import_teachers_from_excel,
                       create_student_referral, get_referrals_for_teacher,
                       get_all_referrals, get_referral_by_id,
-                      update_referral_deputy, close_referral,
+                      update_referral_deputy, update_referral_counselor, close_referral,
                       create_academic_inquiry, get_academic_inquiries,
                       get_academic_inquiry, reply_academic_inquiry,
                       create_circular, get_circulars, mark_circular_as_read,
-                      get_unread_circulars_count, delete_circular)
+                      get_unread_circulars_count, delete_circular,
+                      insert_counselor_session, get_counselor_sessions,
+                      delete_counselor_session, insert_counselor_alert,
+                      get_counselor_alerts, insert_behavioral_contract,
+                      get_behavioral_contracts, delete_behavioral_contract,
+                      delete_absence, delete_excuse, save_user_phone)
 from whatsapp_service import (send_whatsapp_message, send_whatsapp_pdf,
                                check_whatsapp_server_status)
 from alerts_service import (log_message_status, run_smart_alerts,
@@ -45,7 +50,8 @@ from alerts_service import (log_message_status, run_smart_alerts,
                              get_tardiness_recipients, save_tardiness_recipients,
                              query_permissions, insert_permission,
                              update_permission_status, load_schedule, save_schedule,
-                             send_permission_request, build_absent_groups)
+                             send_permission_request, build_absent_groups,
+                             delete_permission, query_today_messages)
 from report_builder import (generate_daily_report, generate_monthly_report,
                              generate_weekly_report, export_to_noor_excel,
                              build_daily_report_df, get_live_monitor_status,
@@ -84,6 +90,14 @@ def _verify_token(token: str) -> dict:
 def _get_current_user(request: Request) -> dict:
     token = request.cookies.get("darb_token","") or request.headers.get("Authorization","").replace("Bearer ","")
     if not token: return {}
+    
+    # 1. جرب التحقق من الـ Access Token الثابت (المستخدم في الربط السحابي)
+    cfg = load_config()
+    master_token = cfg.get("cloud_token")
+    if master_token and token == master_token:
+        return {"sub": "master_sync", "role": "admin", "username": "master_sync"}
+
+    # 2. جرب التحقق من الـ JWT العادي (المستخدم في لوحة الويب)
     data = _verify_token(token)
     if data:
         data["username"] = data.get("sub", "")
@@ -219,6 +233,17 @@ async def api_absence_by_dow(request: Request):
     if not user: return JSONResponse({"ok": False}, status_code=401)
     try:
         data = get_absence_by_day_of_week()
+        return JSONResponse({"ok": True, "data": data})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/student-analytics/{student_id}", response_class=JSONResponse)
+async def api_student_analytics(request: Request, student_id: str):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    try:
+        from database import get_student_analytics_data
+        data = get_student_analytics_data(student_id)
         return JSONResponse({"ok": True, "data": data})
     except Exception as e:
         return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
@@ -564,11 +589,24 @@ async def web_get_teachers(request: Request):
     user = _get_current_user(request)
     if not user: return JSONResponse({"error": "غير مصرح"}, status_code=401)
     try:
-        users = get_all_users()
-        teachers = [{"username": u["username"], "full_name": u.get("full_name") or u["username"]} for u in users if u["role"] == "teacher" and u["active"]]
-        return JSONResponse({"ok": True, "teachers": teachers})
+        # نعيد بيانات المعلمين من ملف teachers.json وليس فقط المستخدمين
+        data = load_teachers()
+        return JSONResponse({"ok": True, "teachers": data.get("teachers", [])})
     except Exception as e:
         return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/sync/users", response_class=JSONResponse)
+async def web_sync_users(request: Request):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"error": "غير مصرح"}, status_code=401)
+    try:
+        users = get_all_users()
+        # تحويل كائنات sqlite3.Row إلى dict لضمان إمكانية تحويلها لـ JSON
+        users_list = [dict(u) if not isinstance(u, dict) else u for u in users]
+        return JSONResponse({"ok": True, "users": users_list})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
 
 @router.post("/web/api/create-academic-inquiry", response_class=JSONResponse)
 async def web_create_academic_inquiry(req: Request):
@@ -578,6 +616,148 @@ async def web_create_academic_inquiry(req: Request):
         data = await req.json()
         inq_id = create_academic_inquiry(data)
         return JSONResponse({"ok": True, "id": inq_id})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+# ─── New Sync Endpoints (Batch 1: Counselor & Deletions) ───────
+
+@router.delete("/web/api/absences/{rec_id}", response_class=JSONResponse)
+async def api_delete_absence(rec_id: int, request: Request):
+    user = _get_current_user(request)
+    if not user or user["role"] not in ("admin", "deputy"):
+        return JSONResponse({"ok": False, "msg": "Unauthorized"}, status_code=401)
+    try:
+        delete_absence(rec_id)
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.delete("/web/api/tardiness/{rec_id}", response_class=JSONResponse)
+async def api_delete_tardiness(rec_id: int, request: Request):
+    user = _get_current_user(request)
+    if not user or user["role"] not in ("admin", "deputy"):
+        return JSONResponse({"ok": False, "msg": "Unauthorized"}, status_code=401)
+    try:
+        delete_tardiness(rec_id)
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.delete("/web/api/excuses/{rec_id}", response_class=JSONResponse)
+async def api_delete_excuse(rec_id: int, request: Request):
+    user = _get_current_user(request)
+    if not user or user["role"] not in ("admin", "deputy"):
+        return JSONResponse({"ok": False, "msg": "Unauthorized"}, status_code=401)
+    try:
+        delete_excuse(rec_id)
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.delete("/web/api/circulars/{circ_id}", response_class=JSONResponse)
+async def api_delete_circular_sync(circ_id: int, request: Request):
+    user = _get_current_user(request)
+    if not user or user["role"] != "admin":
+        return JSONResponse({"ok": False, "msg": "Admin only"}, status_code=401)
+    try:
+        delete_circular(circ_id)
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.delete("/web/api/permissions/{perm_id}", response_class=JSONResponse)
+async def api_delete_permission_sync(perm_id: int, request: Request):
+    user = _get_current_user(request)
+    if not user or user["role"] not in ("admin", "deputy"):
+        return JSONResponse({"ok": False, "msg": "Unauthorized"}, status_code=401)
+    try:
+        delete_permission(perm_id)
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+# --- Counselor API ---
+
+@router.post("/web/api/counselor/session/create", response_class=JSONResponse)
+async def api_create_session(req: Request):
+    user = _get_current_user(req)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    try:
+        data = await req.json()
+        sid = insert_counselor_session(data)
+        return JSONResponse({"ok": True, "id": sid})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/counselor/sessions", response_class=JSONResponse)
+async def api_get_sessions(request: Request, student_id: str = None):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    try:
+        rows = get_counselor_sessions(student_id)
+        return JSONResponse({"ok": True, "rows": rows})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.delete("/web/api/counselor/session/{sess_id}", response_class=JSONResponse)
+async def api_delete_session(sess_id: int, request: Request):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    try:
+        delete_counselor_session(sess_id)
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.post("/web/api/counselor/alert/create", response_class=JSONResponse)
+async def api_create_counselor_alert(req: Request):
+    user = _get_current_user(req)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    try:
+        data = await req.json()
+        aid = insert_counselor_alert(data)
+        return JSONResponse({"ok": True, "id": aid})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/counselor/alerts", response_class=JSONResponse)
+async def api_get_counselor_alerts(request: Request, student_id: str = None):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    try:
+        rows = get_counselor_alerts(student_id)
+        return JSONResponse({"ok": True, "rows": rows})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.post("/web/api/counselor/contract/create", response_class=JSONResponse)
+async def api_create_contract(req: Request):
+    user = _get_current_user(req)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    try:
+        data = await req.json()
+        cid = insert_behavioral_contract(data)
+        return JSONResponse({"ok": True, "id": cid})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/counselor/contracts", response_class=JSONResponse)
+async def api_get_contracts(request: Request, student_id: str = None):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    try:
+        rows = get_behavioral_contracts(student_id)
+        return JSONResponse({"ok": True, "rows": rows})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.delete("/web/api/counselor/contract/{cid}", response_class=JSONResponse)
+async def api_delete_contract(cid: int, request: Request):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    try:
+        delete_behavioral_contract(cid)
+        return JSONResponse({"ok": True})
     except Exception as e:
         return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
 
@@ -658,6 +838,19 @@ async def web_referral_update_deputy(req: Request):
         data = await req.json()
         ref_id = int(data.get("id", 0))
         update_referral_deputy(ref_id, data)
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.post("/web/api/referrals/update-counselor", response_class=JSONResponse)
+async def web_referral_update_counselor_api(req: Request):
+    user = _get_current_user(req)
+    if not user or user["role"] not in ("admin", "counselor"):
+        return JSONResponse({"error": "غير مصرح"}, status_code=401)
+    try:
+        data = await req.json()
+        ref_id = int(data.get("id", 0))
+        update_referral_counselor(ref_id, data)
         return JSONResponse({"ok": True})
     except Exception as e:
         return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
@@ -771,6 +964,151 @@ async def web_unread_count(request: Request):
     if not user: return JSONResponse({"error": "غير مصرح"}, status_code=401)
     count = get_unread_circulars_count(user["sub"], user["role"])
     return JSONResponse({"ok": True, "count": count})
+
+# ─── User Management Sync API ─────────────────────────────
+
+@router.post("/web/api/users/create", response_class=JSONResponse)
+async def api_create_user(req: Request):
+    user = _get_current_user(req)
+    if not user or user["role"] != "admin":
+        return JSONResponse({"ok": False, "msg": "Admin only"}, status_code=401)
+    try:
+        data = await req.json()
+        ok, msg = create_user(data["username"], data["password"], data["role"], data.get("full_name",""))
+        return JSONResponse({"ok": ok, "msg": msg})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.post("/web/api/users/update-password", response_class=JSONResponse)
+async def api_update_password(req: Request):
+    user = _get_current_user(req)
+    if not user or user["role"] != "admin":
+        return JSONResponse({"ok": False}, status_code=401)
+    try:
+        data = await req.json()
+        update_user_password(data["username"], data["password"])
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.post("/web/api/users/toggle-active", response_class=JSONResponse)
+async def api_toggle_active(req: Request):
+    user = _get_current_user(req)
+    if not user or user["role"] != "admin":
+        return JSONResponse({"ok": False}, status_code=401)
+    try:
+        data = await req.json()
+        toggle_user_active(data["user_id"], data["active"])
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.delete("/web/api/users/{user_id}", response_class=JSONResponse)
+async def api_delete_user(user_id: int, request: Request):
+    user = _get_current_user(request)
+    if not user or user["role"] != "admin":
+        return JSONResponse({"ok": False}, status_code=401)
+    try:
+        delete_user(user_id)
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.post("/web/api/users/phone", response_class=JSONResponse)
+async def api_user_phone(req: Request):
+    user = _get_current_user(req)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    try:
+        data = await req.json()
+        save_user_phone(data["username"], data["phone"])
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.post("/web/api/users/allowed-tabs", response_class=JSONResponse)
+async def api_user_allowed_tabs(req: Request):
+    user = _get_current_user(req)
+    if not user or user["role"] != "admin":
+        return JSONResponse({"ok": False}, status_code=401)
+    try:
+        data = await req.json()
+        save_user_allowed_tabs(data["username"], data["tabs"])
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/users/deputy-phones", response_class=JSONResponse)
+async def api_deputy_phones(request: Request):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    try:
+        from database import get_deputy_phones
+        phones = get_deputy_phones()
+        return JSONResponse({"ok": True, "phones": phones})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+# --- Schedule & Logs API ---
+
+@router.post("/web/api/schedule/save", response_class=JSONResponse)
+async def api_save_schedule(req: Request):
+    user = _get_current_user(req)
+    if not user or user["role"] != "admin":
+        return JSONResponse({"ok": False}, status_code=401)
+    try:
+        data = await req.json()
+        save_schedule(data["day_of_week"], data["schedule"])
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/schedule", response_class=JSONResponse)
+async def api_get_schedule(request: Request, day_of_week: int):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    try:
+        # load_schedule returns dict{(cid,period): name}, we need rows for JSON
+        con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
+        cur.execute("SELECT class_id, period, teacher_name FROM schedule WHERE day_of_week = ?", (day_of_week,))
+        rows = [dict(r) for r in cur.fetchall()]; con.close()
+        return JSONResponse({"ok": True, "rows": rows})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.post("/web/api/messages-log/create", response_class=JSONResponse)
+async def api_create_msg_log(req: Request):
+    user = _get_current_user(req)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    try:
+        data = await req.json()
+        log_message_status(
+            data["date"], data["student_id"], data["student_name"],
+            data["class_id"], data["class_name"], data["phone"],
+            data["status"], data["template_used"], data.get("message_type", "absence")
+        )
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/messages-log", response_class=JSONResponse)
+async def api_get_msg_log(request: Request, date: str):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    try:
+        rows = query_today_messages(date)
+        return JSONResponse({"ok": True, "rows": rows})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/student-absence-count", response_class=JSONResponse)
+async def api_student_abs_count(request: Request, student_id: str, month: str = None):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    try:
+        data = get_student_absence_count(student_id, month)
+        return JSONResponse({"ok": True, "data": data})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
 
 # ─── خدمة المرفقات (Static) ──────────────────────────────────
 @router.get("/web/api/circulars/attachment/{filename}")
@@ -1076,6 +1414,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
         '}'
         '@media(max-width:420px){.topbar h1{font-size:13px}.section{padding:12px}}'
         '@media print{.topbar,.sidebar,#ov{display:none!important}.content{margin:0!important;padding:0!important}}'
+        '</style><script src="https://cdn.jsdelivr.net/npm/chart.js"></script></head><body>'
     )
 
     # ── محتوى التبويبات ────────────────────────────────────────
@@ -1372,15 +1711,48 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 </div>
 
 <div id="tab-student_analysis">
-  <h2 class="pt"><i class="fas fa-search"></i> تحليل طالب</h2>
+  <h2 class="pt"><i class="fas fa-chart-bar"></i> تحليل الطالب الشامل</h2>
   <div class="section">
-    <div class="fg2">
-      <div class="fg"><label class="fl">الفصل</label><select id="an-class" onchange="loadClsForAn()"><option value="">اختر فصلاً</option></select></div>
-      <div class="fg"><label class="fl">الطالب</label><select id="an-student"><option value="">اختر طالباً</option></select></div>
+    <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+      <div class="fg"><label class="fl">الفصل</label><select id="an-class" onchange="loadClsForAn()" style="min-width:180px"><option value="">اختر فصلاً</option></select></div>
+      <div class="fg"><label class="fl">الطالب</label><select id="an-student" style="min-width:250px"><option value="">اختر طالباً</option></select></div>
+      <button class="btn bp1" onclick="analyzeStudent()">🔍 بدء التحليل</button>
     </div>
-    <button class="btn bp1" onclick="analyzeStudent()">تحليل</button>
   </div>
-  <div id="an-result" style="margin-top:16px"></div>
+
+  <div id="an-result" style="display:none;margin-top:20px">
+    <!-- كروت الإحصائيات -->
+    <div id="an-cards" class="stat-cards" style="margin-bottom:20px"></div>
+
+    <!-- الرسوم البيانية -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(400px, 1fr));gap:20px;margin-bottom:20px">
+      <div class="section">
+        <div class="st">📈 اتجاه غياب الطالب (شهرياً)</div>
+        <div style="height:320px; position:relative;">
+          <canvas id="an-chart-line"></canvas>
+        </div>
+      </div>
+      <div class="section">
+        <div class="st">📊 توزيع السلوك والتأخر</div>
+        <div style="height:320px; position:relative;">
+          <canvas id="an-chart-pie"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- السجل الزمني -->
+    <div class="section">
+      <div class="st">📅 السجل الزمني لأحدث الإجراءات</div>
+      <div class="tw">
+        <table>
+          <thead>
+            <tr><th>التاريخ</th><th>النوع</th><th>التفاصيل</th><th>الحالة</th></tr>
+          </thead>
+          <tbody id="an-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div id="tab-top_absent">
@@ -2490,26 +2862,97 @@ async function sendAdminReport(){
 }
 
 /* ── STUDENT ANALYSIS ── */
+var anCharts = {};
 async function loadClsForAn(){
-  var cid=document.getElementById('an-class').value;if(!cid)return;
-  var d=await api('/web/api/class-students/'+cid);if(!d||!d.ok)return;
-  document.getElementById('an-student').innerHTML='<option value="">اختر طالباً</option>'+
+  var cid = document.getElementById('an-class').value; if(!cid) return;
+  var d = await api('/web/api/class-students/'+cid); if(!d||!d.ok) return;
+  document.getElementById('an-student').innerHTML = '<option value="">اختر طالباً</option>' +
     d.students.map(function(s){return '<option value="'+s.id+'">'+s.name+'</option>';}).join('');
 }
+
 async function analyzeStudent(){
-  var sid=document.getElementById('an-student').value;if(!sid){alert('اختر طالباً');return;}
-  document.getElementById('an-result').innerHTML='<div class="loading">⏳ جارٍ التحليل...</div>';
-  var d=await api('/web/api/student-analysis/'+sid);if(!d||!d.ok){document.getElementById('an-result').innerHTML='<div class="section">❌ خطأ</div>';return;}
-  var data=d.data;var ac=data.total_absences>=5?'#C62828':'#1565C0';
-  document.getElementById('an-result').innerHTML='<div class="stat-cards">'+
-    '<div class="sc" style="border-bottom:3px solid '+ac+'"><div class="v" style="color:'+ac+'">'+data.total_absences+'</div><div class="l">إجمالي الغياب</div></div>'+
-    '<div class="sc"><div class="v" style="color:#2E7D32">'+data.excused_days+'</div><div class="l">مبرر</div></div>'+
-    '<div class="sc"><div class="v" style="color:#C62828">'+data.unexcused_days+'</div><div class="l">غير مبرر</div></div>'+
-    '<div class="sc"><div class="v" style="color:#E65100">'+data.total_tardiness+'</div><div class="l">تأخر</div></div>'+
-    '<div class="sc"><div class="v" style="color:#0277BD">'+(data.total_permissions||0)+'</div><div class="l">استئذانات</div></div>'+
-    '</div><div class="section"><div class="st">آخر الغيابات</div><div class="tw"><table><thead><tr><th>التاريخ</th><th>الفصل</th><th>الحصة</th></tr></thead><tbody>'+
-    (data.absence_rows||[]).slice(0,10).map(function(r){return '<tr><td>'+r.date+'</td><td>'+r.class_name+'</td><td>'+(r.period||'-')+'</td></tr>';}).join('')+
-    '</tbody></table></div></div>';
+  var sid = document.getElementById('an-student').value;
+  if(!sid){ alert('يرجى اختيار طالب أولاً'); return; }
+  
+  document.getElementById('an-result').style.display = 'block';
+  document.getElementById('an-cards').innerHTML = '<div class="loading">⏳ جارٍ التحميل...</div>';
+  
+  try {
+    var res = await fetch('/web/api/student-analytics/' + sid);
+    var d = await res.json();
+    if(!d.ok){ alert('❌ فشل جلب البيانات: ' + d.msg); return; }
+    
+    var data = d.data;
+    
+    // (1) تحديث الكروت
+    var cardsHtml = 
+      crd(data.total_absences, (data.total_absences >= 5 ? '#C62828' : '#1565C0'), 'إجمالي الغياب', '<i class="fas fa-user-times"></i>') +
+      crd(data.total_tardiness, '#E65100', 'دقائق التأخر', '<i class="fas fa-clock"></i>') +
+      crd(data.behavior_referrals, '#C62828', 'المخالفات السلوكية', '<i class="fas fa-user-shield"></i>') +
+      crd(data.academic_results, '#2E7D32', 'المعدل / التقدير', '<i class="fas fa-graduation-cap"></i>');
+    document.getElementById('an-cards').innerHTML = cardsHtml;
+    
+    // (2) تحديث الجدول
+    var tableHtml = (data.recent_events || []).map(function(ev){
+      var color = ev.type==='غياب'?'#ef4444':(ev.type==='تأخر'?'#f59e0b':'#3b82f6');
+      return '<tr>' +
+        '<td>'+ev.date+'</td>' +
+        '<td><span class="badge" style="background:'+color+';color:white">'+ev.type+'</span></td>' +
+        '<td>'+(ev.details || '-')+'</td>' +
+        '<td><span class="badge bg">'+(ev.status || '-')+'</span></td>' +
+      '</tr>';
+    }).join('') || '<tr><td colspan="4" style="color:#94A3B8;text-align:center">لا يوجد سجلات حالية</td></tr>';
+    document.getElementById('an-table-body').innerHTML = tableHtml;
+    
+    // (3) الرسوم البيانية
+    renderAnCharts(data);
+    
+  } catch(e) {
+    console.error('analyzeStudent Error:', e);
+    alert('❌ حدث خطأ أثناء التحليل');
+  }
+}
+
+function renderAnCharts(data){
+  // تدمير الرسوم السابقة إن وجدت
+  if(anCharts.line) anCharts.line.destroy();
+  if(anCharts.pie) anCharts.pie.destroy();
+  
+  // -- Line Chart (Absence Trend) --
+  var lineCtx = document.getElementById('an-chart-line').getContext('2d');
+  var trend = data.absence_trend || {};
+  var labels = Object.keys(trend).sort();
+  var points = labels.map(function(l){ return trend[l]; });
+  
+  anCharts.line = new Chart(lineCtx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'حالات الغياب',
+        data: points,
+        borderColor: '#1565C0',
+        backgroundColor: 'rgba(21, 101, 192, 0.1)',
+        tension: 0.3,
+        fill: true
+      }]
+    },
+    options: { responsive: true, maintainAspectRatio: false }
+  });
+  
+  // -- Pie Chart (Behavior/Tardiness) --
+  var pieCtx = document.getElementById('an-chart-pie').getContext('2d');
+  anCharts.pie = new Chart(pieCtx, {
+    type: 'doughnut',
+    data: {
+      labels: ['تأخر', 'مخالفات سلوكية', 'جلسات إرشادية'],
+      datasets: [{
+        data: [data.total_tardiness, data.behavior_referrals, data.counselor_sessions],
+        backgroundColor: ['#f59e0b', '#ef4444', '#10b981']
+      }]
+    },
+    options: { responsive: true, maintainAspectRatio: false }
+  });
 }
 
 /* ── REPORTS ── */

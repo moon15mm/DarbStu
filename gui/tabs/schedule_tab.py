@@ -8,7 +8,7 @@ from config_manager import load_config
 from database import load_teachers
 from alerts_service import (get_tardiness_recipients, load_schedule,
                              save_schedule, save_tardiness_recipients)
-from whatsapp_service import check_whatsapp_server_status, send_whatsapp_message, start_whatsapp_server
+from whatsapp_service import check_whatsapp_server_status, send_whatsapp_message
 
 class ScheduleTabMixin:
     """Mixin: ScheduleTabMixin"""
@@ -197,34 +197,9 @@ class ScheduleTabMixin:
         self._wa_mini_text = ttk.Label(wa_mini_row, text="جارٍ التحقق...", font=("Tahoma", 9))
         self._wa_mini_text.pack(side="right", padx=(0, 6))
 
-        def _mini_start_wa():
-            if not os.path.isdir(WHATS_PATH):
-                messagebox.showerror("خطأ", "مجلد الواتساب غير موجود:\n" + WHATS_PATH)
-                return
-            try:
-                # يشغّل الخادم مع تعطيل البوت تلقائياً
-                cmd = rf'cmd.exe /k "cd /d {WHATS_PATH} && npm start"'
-                subprocess.Popen(cmd, creationflags=subprocess.CREATE_NEW_CONSOLE)
-                self._wa_mini_text.config(text="جارٍ التشغيل... انتظر 10 ثوانٍ")
-                # بعد تشغيل الخادم أوقف البوت تلقائياً
-                def _disable_bot_after_start():
-                    try:
-                        import urllib.request as _ur
-                        data = json.dumps({"enabled": False}).encode()
-                        req = _ur.Request("http://localhost:3000/bot-toggle",
-                                          data=data,
-                                          headers={"Content-Type": "application/json"},
-                                          method="POST")
-                        _ur.urlopen(req, timeout=3)
-                        print("[WA] البوت مُوقَف تلقائياً عند التشغيل من تبويب التأخر")
-                    except Exception:
-                        pass
-                pass  # لا جدولة تلقائية
-                frame.after(11000, _disable_bot_after_start)
-            except Exception as e:
-                messagebox.showerror("خطأ", "تعذّر التشغيل:\n" + str(e))
-
         def _mini_check():
+            self.check_whatsapp_status_ui()
+            # فحص سريع للمؤشر الصغير أيضاً
             try:
                 import urllib.request, json as _j
                 r = urllib.request.urlopen("http://localhost:3000/status", timeout=1)
@@ -238,12 +213,9 @@ class ScheduleTabMixin:
             except Exception:
                 self._wa_mini_dot.config(fg="#ef4444")
                 self._wa_mini_text.config(text="🔴 غير متصل", foreground="#991b1b")
-            pass  # لا جدولة تلقائية
 
-        ttk.Button(wa_mini_row, text="▶ تشغيل",
-                   command=_mini_start_wa).pack(side="left", padx=4)
-        ttk.Button(wa_mini_row, text="🔄",
-                   command=_mini_check).pack(side="left", padx=2)
+        ttk.Button(wa_mini_row, text="🔍 فحص الحالة",
+                   command=_mini_check).pack(side="left", padx=4)
 
         # فحص عند الضغط فقط — لا جدولة تلقائية
 
@@ -455,7 +427,7 @@ class ScheduleTabMixin:
         selected_day = self.selected_day_var.get()
         classes = sorted(self.store["list"], key=lambda c: c['id'])
         teachers_data = load_teachers()
-        teacher_names = [""] + [t["اسم المعلم"] for t in teachers_data.get("teachers", [])]
+        teacher_names = [""] + [t.get("اسم المعلم", "") for t in teachers_data.get("teachers", [])]
         saved_schedule = load_schedule(selected_day)
 
         header_font = ("Segoe UI", 10, "bold")
@@ -599,7 +571,7 @@ class ScheduleTabMixin:
             self.log_scheduler_message(f"الحصة {period}: لا يوجد معلمون مجدولون لهذه الحصة.")
             return
 
-        all_teachers = {t["اسم المعلم"]: t for t in load_teachers().get("teachers", [])}
+        all_teachers = {t.get("اسم المعلم", ""): t for t in load_teachers().get("teachers", [])}
 
         for teacher_name, assigned_classes in teachers_to_notify.items():
             teacher_data = all_teachers.get(teacher_name)

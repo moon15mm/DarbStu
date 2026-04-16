@@ -6,7 +6,7 @@ import sqlite3
 from constants import now_riyadh_date, CONFIG_JSON
 from config_manager import invalidate_config_cache, load_config
 from database import get_db, load_students, query_tardiness
-from whatsapp_service import start_whatsapp_server, send_whatsapp_message
+from whatsapp_service import send_whatsapp_message
 
 class TardinessMessagesTabMixin:
     """Mixin: TardinessMessagesTabMixin"""
@@ -29,8 +29,8 @@ class TardinessMessagesTabMixin:
                   width=12).pack(side="right", padx=4)
         ttk.Button(top, text="تحميل المتأخرين",
                    command=self._tard_msg_load).pack(side="right", padx=4)
-        ttk.Button(top, text="تشغيل WhatsApp Server",
-                   command=start_whatsapp_server).pack(side="right", padx=4)
+        ttk.Button(top, text="🔍 حالة الواتساب",
+                   command=self.check_whatsapp_status_ui).pack(side="right", padx=4)
 
         self.tard_global_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(top, text="اختيار الجميع",
