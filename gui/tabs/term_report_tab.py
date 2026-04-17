@@ -48,8 +48,8 @@ class TermReportTabMixin:
                                      font=("Tahoma",9), state="disabled", bg="#FAFAFA")
         sb = ttk.Scrollbar(prev_lf, orient="vertical", command=self.term_preview.yview)
         self.term_preview.configure(yscrollcommand=sb.set)
-        self.term_preview.pack(side="left", fill="both", expand=True)
         sb.pack(side="right", fill="y")
+        self.term_preview.pack(side="left", fill="both", expand=True)
         self._term_html = ""
 
     def _generate_term_report(self):
@@ -57,7 +57,6 @@ class TermReportTabMixin:
         mt = self.term_to_var.get().strip()   if hasattr(self,"term_to_var")   else None
         if hasattr(self,"term_status"):
             self.term_status.config(text="⏳ جارٍ الإنشاء...")
-        self.root.update_idletasks()
         import threading as _th
         def _build():
             try:

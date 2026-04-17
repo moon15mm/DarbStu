@@ -24,7 +24,21 @@ try:
     
     Figure = _Figure
     FigureCanvasTkAgg = _FigureCanvasTkAgg
-    
+
+    # إصلاح بق matplotlib على Windows (Python 3.12+):
+    # event.widget يُعاد كـ string بدل widget → AttributeError في scroll_event_windows
+    try:
+        from matplotlib.backends._backend_tk import FigureCanvasTk as _FigCvTk
+        _orig_scroll = _FigCvTk.scroll_event_windows
+        def _safe_scroll(self, event):
+            try:
+                return _orig_scroll(self, event)
+            except AttributeError:
+                pass
+        _FigCvTk.scroll_event_windows = _safe_scroll
+    except Exception:
+        pass
+
     # دعم اللغة العربية
     try:
         import arabic_reshaper as _ar

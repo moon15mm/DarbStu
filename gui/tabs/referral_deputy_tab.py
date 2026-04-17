@@ -84,8 +84,8 @@ class DeputyReferralTabMixin:
         sb = ttk.Scrollbar(list_frame, orient="vertical",
                             command=self._dep_tree.yview)
         self._dep_tree.configure(yscrollcommand=sb.set)
-        self._dep_tree.pack(side="left", fill="both", expand=True)
         sb.pack(side="right", fill="y")
+        self._dep_tree.pack(side="left", fill="both", expand=True)
         self._dep_tree.bind("<<TreeviewSelect>>", self._on_dep_select)
         self._dep_tree.bind("<Double-1>", lambda e: self._open_dep_detail())
 
@@ -108,11 +108,15 @@ class DeputyReferralTabMixin:
         _dcv_win = dcv.create_window((0, 0), window=self._dep_detail_frame,
                                       anchor="nw")
 
+        self._dep_detail_frame.bind("<Configure>",
+            lambda e: dcv.configure(scrollregion=dcv.bbox("all")))
+        _dcv_last_w = [0]
         def _dcfg(e):
-            dcv.configure(scrollregion=dcv.bbox("all"))
-            dcv.itemconfig(_dcv_win, width=dcv.winfo_width())
-        self._dep_detail_frame.bind("<Configure>", _dcfg)
-        dcv.bind("<Configure>", lambda e: dcv.itemconfig(_dcv_win, width=e.width))
+            w = dcv.winfo_width()
+            if w == _dcv_last_w[0]: return
+            _dcv_last_w[0] = w
+            dcv.itemconfig(_dcv_win, width=w)
+        dcv.bind("<Configure>", _dcfg)
         dcv.bind("<MouseWheel>", lambda e: dcv.yview_scroll(-1*(e.delta//120), "units"))
 
         # placeholder

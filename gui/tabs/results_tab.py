@@ -6,7 +6,7 @@ import sqlite3
 from constants import PORT, STATIC_DOMAIN, local_ip, DATA_DIR, DB_PATH
 from pdf_generator import parse_results_pdf, save_results_to_db
 from license_manager import activate_license
-from database import load_students
+from database import load_students, clear_student_results, get_cloud_client
 
 class ResultsTabMixin:
     """Mixin: ResultsTabMixin"""
@@ -82,8 +82,11 @@ class ResultsTabMixin:
         self.results_stats_lbl = ttk.Label(stats_lf, text="",
                                             font=("Tahoma",10))
         self.results_stats_lbl.pack(anchor="e")
-        ttk.Button(stats_lf, text="🔄 تحديث الإحصائيات",
-                   command=self._results_refresh_stats).pack(side="left", pady=4)
+        srow = ttk.Frame(stats_lf); srow.pack(fill="x", pady=4)
+        ttk.Button(srow, text="🔄 تحديث الإحصائيات",
+                   command=self._results_refresh_stats).pack(side="right", padx=4)
+        ttk.Button(srow, text="🗑️ مسح جميع النتائج السابقة",
+                   command=self._results_clear_all).pack(side="right", padx=4)
 
         self._results_refresh_stats()
 
@@ -109,8 +112,25 @@ class ResultsTabMixin:
 
         def _run():
             try:
-                # نسخ الـ PDF إلى الموقع المشترك مع واجهة الويب
-                # حتى يتمكن الطلاب من عرض شهاداتهم عبر الويب أيضاً
+                client = get_cloud_client()
+                if client.is_active():
+                    # وضع الربط السحابي: ارفع الملف للسيرفر ودعه يقوم بالتنقية والفهرسة
+                    self.root.after(0, lambda: self.results_status.config(text="☁️ جارٍ رفع الملف للسيرفر للمزامنة..."))
+                    res = client.upload("/web/api/upload-results", path, data={"year": year})
+                    
+                    if res.get("ok"):
+                        def _done():
+                            count = res.get("count", 0)
+                            self.results_status.config(
+                                text=f"✅ تم الرفع والمزامنة — تم فهرسة {count} شهادة على السيرفر",
+                                foreground="#2E7D32")
+                            self._results_refresh_stats()
+                        self.root.after(0, _done)
+                        return
+                    else:
+                        raise Exception(res.get("msg", "فشل الرفع للسيرفر"))
+
+                # الوضع المحلي: فهرسة يدوية
                 results_dir = os.path.join(DATA_DIR, "results")
                 os.makedirs(results_dir, exist_ok=True)
                 shared_pdf = os.path.join(results_dir, f"results_{year or 'current'}.pdf")
@@ -139,7 +159,6 @@ class ResultsTabMixin:
                     self.results_status.config(
                         text="❌ خطأ: {}".format(msg),
                         foreground="#C62828")
-                    # عرض الخطأ الكامل في نافذة منبثقة
                     messagebox.showerror("تفاصيل الخطأ", tb)
                 self.root.after(0, _err)
 
@@ -158,6 +177,21 @@ class ResultsTabMixin:
                     count, last))
         except Exception as e:
             self.results_stats_lbl.config(text="خطأ: {}".format(e))
+
+    def _results_clear_all(self):
+        if not messagebox.askyesno("تأكيد المَسح",
+            "🔴 هل أنت متأكد من رغبتك في حذف جميع نتائج الطلاب المنشورة سابقاً؟\n\nلا يمكن التراجع عن هذه الخطوة."):
+            return
+            
+        try:
+            from database import clear_student_results
+            clear_student_results()
+            messagebox.showinfo("تم", "✅ تم مسح جميع النتائج بنجاح.")
+            self._results_refresh_stats()
+            # تحديث الحالة أيضاً
+            self.results_status.config(text="تم مسح النتائج السابقة — بانتظار رفع ملف جديد", foreground="#5A6A7E")
+        except Exception as e:
+            messagebox.showerror("خطأ", f"تعذر المسح: {e}")
 
 
     def _build_license_tab(self):

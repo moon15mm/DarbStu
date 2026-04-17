@@ -29,7 +29,7 @@ from alerts_service import (log_message_status, query_today_messages,
                              load_schedule, save_schedule,
                              query_permissions, insert_permission,
                              update_permission_status, delete_permission)
-from pdf_generator import (results_portal_html, student_result_html)
+from pdf_generator import (results_portal_html, student_result_html, get_student_result, _render_pdf_page_as_png)
 
 router = APIRouter()
 
@@ -2037,9 +2037,23 @@ async def student_result_image(identity_no: str):
             return Response(content=b"", status_code=404)
         pdf_path = result.get("pdf_path", "")
         page_no  = int(result.get("page_no", 0))
+        
+        # Fallback: إذا لم يوجد الملف في المسار المخزن، ابحث عنه في مجلد النتائج الافتراضي
+        if not pdf_path or not os.path.exists(pdf_path):
+            year = result.get("school_year", "")
+            alt_path = os.path.join(DATA_DIR, "results", f"results_{year}.pdf")
+            if os.path.exists(alt_path):
+                pdf_path = alt_path
+            else:
+                # محاولة أخرى بالاسم الافتراضي
+                alt_path2 = os.path.join(DATA_DIR, "results", "results_current.pdf")
+                if os.path.exists(alt_path2):
+                    pdf_path = alt_path2
+
         if not pdf_path or not os.path.exists(pdf_path):
             return Response(content=b"", status_code=404,
                             media_type="text/plain")
+                            
         img_bytes = _render_pdf_page_as_png(pdf_path, page_no, dpi=150)
         return Response(content=img_bytes, media_type="image/jpeg")
     except Exception as e:
@@ -2049,8 +2063,12 @@ async def student_result_image(identity_no: str):
 @router.get("/api/results/{identity_no}", response_class=JSONResponse)
 async def api_check_result(identity_no: str):
     """يتحقق من وجود نتيجة لرقم هوية معين."""
+    identity_no = identity_no.strip()
     result = get_student_result(identity_no)
-    return JSONResponse({"ok": result is not None})
+    
+    return JSONResponse({
+        "ok": result is not None
+    })
 
 @router.post("/api/send-bulk-messages", response_class=JSONResponse)
 async def send_bulk_messages_api(request: Request):

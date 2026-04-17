@@ -59,6 +59,36 @@ class CloudDBClient:
             print(f"[CLOUD-POST-EXCEPTION] {endpoint} -> {e}")
             return {"ok": False, "msg": str(e)}
 
+    def delete(self, endpoint, params=None):
+        try:
+            resp = requests.delete(f"{self.url}{endpoint}", params=params, headers=self._get_headers(), timeout=10)
+            if resp.status_code != 200:
+                print(f"[CLOUD-DELETE-ERROR] {endpoint} -> Status {resp.status_code}: {resp.text[:200]}")
+            return resp.json() if resp.status_code == 200 else {"ok": False, "msg": f"Error {resp.status_code}"}
+        except Exception as e:
+            print(f"[CLOUD-DELETE-EXCEPTION] {endpoint} -> {e}")
+            return {"ok": False, "msg": str(e)}
+
+    def put(self, endpoint, json_data):
+        try:
+            resp = requests.put(f"{self.url}{endpoint}", json=json_data, headers=self._get_headers(), timeout=10)
+            if resp.status_code != 200:
+                print(f"[CLOUD-PUT-ERROR] {endpoint} -> Status {resp.status_code}: {resp.text[:200]}")
+            return resp.json() if resp.status_code == 200 else {"ok": False, "msg": f"Error {resp.status_code}"}
+        except Exception as e:
+            print(f"[CLOUD-PUT-EXCEPTION] {endpoint} -> {e}")
+            return {"ok": False, "msg": str(e)}
+
+    def patch(self, endpoint, json_data):
+        try:
+            resp = requests.patch(f"{self.url}{endpoint}", json=json_data, headers=self._get_headers(), timeout=10)
+            if resp.status_code != 200:
+                print(f"[CLOUD-PATCH-ERROR] {endpoint} -> Status {resp.status_code}: {resp.text[:200]}")
+            return resp.json() if resp.status_code == 200 else {"ok": False, "msg": f"Error {resp.status_code}"}
+        except Exception as e:
+            print(f"[CLOUD-PATCH-EXCEPTION] {endpoint} -> {e}")
+            return {"ok": False, "msg": str(e)}
+
 _cloud_client = CloudDBClient()
 
 def get_cloud_client():
@@ -486,6 +516,17 @@ def init_db():
         read_at          TEXT NOT NULL,
         UNIQUE(circular_id, username)
     )""")
+
+    # ─── جدول ملاحظات الطالب الإدارية ───────────────────────
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS student_notes (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id  TEXT NOT NULL,
+        note        TEXT NOT NULL,
+        author      TEXT NOT NULL DEFAULT '',
+        created_at  TEXT NOT NULL
+    )""")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_snotes_student ON student_notes(student_id)")
 
     migrate_circulars_permission(cur)
     con.commit(); con.close()
@@ -2086,5 +2127,59 @@ def get_student_analytics_data(student_id: str) -> Dict[str, Any]:
     events.sort(key=lambda x: x["date"], reverse=True)
     data["recent_events"] = events[:20]
 
+    # إجمالي أيام الدراسة الفعلية (أيام تم تسجيل غياب فيها لأي طالب)
+    cur.execute("SELECT COUNT(DISTINCT date) FROM absences")
+    row = cur.fetchone()
+    data["total_school_days"] = max(row[0], 1) if row else 1
+
+    # الأعذار المقبولة
+    cur.execute("SELECT date FROM excuses WHERE student_id=?", (student_id,))
+    excused_dates = {r[0] for r in cur.fetchall()}
+    data["excused_count"]   = len(excused_dates)
+    data["unexcused_count"] = max(0, len(data["absences"]) - len(excused_dates))
+
+    # توزيع الغياب حسب يوم الأسبوع
+    day_names = ["الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت","الأحد"]
+    dow = {d: 0 for d in day_names}
+    import datetime as _dt
+    for a in data["absences"]:
+        try:
+            d = _dt.date.fromisoformat(a["date"])
+            dow[day_names[d.weekday()]] += 1
+        except: pass
+    data["absence_by_dow"] = dow
+
+    # الملاحظات الإدارية
+    cur.execute("SELECT id, note, author, created_at FROM student_notes WHERE student_id=? ORDER BY created_at DESC", (student_id,))
+    data["notes"] = [{"id": r[0], "note": r[1], "author": r[2], "created_at": r[3]} for r in cur.fetchall()]
+
     con.close()
     return data
+
+
+def get_student_notes(student_id: str) -> list:
+    con = get_db(); cur = con.cursor()
+    cur.execute("SELECT id, note, author, created_at FROM student_notes WHERE student_id=? ORDER BY created_at DESC", (student_id,))
+    rows = [{"id": r[0], "note": r[1], "author": r[2], "created_at": r[3]} for r in cur.fetchall()]
+    con.close()
+    return rows
+
+def add_student_note(student_id: str, note: str, author: str) -> int:
+    import datetime as _dt
+    con = get_db(); cur = con.cursor()
+    cur.execute("INSERT INTO student_notes (student_id, note, author, created_at) VALUES (?,?,?,?)",
+                (student_id, note, author, _dt.datetime.now().strftime("%Y-%m-%d %H:%M")))
+    new_id = cur.lastrowid
+    con.commit(); con.close()
+    return new_id
+
+def delete_student_note(note_id: int):
+    con = get_db(); cur = con.cursor()
+    cur.execute("DELETE FROM student_notes WHERE id=?", (note_id,))
+    con.commit(); con.close()
+
+
+def clear_student_results():
+    con = get_db(); cur = con.cursor()
+    cur.execute("DELETE FROM student_results")
+    con.commit(); con.close()

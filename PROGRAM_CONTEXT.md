@@ -4,7 +4,7 @@
 > المستودع: `https://github.com/moon15mm/DarbStu`
 
 > [!IMPORTANT]
-> آخر تحديث لهذا الملف: أبريل 2026 — يشمل نظام التعاميم الرسمية، الربط السحابي الكامل، وتحسينات تجربة المستخدم في وضع العميل.
+> آخر تحديث لهذا الملف: 17 أبريل 2026 — يشمل إصلاحات تبويب المستخدمين، فصل أزرار المعلمين، وإصلاح حلقات Canvas في تبويبات التحويلات.
 
 ---
 
@@ -118,5 +118,89 @@ DarbStu/
 
 ---
 
-*آخر تحديث: 16 أبريل 2026*
+## 7. إصلاحات جلسة 17 أبريل 2026
+
+### أ. إصلاح Mixins مفقودة في AppGUI
+ثلاث Mixins كانت مستوردة لكنها غير مُضافة لتعريف الكلاس، مما يسبب `AttributeError` عند فتح التبويبات:
+- `ClassNamingTabMixin` → تبويب "إدارة الفصول"
+- `TeacherFormsTabMixin` → تبويب "نماذج المعلم"
+- `CircularsTabMixin` → تبويب "التعاميم والنشرات"
+- **الملف:** `gui/app_gui.py` — أُضيفت للـ class inheritance
+
+### ب. إصلاح حلقة Canvas اللانهائية في تبويبات التحويلات
+نمط خاطئ: callback واحد مربوط بالـ inner frame يجمع `scrollregion` + `itemconfig(width)` → حلقة لا نهائية.
+- **الملفات المُصلحة:** `gui/tabs/referral_deputy_tab.py`، `gui/tabs/referral_teacher_tab.py`
+- **القاعدة الثابتة:** inner frame → `scrollregion` فقط | canvas → `itemconfig(width)` فقط مع guard
+
+### ج. إصلاحات شاملة في تبويب المستخدمين (`gui/tabs/users_tab.py`)
+
+| المشكلة | السبب | الحل |
+|---------|-------|------|
+| `frame.after()` يرفع NameError | `frame` متغير محلي في `_build_users_tab` | استبدل بـ `self.users_frame.after()` |
+| Scrollbar لا يظهر | `canvas.pack()` قبل `sb2.pack()` → canvas يستولي على كل المساحة | عكس الترتيب: `sb2` أولاً ثم `canvas` |
+| زر تفعيل/تعطيل لا يعمل | يبحث عن نص `"فعّال"` لكن القيمة `"✅"` | صُحح إلى `"✅" in str(vals[4])` |
+| تقطيع عند اختيار مستخدم | كل `var.set()` يُطلق `<Configure>` → 30+ تحديث للـ canvas | تعطيل `<Configure>` مؤقتاً أثناء التحديث الجماعي، تحديث واحد في النهاية |
+| أزرار المعلمين مدمجة | زر واحد يجمع التوليد والإرسال | فُصل إلى: "⚙️ توليد حسابات المعلمين" + "📤 إرسال بيانات الدخول" |
+
+**دالة الإرسال الجديدة `_user_send_teacher_creds`:** تُعيد توليد كلمة مرور عشوائية لكل معلم موجود في DB وترسلها بالواتساب.
+
+### د. النمط الصحيح لـ Canvas القابل للتمرير (مرجع دائم)
+```python
+# 1. الـ scrollbar يُعبأ أولاً دائماً
+sb.pack(side="right", fill="y")
+canvas.pack(side="left", fill="both", expand=True)
+
+# 2. inner frame → scrollregion فقط
+inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+
+# 3. canvas → itemconfig(width) فقط مع guard
+_last_w = [0]
+def _on_canvas_conf(e):
+    w = canvas.winfo_width()
+    if w == _last_w[0]: return
+    _last_w[0] = w
+    canvas.itemconfig(win_id, width=w)
+canvas.bind("<Configure>", _on_canvas_conf)
+
+# 4. عند التحديث الجماعي للعناصر → عطّل <Configure> مؤقتاً
+inner.unbind("<Configure>")
+# ... التحديثات ...
+inner.bind("<Configure>", ...)
+canvas.configure(scrollregion=canvas.bbox("all"))  # تحديث واحد
+```
+
+---
+
+---
+
+## 8. تطوير تبويب تحليل الطالب (17 أبريل 2026)
+
+### الميزات المُضافة في `gui/tabs/student_analysis_tab.py`
+
+| الميزة | التفاصيل |
+|--------|----------|
+| **بطاقة الطالب الشخصية** | الاسم + الفصل + رقم الطالب + زر واتساب مباشر لولي الأمر |
+| **مؤشر الخطر التلقائي** | يحسب: `غياب×3 + تأخر÷10 + مخالفات×5` ← أخضر/أصفر/أحمر |
+| **6 كروت KPI** | إجمالي الغياب، مبرر، غير مبرر، دقائق التأخر، المخالفات، المعدل |
+| **خريطة أيام الأسبوع** | رسم بياني يوضح أي الأيام تتكرر فيها غيابات الطالب |
+| **فصل الغياب المبرر** | يُقارن غيابات قاعدة `excuses` بإجمالي الغياب |
+| **ملاحظات إدارية** | إضافة/حذف ملاحظات مرتبطة بـ DB — جدول `student_notes` |
+| **تصدير HTML للطباعة** | تقرير كامل بكل البيانات يُفتح في المتصفح |
+| **تمرير عمودي كامل** | الصفحة كلها داخل Canvas قابل للتمرير |
+
+### التغييرات في `database.py`
+- جدول جديد `student_notes` (id, student_id, note, author, created_at)
+- دوال جديدة: `get_student_notes()`, `add_student_note()`, `delete_student_note()`
+- تحديث `get_student_analytics_data()` ليرجع:
+  - `excused_count` / `unexcused_count` (من جدول `excuses`)
+  - `absence_by_dow` (توزيع الغياب على أيام الأسبوع)
+  - `notes` (ملاحظات الطالب)
+
+### إصلاح ترتيب pack في 9 ملفات
+الـ Scrollbar يجب أن يُعبأ **قبل** الـ Treeview/Canvas دائماً — إلا يختفي.
+ملفات مُصلحة: `term_report_tab`, `referral_deputy_tab`, `dashboard_tab`, `tardiness_msg_tab`, `counselor_tab` (موضعان), `teacher_inquiries_tab`, `excuses_tab`, `noor_tab`, `alerts_tab` (4 مواضع).
+
+---
+
+*آخر تحديث: 17 أبريل 2026*
 *الحالة: مستقر وجاهز للنشر*

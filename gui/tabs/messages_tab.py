@@ -55,10 +55,13 @@ class MessagesTabMixin:
             lambda e: self.msg_canvas.configure(scrollregion=self.msg_canvas.bbox("all"))
         )
 
-        self.msg_canvas.bind(
-            "<Configure>",
-            lambda e: self.msg_canvas.itemconfigure(self._msg_canvas_window, width=e.width)
-        )
+        _msg_last_w = [0]
+        def _on_msg_canvas_conf(e):
+            w = e.width
+            if w == _msg_last_w[0]: return
+            _msg_last_w[0] = w
+            self.msg_canvas.itemconfigure(self._msg_canvas_window, width=w)
+        self.msg_canvas.bind("<Configure>", _on_msg_canvas_conf)
 
         self._msg_load_groups()
 

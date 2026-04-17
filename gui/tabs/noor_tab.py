@@ -73,8 +73,8 @@ class NoorTabMixin:
             self.tree_noor.column(col, width=w, anchor="center")
         sb = ttk.Scrollbar(hist, orient="vertical", command=self.tree_noor.yview)
         self.tree_noor.configure(yscrollcommand=sb.set)
-        self.tree_noor.pack(side="left", fill="both", expand=True)
         sb.pack(side="right", fill="y")
+        self.tree_noor.pack(side="left", fill="both", expand=True)
         ttk.Button(hist, text="📂 فتح المجلد",
                    command=self._noor_open_dir).pack(pady=4)
         frame.after(100, self._noor_load_history)
@@ -97,7 +97,7 @@ class NoorTabMixin:
                     text="✅ تم التصدير: {} ({} KB)".format(
                         os.path.basename(filename), size_kb),
                     foreground="green")
-            frame.after(100, self._noor_load_history)
+            self.noor_export_frame.after(100, self._noor_load_history)
             messagebox.showinfo("تم التصدير", "تم حفظ ملف نور:\n{}".format(filename))
         except Exception as e:
             if hasattr(self,"noor_status"):

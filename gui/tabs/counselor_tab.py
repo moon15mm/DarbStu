@@ -58,8 +58,8 @@ class CounselorTabMixin:
 
         sb = ttk.Scrollbar(win, orient="vertical", command=tr.yview)
         tr.configure(yscrollcommand=sb.set)
-        tr.pack(side="left", fill="both", expand=True)
         sb.pack(side="right", fill="y")
+        tr.pack(side="left", fill="both", expand=True)
 
         def on_dbl(event):
             sel = tr.selection()
@@ -88,22 +88,25 @@ class CounselorTabMixin:
 
         canvas_frame = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         
-        # ضبط عرض الإطار الداخلي ليناسب عرض الكانفس
+        # ضبط عرض الإطار الداخلي ليناسب عرض الكانفس (مع guard لمنع التحديثات الزائدة)
+        _csl_last_w = [0]
         def _on_canvas_configure(e):
-            canvas.itemconfig(canvas_frame, width=e.width)
+            w = e.width
+            if w == _csl_last_w[0]: return
+            _csl_last_w[0] = w
+            canvas.itemconfig(canvas_frame, width=w)
         canvas.bind("<Configure>", _on_canvas_configure)
 
         canvas.configure(yscrollcommand=scrollbar.set)
-        
+
         scrollbar.pack(side="right", fill="y")
         canvas.pack(side="left", fill="both", expand=True)
 
-        # دعم عجلة الفأرة للتمرير
+        # دعم عجلة الفأرة — نربط فقط عند دخول المؤشر لمنع التداخل مع التبويبات الأخرى
         def _on_mousewheel(event):
             canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-        
-        # تفعيل التمرير عند وجود المؤشر داخل الكانفس
-        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        canvas.bind("<Enter>", lambda e: canvas.bind_all("<MouseWheel>", _on_mousewheel))
+        canvas.bind("<Leave>", lambda e: canvas.unbind_all("<MouseWheel>"))
 
         # نستخدم الإطار الداخلي (scrollable_frame) كأصل لكافة العناصر بدلاً من frame
         frame = scrollable_frame
@@ -332,8 +335,8 @@ class CounselorTabMixin:
 
         inq_sb = ttk.Scrollbar(inq_list_fr, orient="vertical", command=self._coun_inq_tree.yview)
         self._coun_inq_tree.configure(yscrollcommand=inq_sb.set)
-        self._coun_inq_tree.pack(side="left", fill="both", expand=True)
         inq_sb.pack(side="right", fill="y")
+        self._coun_inq_tree.pack(side="left", fill="both", expand=True)
         self._coun_inq_tree.bind("<Double-1>", lambda e: self._view_academic_inquiry_reply())
 
         self._load_academic_inquirers_teachers()

@@ -4113,7 +4113,7 @@ async function analyzeGrades(){
 function renderGaHtml(html){
   // عرض HTML في iframe لعزل الأنماط ومنع تعارضها مع الصفحة
   var box=document.getElementById('ga-res');
-  box.innerHTML='<iframe id="ga-frame" style="width:100%;height:800px;border:1px solid var(--bd);border-radius:var(--rd);background:#fff" sandbox="allow-same-origin"></iframe>'+
+  box.innerHTML='<iframe id="ga-frame" style="width:100%;height:800px;border:1px solid var(--bd);border-radius:var(--rd);background:#fff" sandbox="allow-same-origin allow-modals allow-scripts allow-forms"></iframe>'+
     '<div style="margin-top:8px;text-align:left"><button class="btn bp4 bsm" onclick="printGaFrame()">🖨️ طباعة التقرير</button></div>';
   var iframe=document.getElementById('ga-frame');
   var doc=iframe.contentDocument||iframe.contentWindow.document;
@@ -4122,8 +4122,10 @@ function renderGaHtml(html){
   doc.close();
 }
 function printGaFrame(){
-  var iframe=document.getElementById('ga-frame');
-  if(iframe&&iframe.contentWindow){iframe.contentWindow.focus();iframe.contentWindow.print();}
+  // بدلاً من طباعة لوحة التحكم التفاعلية، نفتح رابط الطباعة المهيأ لـ A4 في نافذة جديدة
+  var sub = "الكل";
+  // يمكننا محاولة جلب الفلتر المختار مستقبلاً إذا أضفنا اختيار مادة في الويب
+  window.open('/web/api/grade-analysis-print?subject=' + encodeURIComponent(sub), '_blank');
 }
 
 /* ── REPORT HELPERS ── */
@@ -4899,6 +4901,17 @@ async def web_get_results(request: Request):
         return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
 
 
+@router.delete("/web/api/results", response_class=JSONResponse)
+async def web_clear_results(request: Request):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"error": "غير مصرح"}, status_code=401)
+    try:
+        clear_student_results()
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+
 @router.get("/web/api/noor-export", response_class=JSONResponse)
 async def web_noor_export(request: Request, date: str = None):
     user = _get_current_user(request)
@@ -5160,7 +5173,6 @@ async def web_grade_analysis(request: Request, class_id: str = ""):
     if not user:
         return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
     try:
-        # محاولة جلب آخر HTML محفوظ
         cache_dir = os.path.join(DATA_DIR, "grade_analysis")
         cache_file = os.path.join(cache_dir, "last_analysis.html")
         if os.path.exists(cache_file):
@@ -5190,7 +5202,6 @@ async def web_grade_analysis_upload(request: Request):
         if ext not in (".pdf", ".xlsx", ".xls", ".csv"):
             return JSONResponse({"ok": False, "msg": f"صيغة غير مدعومة: {ext}"})
 
-        # حفظ مؤقت للملف
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=ext, prefix="ga_")
         content = await upload.read()
         tmp.write(content); tmp.close()
@@ -5201,16 +5212,10 @@ async def web_grade_analysis_upload(request: Request):
             if not students:
                 return JSONResponse({"ok": False, "msg": "لم يُعثر على بيانات طلاب في الملف"})
 
-            # بناء HTML بنفس دالة التطبيق المكتبي
+            # بناء HTML التفاعلي من النسخة المتقدمة
             html = _ga_build_html(students)
 
-            # حفظ كاش لاستعادتها لاحقاً
-            cache_dir = os.path.join(DATA_DIR, "grade_analysis")
-            os.makedirs(cache_dir, exist_ok=True)
-            with open(os.path.join(cache_dir, "last_analysis.html"), "w", encoding="utf-8") as f:
-                f.write(html)
-
-            # ملخص سريع للإحصائيات
+            # ملخص سريع للإحصائيات للكروت العلوية
             total_students = len(students)
             all_pcts = []
             for s in students:
@@ -5220,6 +5225,16 @@ async def web_grade_analysis_upload(request: Request):
             avg = round(sum(all_pcts) / len(all_pcts), 1) if all_pcts else 0
             pass_rate = round(sum(1 for p in all_pcts if p >= 50) / len(all_pcts) * 100, 1) if all_pcts else 0
 
+            # حفظ كاش HTML والبيانات الخام للطباعة
+            cache_dir = os.path.join(DATA_DIR, "grade_analysis")
+            os.makedirs(cache_dir, exist_ok=True)
+            with open(os.path.join(cache_dir, "last_analysis.html"), "w", encoding="utf-8") as f:
+                f.write(html)
+            
+            # حفظ البيانات الخام (JSON) لتمكين إعادة توليد التقارير أو الطباعة
+            with open(os.path.join(cache_dir, "last_analysis.json"), "w", encoding="utf-8") as f:
+                json.dump(students, f, ensure_ascii=False, indent=2)
+
             return JSONResponse({
                 "ok": True,
                 "html": html,
@@ -5227,12 +5242,38 @@ async def web_grade_analysis_upload(request: Request):
                 "average": avg,
                 "pass_rate": pass_rate
             })
+        except Exception as e:
+            import traceback
+            return JSONResponse({"ok": False, "msg": str(e), "trace": traceback.format_exc()[:500]}, status_code=500)
         finally:
             try: os.unlink(tmp.name)
             except Exception: pass
     except Exception as e:
         import traceback
         return JSONResponse({"ok": False, "msg": str(e), "trace": traceback.format_exc()[:500]}, status_code=500)
+
+
+@router.get("/web/api/grade-analysis-print")
+async def web_grade_analysis_print(request: Request, subject: str = "الكل"):
+    """يولد نسخة HTML مهيئة للطباعة (A4) لآخر تحليل نتائج."""
+    try:
+        cache_file = os.path.join(DATA_DIR, "grade_analysis", "last_analysis.json")
+        if not os.path.exists(cache_file):
+            return HTMLResponse("<html><body><h3>لم يتم إجراء أي تحليل بعد</h3></body></html>")
+        
+        with open(cache_file, "r", encoding="utf-8") as f:
+            students = json.load(f)
+        
+        from grade_analysis import _ga_build_print_html
+        html = _ga_build_print_html(students, sel_subject=subject)
+        
+        # إضافة سكريبت للطباعة التلقائية
+        if "</body>" in html:
+            html = html.replace("</body>", "<script>window.onload = function(){ window.print(); }</script></body>")
+            
+        return HTMLResponse(html)
+    except Exception as e:
+        return HTMLResponse(f"<html><body><h3>خطأ في تجهيز الطباعة: {str(e)}</h3></body></html>")
 
 
 # ─── الموجّه الطلابي: نسخة مطابقة للتطبيق المكتبي ──────────

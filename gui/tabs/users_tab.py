@@ -36,7 +36,9 @@ class UsersTabMixin:
                    command=self._user_toggle).pack(side="right", padx=3)
         ttk.Button(ctrl, text="🗑️ حذف",
                    command=self._user_delete).pack(side="right", padx=3)
-        ttk.Button(ctrl, text="توليد حسابات وإرسال بالواتساب",
+        ttk.Button(ctrl, text="📤 إرسال بيانات الدخول",
+                   command=self._user_send_teacher_creds).pack(side="right", padx=3)
+        ttk.Button(ctrl, text="⚙️ توليد حسابات المعلمين",
                    command=self._user_generate_teachers).pack(side="right", padx=3)
 
         cols = ("id","username","full_name","role","active","tabs_info")
@@ -54,8 +56,8 @@ class UsersTabMixin:
         sb = ttk.Scrollbar(left_lf, orient="vertical",
                             command=self.tree_users.yview)
         self.tree_users.configure(yscrollcommand=sb.set)
-        self.tree_users.pack(side="left", fill="both", expand=True)
         sb.pack(side="right", fill="y")
+        self.tree_users.pack(side="left", fill="both", expand=True)
         self.tree_users.bind("<<TreeviewSelect>>", self._on_user_select)
 
         # ══ الجانب الأيسر: صلاحيات التبويبات ════════════════════
@@ -121,17 +123,26 @@ class UsersTabMixin:
         scroll_frame_outer = ttk.Frame(right_lf)
         scroll_frame_outer.pack(fill="both", expand=True)
 
-        canvas = tk.Canvas(scroll_frame_outer, highlightthickness=0)
-        sb2    = ttk.Scrollbar(scroll_frame_outer, orient="vertical",
-                                command=canvas.yview)
+        sb2    = ttk.Scrollbar(scroll_frame_outer, orient="vertical")
+        self._tabs_canvas = tk.Canvas(scroll_frame_outer, highlightthickness=0, bg="white",
+                                      yscrollcommand=sb2.set)
+        canvas = self._tabs_canvas
+        sb2.configure(command=canvas.yview)
         self._tabs_inner = ttk.Frame(canvas)
 
+        _tabs_win = canvas.create_window((0,0), window=self._tabs_inner, anchor="nw")
         self._tabs_inner.bind("<Configure>",
             lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.create_window((0,0), window=self._tabs_inner, anchor="nw")
-        canvas.configure(yscrollcommand=sb2.set)
-        canvas.pack(side="left", fill="both", expand=True)
+        _tabs_last_w = [0]
+        def _on_tabs_canvas_conf(e):
+            w = canvas.winfo_width()
+            if w == _tabs_last_w[0]: return
+            _tabs_last_w[0] = w
+            canvas.itemconfig(_tabs_win, width=w)
+        canvas.bind("<Configure>", _on_tabs_canvas_conf)
+        canvas.bind("<MouseWheel>", lambda e: canvas.yview_scroll(-1*(e.delta//120), "units"))
         sb2.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
 
         # بناء checkboxes في شبكة عمودين
         COLS = 2
@@ -210,34 +221,41 @@ class UsersTabMixin:
         if not row:
             return
 
-        if row["role"] == "admin":
-            # المدير: كل التبويبات مُفعَّلة ومقفلة
-            for var in self._tab_vars.values(): var.set(True)
+        # تعطيل حدث Configure مؤقتاً لمنع التقطيع أثناء التحديث الجماعي
+        self._tabs_inner.unbind("<Configure>")
+        try:
+            if row["role"] == "admin":
+                for var in self._tab_vars.values(): var.set(True)
+                for child in self._tabs_inner.winfo_children():
+                    if isinstance(child, ttk.Checkbutton):
+                        child.configure(state="disabled")
+                return
+
             for child in self._tabs_inner.winfo_children():
                 if isinstance(child, ttk.Checkbutton):
-                    child.configure(state="disabled")
-            return
+                    child.configure(state="normal")
 
-        # أفعّل checkboxes
-        for child in self._tabs_inner.winfo_children():
-            if isinstance(child, ttk.Checkbutton):
-                child.configure(state="normal")
-
-        # حدد التبويبات المسموحة
-        if row["allowed_tabs"]:
-            try:
-                allowed = _j.loads(row["allowed_tabs"])
-            except:
+            if row["allowed_tabs"]:
+                try:
+                    allowed = _j.loads(row["allowed_tabs"])
+                except:
+                    allowed = ROLE_TABS.get(row["role"]) or []
+            else:
                 allowed = ROLE_TABS.get(row["role"]) or []
-        else:
-            allowed = ROLE_TABS.get(row["role"]) or []
 
-        allowed_set = set(allowed) if allowed else set()
-        for tab_name, var in self._tab_vars.items():
-            var.set(tab_name in allowed_set)
+            allowed_set = set(allowed) if allowed else set()
+            for tab_name, var in self._tab_vars.items():
+                var.set(tab_name in allowed_set)
 
-        if not is_admin:
-            self._tabs_save_btn.configure(state="normal")
+            if not is_admin:
+                self._tabs_save_btn.configure(state="normal")
+        finally:
+            # إعادة الربط وتحديث واحد فقط
+            self._tabs_inner.bind("<Configure>",
+                lambda e: self._tabs_canvas.configure(
+                    scrollregion=self._tabs_canvas.bbox("all")))
+            self._tabs_canvas.configure(
+                scrollregion=self._tabs_canvas.bbox("all"))
 
     def _on_tab_perm_change(self):
         """عند تغيير أي checkbox."""
@@ -280,7 +298,7 @@ class UsersTabMixin:
                 return
         save_user_allowed_tabs(self._current_perm_user, selected)
         self._tabs_save_btn.configure(state="disabled")
-        frame.after(100, self._users_load)
+        self.users_frame.after(100, self._users_load)
         messagebox.showinfo("تم",
             "تم حفظ {} تبويب للمستخدم '{}'".format(
                 len(selected), self._current_perm_user))
@@ -337,7 +355,7 @@ class UsersTabMixin:
             ok, msg = create_user(un, pw, role_var.get(), fn)
             if ok:
                 status_lbl.config(text="✅ "+msg, foreground="green")
-                frame.after(100, self._users_load)
+                self.users_frame.after(100, self._users_load)
                 win.after(1200, win.destroy)
             else:
                 status_lbl.config(text="❌ "+msg, foreground="red")
@@ -362,11 +380,11 @@ class UsersTabMixin:
         if not sel: messagebox.showwarning("تنبيه","حدد مستخدماً"); return
         vals    = self.tree_users.item(sel[0])["values"]
         user_id = vals[0]
-        is_active = "فعّال" in str(vals[4])
+        is_active = "✅" in str(vals[4])
         if vals[1] == "admin":
             messagebox.showwarning("تنبيه","لا يمكن تعطيل حساب المدير الرئيسي"); return
         toggle_user_active(user_id, 0 if is_active else 1)
-        frame.after(100, self._users_load)
+        self.users_frame.after(100, self._users_load)
 
     def _user_delete(self):
         sel = self.tree_users.selection()
@@ -379,11 +397,12 @@ class UsersTabMixin:
         delete_user(user_id); self._users_load()
 
     def _user_generate_teachers(self):
-        if not messagebox.askyesno("تأكيد", "سيتم توليد حسابات (اسم المستخدم وكلمة مرور عشوائية) للمعلمين وإرسالها لهم عبر واتساب.\nهل أنت متأكد؟"):
+        """توليد حسابات للمعلمين الذين ليس لديهم حسابات (بدون إرسال)."""
+        if not messagebox.askyesno("تأكيد",
+                "سيتم توليد حسابات بكلمة مرور عشوائية للمعلمين الذين ليس لديهم حسابات.\n"
+                "لن يتم الإرسال — استخدم زر 'إرسال بيانات الدخول' بعد ذلك.\nهل تريد المتابعة؟"):
             return
         from database import load_teachers, create_user, save_user_allowed_tabs, get_all_users
-        from config_manager import load_config
-        from whatsapp_service import send_whatsapp_message
         import random
 
         teachers_data = load_teachers().get("teachers", [])
@@ -391,50 +410,85 @@ class UsersTabMixin:
             messagebox.showwarning("تنبيه", "لا يوجد معلمين. تأكد من استيراد ملف المعلمين أولاً.")
             return
 
-        cfg = load_config()
-        public_url = cfg.get("public_url", "")
-        if not public_url:
-            messagebox.showwarning("تنبيه", "يرجى تعيين 'الرابط العالمي' من إعدادات المدرسة قبل الإرسال لتضمينه في رسالة الواتساب.")
-            return
-
-        existing_users = {u["username"]: u for u in get_all_users()}
-        
+        existing_users = {u["username"] for u in get_all_users()}
         success_count = 0
         skip_count = 0
 
         self.root.config(cursor="wait")
         try:
             for t in teachers_data:
-                name = t.get("اسم المعلم", "").strip()
-                phone = t.get("رقم الجوال", "").strip()
-                civ_id = t.get("رقم الهوية", "").strip()
-
+                name    = t.get("اسم المعلم", "").strip()
+                phone   = t.get("رقم الجوال", "").strip()
+                civ_id  = t.get("رقم الهوية", "").strip()
                 username = civ_id if civ_id else phone
                 if not username:
-                    skip_count += 1
-                    continue
-                
-                if username not in existing_users:
-                    password = str(random.randint(100000, 999999))
-                    ok, _ = create_user(username, password, "teacher", name)
-                    if ok:
-                        save_user_allowed_tabs(username, ["لوحة القيادة", "تحليل النتائج", "تحويل طالب", "نماذج المعلم", "خطابات الاستفسار", "التعاميم والنشرات"])
-                        
-                        msg = (f"مرحباً أستاذ {name}\n\n"
-                               f"يسعدنا انضمامك للنظام. بيانات الدخول عبر الويب:\n\n"
-                               f"الرابط العام:\n{public_url}\n\n"
-                               f"اسم المستخدم: {username}\n"
-                               f"كلمة المرور: {password}\n"
-                               f"\nمع تحيات إدارة المدرسة")
-                        
-                        if phone:
-                            send_whatsapp_message(phone, msg)
-                        success_count += 1
-                else:
-                    skip_count += 1
-                    
+                    skip_count += 1; continue
+                if username in existing_users:
+                    skip_count += 1; continue
+                password = str(random.randint(100000, 999999))
+                ok, _ = create_user(username, password, "teacher", name)
+                if ok:
+                    save_user_allowed_tabs(username, [
+                        "لوحة المراقبة", "تحليل النتائج", "تحويل طالب",
+                        "نماذج المعلم", "خطابات الاستفسار", "التعاميم والنشرات"])
+                    success_count += 1
             self._users_load()
-            messagebox.showinfo("اكتمل", f"تم إنشاء وإرسال {success_count} حساب معلم.\nتم تخطي {skip_count} (موجود مسبقاً أو بياناته ناقصة).")
+            messagebox.showinfo("اكتمل",
+                f"✅ تم إنشاء {success_count} حساب جديد.\n"
+                f"⏭️ تم تخطي {skip_count} (موجود مسبقاً أو بياناته ناقصة).\n\n"
+                "استخدم زر 'إرسال بيانات الدخول' لإرسال بيانات الدخول عبر الواتساب.")
+        finally:
+            self.root.config(cursor="")
+
+    def _user_send_teacher_creds(self):
+        """إعادة توليد كلمة مرور وإرسال بيانات الدخول للمعلمين عبر الواتساب."""
+        if not messagebox.askyesno("تأكيد",
+                "سيتم إعادة توليد كلمة مرور جديدة لكل معلم وإرسالها له عبر الواتساب.\n"
+                "هل أنت متأكد؟"):
+            return
+        from database import load_teachers, get_all_users, update_user_password
+        from config_manager import load_config
+        from whatsapp_service import send_whatsapp_message
+        import random
+
+        teachers_data = load_teachers().get("teachers", [])
+        if not teachers_data:
+            messagebox.showwarning("تنبيه", "لا يوجد معلمين في الملف."); return
+
+        cfg = load_config()
+        public_url = cfg.get("public_url", "")
+        if not public_url:
+            messagebox.showwarning("تنبيه",
+                "يرجى تعيين 'الرابط العالمي' من إعدادات المدرسة أولاً."); return
+
+        existing_users = {u["username"]: u for u in get_all_users()}
+        sent_count = 0
+        skip_count = 0
+
+        self.root.config(cursor="wait")
+        try:
+            for t in teachers_data:
+                name    = t.get("اسم المعلم", "").strip()
+                phone   = t.get("رقم الجوال", "").strip()
+                civ_id  = t.get("رقم الهوية", "").strip()
+                username = civ_id if civ_id else phone
+                if not username or username not in existing_users:
+                    skip_count += 1; continue
+                if not phone:
+                    skip_count += 1; continue
+                password = str(random.randint(100000, 999999))
+                update_user_password(username, password)
+                msg = (f"مرحباً أستاذ {name}\n\n"
+                       f"بيانات دخولك للنظام:\n\n"
+                       f"الرابط: {public_url}\n"
+                       f"اسم المستخدم: {username}\n"
+                       f"كلمة المرور: {password}\n\n"
+                       f"مع تحيات إدارة المدرسة")
+                send_whatsapp_message(phone, msg)
+                sent_count += 1
+            messagebox.showinfo("اكتمل",
+                f"✅ تم الإرسال لـ {sent_count} معلم.\n"
+                f"⏭️ تم تخطي {skip_count} (لا حساب أو لا رقم جوال).")
         finally:
             self.root.config(cursor="")
 

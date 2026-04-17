@@ -149,8 +149,11 @@ class AppGUI(
     GradeAnalysisTabMixin,
     TeacherReferralTabMixin,
     DeputyReferralTabMixin,
+    TeacherFormsTabMixin,
     TeacherInquiriesTabMixin,
     StudentAnalysisTabMixin,
+    ClassNamingTabMixin,
+    CircularsTabMixin,
 ):
     """الواجهة الرئيسية للتطبيق — تجمع كل Mixins في class واحد."""
     def __init__(self, root, public_url=None):
@@ -405,8 +408,9 @@ class AppGUI(
                 else:
                     self.root.after(0, lambda: self.unread_circ_lbl.place_forget())
             except: pass
-            self.root.after(300000, self._check_unread_circulars)
         threading.Thread(target=_task, daemon=True).start()
+        # جدولة الفحص التالي من الـ main thread لضمان عدم تراكم الـ timers
+        self.root.after(300000, self._check_unread_circulars)
 
     def _update_circular_badge(self, count):
         btn = self._nav_buttons.get("التعاميم والنشرات")

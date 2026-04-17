@@ -87,8 +87,8 @@ class DashboardTabMixin:
         sb1 = ttk.Scrollbar(cls_lf, orient="vertical",
                              command=self.tree_dash.yview)
         self.tree_dash.configure(yscrollcommand=sb1.set)
-        self.tree_dash.pack(side="left", fill="both", expand=True)
         sb1.pack(side="right", fill="y")
+        self.tree_dash.pack(side="left", fill="both", expand=True)
         self.tree_dash.bind("<Double-1>", self._on_dash_dblclick)
 
         # أكثر الطلاب غياباً
@@ -146,128 +146,133 @@ class DashboardTabMixin:
         self.root.after(30000, self._dashboard_tick)
 
     def update_dashboard_metrics(self):
+        """جلب كل البيانات في خيط خلفي ثم تحديث الواجهة لتجنب تجميد UI."""
         date_str = self.dash_date_var.get().strip() or now_riyadh_date()
-        try:
-            metrics = compute_today_metrics(date_str)
-        except Exception as e:
-            messagebox.showerror("خطأ", str(e)); return
 
-        t = metrics["totals"]
-        pct_absent = round(t["absent"] / max(t["students"],1) * 100, 1)
+        def _fetch():
+            try:
+                metrics    = compute_today_metrics(date_str)
+                tard_today = len(query_tardiness(date_filter=date_str))
+                wk         = get_week_comparison()
+                month      = date_str[:7]
+                top_absent = get_top_absent_students(month, limit=8)
+                dow_data   = get_absence_by_day_of_week()
+            except Exception as e:
+                self.root.after(0, lambda: messagebox.showerror("خطأ", str(e)))
+                return
+            self.root.after(0, lambda: _update_ui(metrics, tard_today, wk, top_absent, dow_data))
 
-        # ─ بطاقات الإحصاء
-        self.lbl_total.config(text=str(t["students"]))
-        self.lbl_present.config(text=str(t["present"]))
-        self.lbl_absent.config(text=str(t["absent"]))
-        if hasattr(self,"lbl_absent_sub"):
-            self.lbl_absent_sub.config(text="{}% من الإجمالي".format(pct_absent))
+        def _update_ui(metrics, tard_today, wk, top_absent, dow_data):
+            t = metrics["totals"]
+            pct_absent = round(t["absent"] / max(t["students"], 1) * 100, 1)
 
-        # التأخر اليوم
-        tard_today = len(query_tardiness(date_filter=date_str))
-        if hasattr(self,"lbl_tard"):
-            self.lbl_tard.config(text=str(tard_today))
+            # ─ بطاقات الإحصاء
+            self.lbl_total.config(text=str(t["students"]))
+            self.lbl_present.config(text=str(t["present"]))
+            self.lbl_absent.config(text=str(t["absent"]))
+            if hasattr(self, "lbl_absent_sub"):
+                self.lbl_absent_sub.config(text="{}% من الإجمالي".format(pct_absent))
+            if hasattr(self, "lbl_tard"):
+                self.lbl_tard.config(text=str(tard_today))
 
-        # مقارنة الأسبوع
-        try:
-            wk = get_week_comparison()
-            if hasattr(self,"lbl_week"):
-                self.lbl_week.config(text=str(wk["this_total"]))
-            if hasattr(self,"lbl_week_sub"):
-                arrow = "▲" if wk["change"]>0 else ("▼" if wk["change"]<0 else "=")
-                color  = "#EF4444" if wk["change"]>0 else "#10B981"
-                self.lbl_week_sub.config(
-                    text="{} {}% عن الأسبوع الماضي".format(
-                        arrow, abs(wk["pct"])),
-                    foreground=color)
-            if hasattr(self,"dash_week_lbl"):
-                self.dash_week_lbl.config(
-                    text="الأسبوع الماضي: {} غياب".format(wk["last_total"]))
-        except Exception as e:
-            print("[DASH-WEEK]", e)
+            # مقارنة الأسبوع
+            try:
+                if hasattr(self, "lbl_week"):
+                    self.lbl_week.config(text=str(wk["this_total"]))
+                if hasattr(self, "lbl_week_sub"):
+                    arrow = "▲" if wk["change"] > 0 else ("▼" if wk["change"] < 0 else "=")
+                    color = "#EF4444" if wk["change"] > 0 else "#10B981"
+                    self.lbl_week_sub.config(
+                        text="{} {}% عن الأسبوع الماضي".format(arrow, abs(wk["pct"])),
+                        foreground=color)
+                if hasattr(self, "dash_week_lbl"):
+                    self.dash_week_lbl.config(
+                        text="الأسبوع الماضي: {} غياب".format(wk["last_total"]))
+            except Exception as e:
+                print("[DASH-WEEK]", e)
 
-        # ─ جدول الفصول
-        for i in self.tree_dash.get_children():
-            self.tree_dash.delete(i)
-        for r in metrics["by_class"]:
-            pct = round(r["absent"]/max(r["total"],1)*100, 0)
-            tag = "high" if pct >= 20 else "normal"
-            self.tree_dash.insert("", "end", tags=(tag,),
-                values=(r["class_id"], r["class_name"],
-                        r["total"],
-                        "🟢 {}".format(r["present"]),
-                        "🔴 {}".format(r["absent"]),
-                        "{}%".format(int(pct))))
+            # ─ جدول الفصول
+            for i in self.tree_dash.get_children():
+                self.tree_dash.delete(i)
+            for r in metrics["by_class"]:
+                pct = round(r["absent"] / max(r["total"], 1) * 100, 0)
+                tag = "high" if pct >= 20 else "normal"
+                self.tree_dash.insert("", "end", tags=(tag,),
+                    values=(r["class_id"], r["class_name"], r["total"],
+                            "🟢 {}".format(r["present"]),
+                            "🔴 {}".format(r["absent"]),
+                            "{}%".format(int(pct))))
 
-        # ─ أكثر الطلاب غياباً
-        if hasattr(self,"tree_top_absent"):
-            for i in self.tree_top_absent.get_children():
-                self.tree_top_absent.delete(i)
-            month = date_str[:7]
-            for idx, s in enumerate(get_top_absent_students(month, limit=8)):
-                tag = "top1" if idx==0 else ("top3" if idx<3 else "")
-                self.tree_top_absent.insert("","end", tags=(tag,),
-                    values=(s["name"], s["class_name"],
-                            "{} يوم".format(s["days"]), s["last_date"]))
+            # ─ أكثر الطلاب غياباً
+            if hasattr(self, "tree_top_absent"):
+                for i in self.tree_top_absent.get_children():
+                    self.tree_top_absent.delete(i)
+                for idx, s in enumerate(top_absent):
+                    tag = "top1" if idx == 0 else ("top3" if idx < 3 else "")
+                    self.tree_top_absent.insert("", "end", tags=(tag,),
+                        values=(s["name"], s["class_name"],
+                                "{} يوم".format(s["days"]), s["last_date"]))
 
-        # ─ رسم الدائرة
-        try:
-            self.ax_pie.clear()
-            sizes  = [t["present"], t["absent"]]
-            if sum(sizes) > 0:
-                self.ax_pie.pie(
-                    sizes,
-                    labels=[ar("الحضور"), ar("الغياب")],
-                    autopct="%1.1f%%", startangle=90,
-                    colors=["#10B981","#EF4444"])
-            self.ax_pie.set_title(ar("الحضور/الغياب اليوم"), fontsize=9)
-            self.canvas_pie.draw_idle()
-        except Exception as e:
-            print("[DASH-PIE]", e)
+            # ─ رسم الدائرة
+            try:
+                self.ax_pie.clear()
+                sizes = [t["present"], t["absent"]]
+                if sum(sizes) > 0:
+                    self.ax_pie.pie(sizes,
+                        labels=[ar("الحضور"), ar("الغياب")],
+                        autopct="%1.1f%%", startangle=90,
+                        colors=["#10B981", "#EF4444"])
+                self.ax_pie.set_title(ar("الحضور/الغياب اليوم"), fontsize=9)
+                self.canvas_pie.draw_idle()
+            except Exception as e:
+                print("[DASH-PIE]", e)
 
-        # ─ رسم مقارنة الأسبوعين
-        try:
-            self.ax_week.clear()
-            wk = get_week_comparison()
-            day_names_short = ["أحد","إثنين","ثلاث","أربع","خميس"]
-            x = range(5)
-            this_vals = [wk["this_daily"].get(
-                (datetime.date.fromisoformat(wk["this_week_start"]) +
-                 datetime.timedelta(days=i)).isoformat(), 0) for i in range(5)]
-            last_vals = [wk["last_daily"].get(
-                (datetime.date.fromisoformat(wk["last_week_start"]) +
-                 datetime.timedelta(days=i)).isoformat(), 0) for i in range(5)]
-            w_bar = 0.35
-            self.ax_week.bar([i-w_bar/2 for i in x], last_vals,
-                              w_bar, label=ar("الأسبوع الماضي"), color="#93C5FD")
-            self.ax_week.bar([i+w_bar/2 for i in x], this_vals,
-                              w_bar, label=ar("هذا الأسبوع"), color="#3B82F6")
-            self.ax_week.set_xticks(list(x))
-            self.ax_week.set_xticklabels([ar(d) for d in day_names_short], fontsize=7)
-            self.ax_week.legend(fontsize=7)
-            self.ax_week.set_title(ar("مقارنة الأسبوعين"), fontsize=9)
-            self.canvas_week.draw_idle()
-        except Exception as e:
-            print("[DASH-WEEK-CHART]", e)
+            # ─ رسم مقارنة الأسبوعين (يستخدم wk المُحضَّر مسبقاً — لا استدعاء ثانٍ)
+            try:
+                self.ax_week.clear()
+                day_names_short = ["أحد", "إثنين", "ثلاث", "أربع", "خميس"]
+                x = range(5)
+                this_vals = [wk["this_daily"].get(
+                    (datetime.date.fromisoformat(wk["this_week_start"]) +
+                     datetime.timedelta(days=i)).isoformat(), 0) for i in range(5)]
+                last_vals = [wk["last_daily"].get(
+                    (datetime.date.fromisoformat(wk["last_week_start"]) +
+                     datetime.timedelta(days=i)).isoformat(), 0) for i in range(5)]
+                w_bar = 0.35
+                self.ax_week.bar([i - w_bar / 2 for i in x], last_vals,
+                                  w_bar, label=ar("الأسبوع الماضي"), color="#93C5FD")
+                self.ax_week.bar([i + w_bar / 2 for i in x], this_vals,
+                                  w_bar, label=ar("هذا الأسبوع"), color="#3B82F6")
+                self.ax_week.set_xticks(list(x))
+                self.ax_week.set_xticklabels([ar(d) for d in day_names_short], fontsize=7)
+                self.ax_week.legend(fontsize=7)
+                self.ax_week.set_title(ar("مقارنة الأسبوعين"), fontsize=9)
+                self.canvas_week.draw_idle()
+            except Exception as e:
+                print("[DASH-WEEK-CHART]", e)
 
-        # ─ رسم أكثر الأيام غياباً
-        try:
-            self.ax_dow.clear()
-            dow_data = get_absence_by_day_of_week()
-            days_ar   = list(dow_data.keys())
-            vals      = list(dow_data.values())
-            bars = self.ax_dow.bar(
-                [ar(d) for d in days_ar], vals,
-                color=["#EF4444" if v==max(vals) else "#FCA5A5" for v in vals])
-            self.ax_dow.set_title(ar("متوسط الغياب حسب اليوم"), fontsize=9)
-            for bar_r, v in zip(bars, vals):
-                if v > 0:
-                    self.ax_dow.text(bar_r.get_x()+bar_r.get_width()/2,
-                                      bar_r.get_height(),
-                                      "{:.0f}".format(v),
-                                      ha="center", va="bottom", fontsize=7)
-            self.canvas_dow.draw_idle()
-        except Exception as e:
-            print("[DASH-DOW]", e)
+            # ─ رسم أكثر الأيام غياباً
+            try:
+                self.ax_dow.clear()
+                days_ar = list(dow_data.keys())
+                vals    = list(dow_data.values())
+                if vals:
+                    bars = self.ax_dow.bar(
+                        [ar(d) for d in days_ar], vals,
+                        color=["#EF4444" if v == max(vals) else "#FCA5A5" for v in vals])
+                    self.ax_dow.set_title(ar("متوسط الغياب حسب اليوم"), fontsize=9)
+                    for bar_r, v in zip(bars, vals):
+                        if v > 0:
+                            self.ax_dow.text(
+                                bar_r.get_x() + bar_r.get_width() / 2,
+                                bar_r.get_height(),
+                                "{:.0f}".format(v),
+                                ha="center", va="bottom", fontsize=7)
+                self.canvas_dow.draw_idle()
+            except Exception as e:
+                print("[DASH-DOW]", e)
+
+        threading.Thread(target=_fetch, daemon=True).start()
 
     def _start_msg_polling(self):
         def _poll():
@@ -294,7 +299,8 @@ class DashboardTabMixin:
             self.sync_info_text.config(state="disabled")
 
     def _start_dashboard_tick(self):
-        self._dashboard_tick()
+        # الـ after(500) في _switch_tab يغطي التحميل الأول — نبدأ الـ tick بعد 30ث لتجنب الاستدعاء المزدوج
+        self.root.after(30000, self._dashboard_tick)
 
     def _on_dash_dblclick(self, event):
         item = self.tree_dash.focus()

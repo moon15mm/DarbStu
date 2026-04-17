@@ -55,8 +55,8 @@ class TeacherInquiriesTabMixin:
         sb = ttk.Scrollbar(list_fr, orient="vertical", command=self._tch_inq_tree.yview)
         self._tch_inq_tree.configure(yscrollcommand=sb.set)
         
-        self._tch_inq_tree.pack(side="left", fill="both", expand=True)
         sb.pack(side="right", fill="y")
+        self._tch_inq_tree.pack(side="left", fill="both", expand=True)
 
         self._tch_inq_tree.tag_configure("جديد", foreground="red", background="#fff0f0")
         self._tch_inq_tree.tag_configure("تم الرد", foreground="green", background="#f0fff0")

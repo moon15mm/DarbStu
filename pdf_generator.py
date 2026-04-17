@@ -502,14 +502,27 @@ def parse_results_pdf(pdf_path: str) -> List[Dict]:
                 student_name = m_name.group(1).strip() if m_name else ""
                 section      = m_sec.group(1).strip()  if m_sec  else ""
 
+                # استخراج المعدل — أنماط متعددة لتغطية تنسيقات نور
+                gpa = ""
+                for pat in [
+                    r'GPA\s*[.:\s]+(\d+\.?\d*)',
+                    r'Average\s*[.:\s]+(\d+\.?\d*)',
+                    r'Overall\s+Average\s*[.:\s]+(\d+\.?\d*)',
+                    r'المعدل\s*[.:\s]+(\d+\.?\d*)',
+                    r'المجموع\s+(\d+\.?\d*)\s*/\s*\d+',
+                ]:
+                    m_gpa = _re.search(pat, text, _re.IGNORECASE)
+                    if m_gpa:
+                        gpa = m_gpa.group(1).strip()
+                        break
+
                 students.append({
                     "identity_no":  identity,
                     "student_name": student_name,
                     "section":      section,
-                    "page_no":      page_num,       # رقم الصفحة (0-based)
+                    "page_no":      page_num,
                     "pdf_path":     abs_path,
-                    # حقول فارغة للتوافق مع save_results_to_db
-                    "gpa": "", "class_rank": "", "section_rank": "",
+                    "gpa": gpa, "class_rank": "", "section_rank": "",
                     "excused_abs": "", "unexcused_abs": "", "subjects": [],
                 })
             except Exception as e:

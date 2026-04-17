@@ -1,0 +1,2415 @@
+<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">
+<title>تحليل نتائج الطلاب</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Cairo',Tahoma,Arial,sans-serif;background:#f0f0f0;direction:rtl;color:#1A2332;}
+.page{width:794px;height:1123px;margin:0 auto 30px;background:white;
+position:relative;box-shadow:0 4px 30px rgba(0,0,0,0.15);
+page-break-after:always;overflow:hidden;zoom:0.95;}
+.no-print{background:#1A3A5C;padding:12px 24px;display:flex;align-items:center;
+gap:12px;position:sticky;top:0;z-index:99;}
+@page { size: portrait; margin: 0; }
+@media print{body{background:white;} .page{box-shadow:none;margin:0;width:100%;height:100vh;zoom:1;transform:scale(0.98);transform-origin:top;}
+.no-print{display:none;}}
+</style></head><body>
+<div class="no-print">
+  <button onclick="window.print()" style="background:#27AE60;color:white;border:none;
+     padding:8px 18px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:bold;
+     font-family:Cairo,Tahoma,Arial;">🖨️ طباعة / حفظ PDF</button>
+  <span style="color:rgba(255,255,255,0.7);font-size:12px;">
+    في نافذة الطباعة فعّل خيار «خلفيات الرسومات» للحصول على الألوان الكاملة
+  </span>
+</div>
+
+<div class="page">
+          <div style="background:linear-gradient(135deg,#0F2542,#1A3A5C);padding:14px 28px 10px;">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;">
+              <div style="text-align:right;">
+                <div style="font-size:8px;color:rgba(255,255,255,0.7);">الإدارة العامة للتعليم بالمنطقة</div>
+                <div style="font-size:10px;font-weight:bold;color:white;">ثانوية الدرب - مسارات</div>
+                <div style="font-size:8px;color:rgba(255,255,255,0.6);margin-top:2px;">مدرسة</div>
+              </div>
+              <div style="text-align:center;">
+                <div style="font-size:7px;letter-spacing:4px;color:rgba(255,255,255,0.5);margin-bottom:4px;">● ● ● ● ●</div>
+                <div style="font-size:11px;font-weight:bold;color:white;">وزارة التعليم</div>
+                <div style="font-size:7px;color:rgba(255,255,255,0.55);">Ministry of Education</div>
+              </div>
+              <div style="font-size:8px;color:rgba(255,255,255,0.8);">إشعار فترة أولى</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);
+                        border-radius:8px;margin-top:8px;padding:6px 0;text-align:center;">
+              <span style="font-size:13px;font-weight:bold;color:white;">
+                تحليل نتائج مادة &nbsp;[&nbsp;*التربية الصحية والبدنية&nbsp;]
+              </span>
+            </div>
+          </div>
+          <div style="display:flex;background:#F5F8FE;border-bottom:2px solid #DDE3EC;">
+             <div style="flex:1;text-align:center;padding:7px;border-left:1px solid #DDE3EC;">
+              <div style="font-size:8px;color:#7F8C8D;font-weight:bold;">المرحلة / الصف</div>
+              <div style="font-size:11px;font-weight:bold;color:#1A3A5C;margin-top:3px;">الأول الثانوي</div>
+            </div><div style="flex:1;text-align:center;padding:7px;border-left:1px solid #DDE3EC;">
+              <div style="font-size:8px;color:#7F8C8D;font-weight:bold;">السنة / الفصل</div>
+              <div style="font-size:11px;font-weight:bold;color:#1A3A5C;margin-top:3px;">الفصل الأول / 1446-1447هـ</div>
+            </div><div style="flex:1;text-align:center;padding:7px;border-left:1px solid #DDE3EC;">
+              <div style="font-size:8px;color:#7F8C8D;font-weight:bold;">درجة القياس</div>
+              <div style="font-size:11px;font-weight:bold;color:#1A3A5C;margin-top:3px;">100</div>
+            </div>
+          </div>
+          <div style="text-align:center;padding:10px 0 4px;">
+            <span style="background:linear-gradient(135deg,#2471A3,#1A3A5C);color:white;
+                         border-radius:16px;padding:4px 24px;font-size:10px;font-weight:bold;">
+              الإحصائيات التفصيلية
+            </span>
+          </div>
+          <div style="display:flex;gap:0;margin:0 20px;">
+            <div style="width:190px;min-width:190px;background:#F8FBFF;border:1px solid #DDE3EC;
+                        border-radius:8px;padding:10px;margin-left:10px;">
+              <div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">عدد الطلاب</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">150</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">أعلى درجة</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">100</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">أقل درجة</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">60</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">متوسط الدرجات</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">93.3</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">نسبة التحصيل</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">93.3%</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">مجموع الدرجات</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">14001</span>
+              </div>
+            </div>
+            <div style="flex:1;">
+              <table style="width:100%;border-collapse:collapse;font-family:Tahoma,Arial,sans-serif;">
+                <thead><tr style="background:#1A3A5C;">
+                  <th style="padding:8px;color:white;font-size:10px;">المستوى</th>
+                  <th style="padding:8px;color:white;font-size:10px;">النطاق</th>
+                  <th style="padding:8px;color:white;font-size:10px;">عدد الطلاب</th>
+                  <th style="padding:8px;color:white;font-size:10px;">النسبة</th>
+                </tr></thead>
+                <tbody>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#27AE60;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">ممتاز</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">90–100</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#27AE60;font-size:13px;">124</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">83%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#2980B9;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">جيد جداً</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">75–89</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#2980B9;font-size:13px;">21</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">14%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#8E44AD;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">جيد</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">65–74</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#8E44AD;font-size:13px;">3</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">2%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#E67E22;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">مقبول</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">50–64</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#E67E22;font-size:13px;">2</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">1%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#E74C3C;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">ضعيف</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">0–49</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#E74C3C;font-size:13px;">0</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">0%</td>
+            </tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div style="margin:14px 20px 0;">
+            <div style="background:#EBF5FB;border-radius:5px;padding:5px 12px;text-align:center;
+                        font-size:10px;color:#2471A3;font-weight:bold;margin-bottom:8px;">
+              رسم بياني — توزيع الطلاب على التقديرات
+            </div>
+            <div style="display:flex;gap:20px;align-items:flex-start;">
+              <div style="flex:1;">
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#27AE60;font-weight:bold;">ممتاز</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#27AE60;width:130px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#27AE60;">124</span>
+              <span style="font-size:9px;color:#999;">(83%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#2980B9;font-weight:bold;">جيد جداً</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#2980B9;width:22px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#2980B9;">21</span>
+              <span style="font-size:9px;color:#999;">(14%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#8E44AD;font-weight:bold;">جيد</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#8E44AD;width:3px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#8E44AD;">3</span>
+              <span style="font-size:9px;color:#999;">(2%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#E67E22;font-weight:bold;">مقبول</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#E67E22;width:2px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#E67E22;">2</span>
+              <span style="font-size:9px;color:#999;">(1%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#E74C3C;font-weight:bold;">ضعيف</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#E74C3C;width:0px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#E74C3C;">0</span>
+              <span style="font-size:9px;color:#999;">(0%)</span>
+            </div></div>
+              <div style="flex:1;display:flex;flex-wrap:wrap;gap:10px;justify-content:center;">
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#27AE60 298deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#27AE60;">
+                  83%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#27AE60;">ممتاز</div>
+            </div>
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#2980B9 50deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#2980B9;">
+                  14%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#2980B9;">جيد جداً</div>
+            </div>
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#8E44AD 7deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#8E44AD;">
+                  2%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#8E44AD;">جيد</div>
+            </div>
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#E67E22 5deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#E67E22;">
+                  1%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#E67E22;">مقبول</div>
+            </div></div>
+            </div>
+          </div>
+          <div style="position:absolute;bottom:0;left:0;right:0;padding:10px 28px;
+                      border-top:1px solid #DDE3EC;display:flex;
+                      justify-content:space-between;align-items:center;">
+            <div style="text-align:center;width:180px;">
+              <div style="font-size:9px;color:#7F8C8D;margin-bottom:4px;">معلم المادة</div>
+              <div style="font-size:10px;font-weight:bold;color:#1A3A5C;margin-bottom:12px;">_______________</div>
+              <div style="border-top:1px solid #BDC3C7;margin:0 16px;"></div>
+            </div>
+            <div style="font-size:8px;color:#BDC3C7;">www.edu-forms.com</div>
+            <div style="text-align:center;width:180px;">
+              <div style="font-size:9px;color:#7F8C8D;margin-bottom:4px;">مدير المدرسة</div>
+              <div style="font-size:10px;font-weight:bold;color:#1A3A5C;margin-bottom:12px;">_______________</div>
+              <div style="border-top:1px solid #BDC3C7;margin:0 16px;"></div>
+            </div>
+          </div>
+        </div>
+<div class="page">
+          <div style="background:linear-gradient(135deg,#0F2542,#1A3A5C);padding:14px 28px 10px;">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;">
+              <div style="text-align:right;">
+                <div style="font-size:8px;color:rgba(255,255,255,0.7);">الإدارة العامة للتعليم بالمنطقة</div>
+                <div style="font-size:10px;font-weight:bold;color:white;">ثانوية الدرب - مسارات</div>
+                <div style="font-size:8px;color:rgba(255,255,255,0.6);margin-top:2px;">مدرسة</div>
+              </div>
+              <div style="text-align:center;">
+                <div style="font-size:7px;letter-spacing:4px;color:rgba(255,255,255,0.5);margin-bottom:4px;">● ● ● ● ●</div>
+                <div style="font-size:11px;font-weight:bold;color:white;">وزارة التعليم</div>
+                <div style="font-size:7px;color:rgba(255,255,255,0.55);">Ministry of Education</div>
+              </div>
+              <div style="font-size:8px;color:rgba(255,255,255,0.8);">إشعار فترة أولى</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);
+                        border-radius:8px;margin-top:8px;padding:6px 0;text-align:center;">
+              <span style="font-size:13px;font-weight:bold;color:white;">
+                تحليل نتائج مادة &nbsp;[&nbsp;*التفكير الناقد&nbsp;]
+              </span>
+            </div>
+          </div>
+          <div style="display:flex;background:#F5F8FE;border-bottom:2px solid #DDE3EC;">
+             <div style="flex:1;text-align:center;padding:7px;border-left:1px solid #DDE3EC;">
+              <div style="font-size:8px;color:#7F8C8D;font-weight:bold;">المرحلة / الصف</div>
+              <div style="font-size:11px;font-weight:bold;color:#1A3A5C;margin-top:3px;">الأول الثانوي</div>
+            </div><div style="flex:1;text-align:center;padding:7px;border-left:1px solid #DDE3EC;">
+              <div style="font-size:8px;color:#7F8C8D;font-weight:bold;">السنة / الفصل</div>
+              <div style="font-size:11px;font-weight:bold;color:#1A3A5C;margin-top:3px;">الفصل الأول / 1446-1447هـ</div>
+            </div><div style="flex:1;text-align:center;padding:7px;border-left:1px solid #DDE3EC;">
+              <div style="font-size:8px;color:#7F8C8D;font-weight:bold;">درجة القياس</div>
+              <div style="font-size:11px;font-weight:bold;color:#1A3A5C;margin-top:3px;">100</div>
+            </div>
+          </div>
+          <div style="text-align:center;padding:10px 0 4px;">
+            <span style="background:linear-gradient(135deg,#2471A3,#1A3A5C);color:white;
+                         border-radius:16px;padding:4px 24px;font-size:10px;font-weight:bold;">
+              الإحصائيات التفصيلية
+            </span>
+          </div>
+          <div style="display:flex;gap:0;margin:0 20px;">
+            <div style="width:190px;min-width:190px;background:#F8FBFF;border:1px solid #DDE3EC;
+                        border-radius:8px;padding:10px;margin-left:10px;">
+              <div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">عدد الطلاب</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">150</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">أعلى درجة</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">100</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">أقل درجة</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">100</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">متوسط الدرجات</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">100.0</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">نسبة التحصيل</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">100.0%</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">مجموع الدرجات</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">15000</span>
+              </div>
+            </div>
+            <div style="flex:1;">
+              <table style="width:100%;border-collapse:collapse;font-family:Tahoma,Arial,sans-serif;">
+                <thead><tr style="background:#1A3A5C;">
+                  <th style="padding:8px;color:white;font-size:10px;">المستوى</th>
+                  <th style="padding:8px;color:white;font-size:10px;">النطاق</th>
+                  <th style="padding:8px;color:white;font-size:10px;">عدد الطلاب</th>
+                  <th style="padding:8px;color:white;font-size:10px;">النسبة</th>
+                </tr></thead>
+                <tbody>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#27AE60;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">ممتاز</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">90–100</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#27AE60;font-size:13px;">150</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">100%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#2980B9;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">جيد جداً</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">75–89</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#2980B9;font-size:13px;">0</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">0%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#8E44AD;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">جيد</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">65–74</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#8E44AD;font-size:13px;">0</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">0%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#E67E22;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">مقبول</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">50–64</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#E67E22;font-size:13px;">0</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">0%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#E74C3C;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">ضعيف</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">0–49</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#E74C3C;font-size:13px;">0</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">0%</td>
+            </tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div style="margin:14px 20px 0;">
+            <div style="background:#EBF5FB;border-radius:5px;padding:5px 12px;text-align:center;
+                        font-size:10px;color:#2471A3;font-weight:bold;margin-bottom:8px;">
+              رسم بياني — توزيع الطلاب على التقديرات
+            </div>
+            <div style="display:flex;gap:20px;align-items:flex-start;">
+              <div style="flex:1;">
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#27AE60;font-weight:bold;">ممتاز</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#27AE60;width:130px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#27AE60;">150</span>
+              <span style="font-size:9px;color:#999;">(100%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#2980B9;font-weight:bold;">جيد جداً</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#2980B9;width:0px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#2980B9;">0</span>
+              <span style="font-size:9px;color:#999;">(0%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#8E44AD;font-weight:bold;">جيد</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#8E44AD;width:0px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#8E44AD;">0</span>
+              <span style="font-size:9px;color:#999;">(0%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#E67E22;font-weight:bold;">مقبول</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#E67E22;width:0px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#E67E22;">0</span>
+              <span style="font-size:9px;color:#999;">(0%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#E74C3C;font-weight:bold;">ضعيف</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#E74C3C;width:0px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#E74C3C;">0</span>
+              <span style="font-size:9px;color:#999;">(0%)</span>
+            </div></div>
+              <div style="flex:1;display:flex;flex-wrap:wrap;gap:10px;justify-content:center;">
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#27AE60 360deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#27AE60;">
+                  100%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#27AE60;">ممتاز</div>
+            </div></div>
+            </div>
+          </div>
+          <div style="position:absolute;bottom:0;left:0;right:0;padding:10px 28px;
+                      border-top:1px solid #DDE3EC;display:flex;
+                      justify-content:space-between;align-items:center;">
+            <div style="text-align:center;width:180px;">
+              <div style="font-size:9px;color:#7F8C8D;margin-bottom:4px;">معلم المادة</div>
+              <div style="font-size:10px;font-weight:bold;color:#1A3A5C;margin-bottom:12px;">_______________</div>
+              <div style="border-top:1px solid #BDC3C7;margin:0 16px;"></div>
+            </div>
+            <div style="font-size:8px;color:#BDC3C7;">www.edu-forms.com</div>
+            <div style="text-align:center;width:180px;">
+              <div style="font-size:9px;color:#7F8C8D;margin-bottom:4px;">مدير المدرسة</div>
+              <div style="font-size:10px;font-weight:bold;color:#1A3A5C;margin-bottom:12px;">_______________</div>
+              <div style="border-top:1px solid #BDC3C7;margin:0 16px;"></div>
+            </div>
+          </div>
+        </div>
+<div class="page">
+          <div style="background:linear-gradient(135deg,#0F2542,#1A3A5C);padding:14px 28px 10px;">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;">
+              <div style="text-align:right;">
+                <div style="font-size:8px;color:rgba(255,255,255,0.7);">الإدارة العامة للتعليم بالمنطقة</div>
+                <div style="font-size:10px;font-weight:bold;color:white;">ثانوية الدرب - مسارات</div>
+                <div style="font-size:8px;color:rgba(255,255,255,0.6);margin-top:2px;">مدرسة</div>
+              </div>
+              <div style="text-align:center;">
+                <div style="font-size:7px;letter-spacing:4px;color:rgba(255,255,255,0.5);margin-bottom:4px;">● ● ● ● ●</div>
+                <div style="font-size:11px;font-weight:bold;color:white;">وزارة التعليم</div>
+                <div style="font-size:7px;color:rgba(255,255,255,0.55);">Ministry of Education</div>
+              </div>
+              <div style="font-size:8px;color:rgba(255,255,255,0.8);">إشعار فترة أولى</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);
+                        border-radius:8px;margin-top:8px;padding:6px 0;text-align:center;">
+              <span style="font-size:13px;font-weight:bold;color:white;">
+                تحليل نتائج مادة &nbsp;[&nbsp;*التقنية الرقمية&nbsp;]
+              </span>
+            </div>
+          </div>
+          <div style="display:flex;background:#F5F8FE;border-bottom:2px solid #DDE3EC;">
+             <div style="flex:1;text-align:center;padding:7px;border-left:1px solid #DDE3EC;">
+              <div style="font-size:8px;color:#7F8C8D;font-weight:bold;">المرحلة / الصف</div>
+              <div style="font-size:11px;font-weight:bold;color:#1A3A5C;margin-top:3px;">الأول الثانوي</div>
+            </div><div style="flex:1;text-align:center;padding:7px;border-left:1px solid #DDE3EC;">
+              <div style="font-size:8px;color:#7F8C8D;font-weight:bold;">السنة / الفصل</div>
+              <div style="font-size:11px;font-weight:bold;color:#1A3A5C;margin-top:3px;">الفصل الأول / 1446-1447هـ</div>
+            </div><div style="flex:1;text-align:center;padding:7px;border-left:1px solid #DDE3EC;">
+              <div style="font-size:8px;color:#7F8C8D;font-weight:bold;">درجة القياس</div>
+              <div style="font-size:11px;font-weight:bold;color:#1A3A5C;margin-top:3px;">100</div>
+            </div>
+          </div>
+          <div style="text-align:center;padding:10px 0 4px;">
+            <span style="background:linear-gradient(135deg,#2471A3,#1A3A5C);color:white;
+                         border-radius:16px;padding:4px 24px;font-size:10px;font-weight:bold;">
+              الإحصائيات التفصيلية
+            </span>
+          </div>
+          <div style="display:flex;gap:0;margin:0 20px;">
+            <div style="width:190px;min-width:190px;background:#F8FBFF;border:1px solid #DDE3EC;
+                        border-radius:8px;padding:10px;margin-left:10px;">
+              <div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">عدد الطلاب</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">150</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">أعلى درجة</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">100</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">أقل درجة</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">35</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">متوسط الدرجات</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">72.0</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">نسبة التحصيل</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">72.0%</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">مجموع الدرجات</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">10801</span>
+              </div>
+            </div>
+            <div style="flex:1;">
+              <table style="width:100%;border-collapse:collapse;font-family:Tahoma,Arial,sans-serif;">
+                <thead><tr style="background:#1A3A5C;">
+                  <th style="padding:8px;color:white;font-size:10px;">المستوى</th>
+                  <th style="padding:8px;color:white;font-size:10px;">النطاق</th>
+                  <th style="padding:8px;color:white;font-size:10px;">عدد الطلاب</th>
+                  <th style="padding:8px;color:white;font-size:10px;">النسبة</th>
+                </tr></thead>
+                <tbody>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#27AE60;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">ممتاز</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">90–100</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#27AE60;font-size:13px;">38</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">25%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#2980B9;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">جيد جداً</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">75–89</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#2980B9;font-size:13px;">33</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">22%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#8E44AD;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">جيد</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">65–74</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#8E44AD;font-size:13px;">23</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">15%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#E67E22;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">مقبول</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">50–64</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#E67E22;font-size:13px;">28</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">19%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#E74C3C;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">ضعيف</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">0–49</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#E74C3C;font-size:13px;">28</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">19%</td>
+            </tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div style="margin:14px 20px 0;">
+            <div style="background:#EBF5FB;border-radius:5px;padding:5px 12px;text-align:center;
+                        font-size:10px;color:#2471A3;font-weight:bold;margin-bottom:8px;">
+              رسم بياني — توزيع الطلاب على التقديرات
+            </div>
+            <div style="display:flex;gap:20px;align-items:flex-start;">
+              <div style="flex:1;">
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#27AE60;font-weight:bold;">ممتاز</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#27AE60;width:130px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#27AE60;">38</span>
+              <span style="font-size:9px;color:#999;">(25%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#2980B9;font-weight:bold;">جيد جداً</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#2980B9;width:112px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#2980B9;">33</span>
+              <span style="font-size:9px;color:#999;">(22%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#8E44AD;font-weight:bold;">جيد</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#8E44AD;width:78px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#8E44AD;">23</span>
+              <span style="font-size:9px;color:#999;">(15%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#E67E22;font-weight:bold;">مقبول</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#E67E22;width:95px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#E67E22;">28</span>
+              <span style="font-size:9px;color:#999;">(19%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#E74C3C;font-weight:bold;">ضعيف</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#E74C3C;width:95px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#E74C3C;">28</span>
+              <span style="font-size:9px;color:#999;">(19%)</span>
+            </div></div>
+              <div style="flex:1;display:flex;flex-wrap:wrap;gap:10px;justify-content:center;">
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#27AE60 91deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#27AE60;">
+                  25%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#27AE60;">ممتاز</div>
+            </div>
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#2980B9 79deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#2980B9;">
+                  22%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#2980B9;">جيد جداً</div>
+            </div>
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#8E44AD 55deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#8E44AD;">
+                  15%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#8E44AD;">جيد</div>
+            </div>
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#E67E22 67deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#E67E22;">
+                  19%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#E67E22;">مقبول</div>
+            </div>
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#E74C3C 67deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#E74C3C;">
+                  19%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#E74C3C;">ضعيف</div>
+            </div></div>
+            </div>
+          </div>
+          <div style="position:absolute;bottom:0;left:0;right:0;padding:10px 28px;
+                      border-top:1px solid #DDE3EC;display:flex;
+                      justify-content:space-between;align-items:center;">
+            <div style="text-align:center;width:180px;">
+              <div style="font-size:9px;color:#7F8C8D;margin-bottom:4px;">معلم المادة</div>
+              <div style="font-size:10px;font-weight:bold;color:#1A3A5C;margin-bottom:12px;">_______________</div>
+              <div style="border-top:1px solid #BDC3C7;margin:0 16px;"></div>
+            </div>
+            <div style="font-size:8px;color:#BDC3C7;">www.edu-forms.com</div>
+            <div style="text-align:center;width:180px;">
+              <div style="font-size:9px;color:#7F8C8D;margin-bottom:4px;">مدير المدرسة</div>
+              <div style="font-size:10px;font-weight:bold;color:#1A3A5C;margin-bottom:12px;">_______________</div>
+              <div style="border-top:1px solid #BDC3C7;margin:0 16px;"></div>
+            </div>
+          </div>
+        </div>
+<div class="page">
+          <div style="background:linear-gradient(135deg,#0F2542,#1A3A5C);padding:14px 28px 10px;">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;">
+              <div style="text-align:right;">
+                <div style="font-size:8px;color:rgba(255,255,255,0.7);">الإدارة العامة للتعليم بالمنطقة</div>
+                <div style="font-size:10px;font-weight:bold;color:white;">ثانوية الدرب - مسارات</div>
+                <div style="font-size:8px;color:rgba(255,255,255,0.6);margin-top:2px;">مدرسة</div>
+              </div>
+              <div style="text-align:center;">
+                <div style="font-size:7px;letter-spacing:4px;color:rgba(255,255,255,0.5);margin-bottom:4px;">● ● ● ● ●</div>
+                <div style="font-size:11px;font-weight:bold;color:white;">وزارة التعليم</div>
+                <div style="font-size:7px;color:rgba(255,255,255,0.55);">Ministry of Education</div>
+              </div>
+              <div style="font-size:8px;color:rgba(255,255,255,0.8);">إشعار فترة أولى</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);
+                        border-radius:8px;margin-top:8px;padding:6px 0;text-align:center;">
+              <span style="font-size:13px;font-weight:bold;color:white;">
+                تحليل نتائج مادة &nbsp;[&nbsp;*القرآن الكريم والتفسير&nbsp;]
+              </span>
+            </div>
+          </div>
+          <div style="display:flex;background:#F5F8FE;border-bottom:2px solid #DDE3EC;">
+             <div style="flex:1;text-align:center;padding:7px;border-left:1px solid #DDE3EC;">
+              <div style="font-size:8px;color:#7F8C8D;font-weight:bold;">المرحلة / الصف</div>
+              <div style="font-size:11px;font-weight:bold;color:#1A3A5C;margin-top:3px;">الأول الثانوي</div>
+            </div><div style="flex:1;text-align:center;padding:7px;border-left:1px solid #DDE3EC;">
+              <div style="font-size:8px;color:#7F8C8D;font-weight:bold;">السنة / الفصل</div>
+              <div style="font-size:11px;font-weight:bold;color:#1A3A5C;margin-top:3px;">الفصل الأول / 1446-1447هـ</div>
+            </div><div style="flex:1;text-align:center;padding:7px;border-left:1px solid #DDE3EC;">
+              <div style="font-size:8px;color:#7F8C8D;font-weight:bold;">درجة القياس</div>
+              <div style="font-size:11px;font-weight:bold;color:#1A3A5C;margin-top:3px;">100</div>
+            </div>
+          </div>
+          <div style="text-align:center;padding:10px 0 4px;">
+            <span style="background:linear-gradient(135deg,#2471A3,#1A3A5C);color:white;
+                         border-radius:16px;padding:4px 24px;font-size:10px;font-weight:bold;">
+              الإحصائيات التفصيلية
+            </span>
+          </div>
+          <div style="display:flex;gap:0;margin:0 20px;">
+            <div style="width:190px;min-width:190px;background:#F8FBFF;border:1px solid #DDE3EC;
+                        border-radius:8px;padding:10px;margin-left:10px;">
+              <div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">عدد الطلاب</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">150</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">أعلى درجة</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">100</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">أقل درجة</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">10</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">متوسط الدرجات</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">86.7</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">نسبة التحصيل</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">86.7%</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">مجموع الدرجات</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">12998</span>
+              </div>
+            </div>
+            <div style="flex:1;">
+              <table style="width:100%;border-collapse:collapse;font-family:Tahoma,Arial,sans-serif;">
+                <thead><tr style="background:#1A3A5C;">
+                  <th style="padding:8px;color:white;font-size:10px;">المستوى</th>
+                  <th style="padding:8px;color:white;font-size:10px;">النطاق</th>
+                  <th style="padding:8px;color:white;font-size:10px;">عدد الطلاب</th>
+                  <th style="padding:8px;color:white;font-size:10px;">النسبة</th>
+                </tr></thead>
+                <tbody>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#27AE60;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">ممتاز</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">90–100</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#27AE60;font-size:13px;">97</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">65%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#2980B9;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">جيد جداً</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">75–89</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#2980B9;font-size:13px;">19</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">13%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#8E44AD;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">جيد</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">65–74</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#8E44AD;font-size:13px;">10</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">7%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#E67E22;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">مقبول</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">50–64</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#E67E22;font-size:13px;">20</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">13%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#E74C3C;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">ضعيف</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">0–49</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#E74C3C;font-size:13px;">4</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">3%</td>
+            </tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div style="margin:14px 20px 0;">
+            <div style="background:#EBF5FB;border-radius:5px;padding:5px 12px;text-align:center;
+                        font-size:10px;color:#2471A3;font-weight:bold;margin-bottom:8px;">
+              رسم بياني — توزيع الطلاب على التقديرات
+            </div>
+            <div style="display:flex;gap:20px;align-items:flex-start;">
+              <div style="flex:1;">
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#27AE60;font-weight:bold;">ممتاز</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#27AE60;width:130px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#27AE60;">97</span>
+              <span style="font-size:9px;color:#999;">(65%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#2980B9;font-weight:bold;">جيد جداً</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#2980B9;width:25px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#2980B9;">19</span>
+              <span style="font-size:9px;color:#999;">(13%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#8E44AD;font-weight:bold;">جيد</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#8E44AD;width:13px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#8E44AD;">10</span>
+              <span style="font-size:9px;color:#999;">(7%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#E67E22;font-weight:bold;">مقبول</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#E67E22;width:26px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#E67E22;">20</span>
+              <span style="font-size:9px;color:#999;">(13%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#E74C3C;font-weight:bold;">ضعيف</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#E74C3C;width:5px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#E74C3C;">4</span>
+              <span style="font-size:9px;color:#999;">(3%)</span>
+            </div></div>
+              <div style="flex:1;display:flex;flex-wrap:wrap;gap:10px;justify-content:center;">
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#27AE60 233deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#27AE60;">
+                  65%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#27AE60;">ممتاز</div>
+            </div>
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#2980B9 46deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#2980B9;">
+                  13%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#2980B9;">جيد جداً</div>
+            </div>
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#8E44AD 24deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#8E44AD;">
+                  7%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#8E44AD;">جيد</div>
+            </div>
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#E67E22 48deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#E67E22;">
+                  13%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#E67E22;">مقبول</div>
+            </div>
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#E74C3C 10deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#E74C3C;">
+                  3%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#E74C3C;">ضعيف</div>
+            </div></div>
+            </div>
+          </div>
+          <div style="position:absolute;bottom:0;left:0;right:0;padding:10px 28px;
+                      border-top:1px solid #DDE3EC;display:flex;
+                      justify-content:space-between;align-items:center;">
+            <div style="text-align:center;width:180px;">
+              <div style="font-size:9px;color:#7F8C8D;margin-bottom:4px;">معلم المادة</div>
+              <div style="font-size:10px;font-weight:bold;color:#1A3A5C;margin-bottom:12px;">_______________</div>
+              <div style="border-top:1px solid #BDC3C7;margin:0 16px;"></div>
+            </div>
+            <div style="font-size:8px;color:#BDC3C7;">www.edu-forms.com</div>
+            <div style="text-align:center;width:180px;">
+              <div style="font-size:9px;color:#7F8C8D;margin-bottom:4px;">مدير المدرسة</div>
+              <div style="font-size:10px;font-weight:bold;color:#1A3A5C;margin-bottom:12px;">_______________</div>
+              <div style="border-top:1px solid #BDC3C7;margin:0 16px;"></div>
+            </div>
+          </div>
+        </div>
+<div class="page">
+          <div style="background:linear-gradient(135deg,#0F2542,#1A3A5C);padding:14px 28px 10px;">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;">
+              <div style="text-align:right;">
+                <div style="font-size:8px;color:rgba(255,255,255,0.7);">الإدارة العامة للتعليم بالمنطقة</div>
+                <div style="font-size:10px;font-weight:bold;color:white;">ثانوية الدرب - مسارات</div>
+                <div style="font-size:8px;color:rgba(255,255,255,0.6);margin-top:2px;">مدرسة</div>
+              </div>
+              <div style="text-align:center;">
+                <div style="font-size:7px;letter-spacing:4px;color:rgba(255,255,255,0.5);margin-bottom:4px;">● ● ● ● ●</div>
+                <div style="font-size:11px;font-weight:bold;color:white;">وزارة التعليم</div>
+                <div style="font-size:7px;color:rgba(255,255,255,0.55);">Ministry of Education</div>
+              </div>
+              <div style="font-size:8px;color:rgba(255,255,255,0.8);">إشعار فترة أولى</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);
+                        border-radius:8px;margin-top:8px;padding:6px 0;text-align:center;">
+              <span style="font-size:13px;font-weight:bold;color:white;">
+                تحليل نتائج مادة &nbsp;[&nbsp;الأحياء&nbsp;]
+              </span>
+            </div>
+          </div>
+          <div style="display:flex;background:#F5F8FE;border-bottom:2px solid #DDE3EC;">
+             <div style="flex:1;text-align:center;padding:7px;border-left:1px solid #DDE3EC;">
+              <div style="font-size:8px;color:#7F8C8D;font-weight:bold;">المرحلة / الصف</div>
+              <div style="font-size:11px;font-weight:bold;color:#1A3A5C;margin-top:3px;">الأول الثانوي</div>
+            </div><div style="flex:1;text-align:center;padding:7px;border-left:1px solid #DDE3EC;">
+              <div style="font-size:8px;color:#7F8C8D;font-weight:bold;">السنة / الفصل</div>
+              <div style="font-size:11px;font-weight:bold;color:#1A3A5C;margin-top:3px;">الفصل الأول / 1446-1447هـ</div>
+            </div><div style="flex:1;text-align:center;padding:7px;border-left:1px solid #DDE3EC;">
+              <div style="font-size:8px;color:#7F8C8D;font-weight:bold;">درجة القياس</div>
+              <div style="font-size:11px;font-weight:bold;color:#1A3A5C;margin-top:3px;">60</div>
+            </div>
+          </div>
+          <div style="text-align:center;padding:10px 0 4px;">
+            <span style="background:linear-gradient(135deg,#2471A3,#1A3A5C);color:white;
+                         border-radius:16px;padding:4px 24px;font-size:10px;font-weight:bold;">
+              الإحصائيات التفصيلية
+            </span>
+          </div>
+          <div style="display:flex;gap:0;margin:0 20px;">
+            <div style="width:190px;min-width:190px;background:#F8FBFF;border:1px solid #DDE3EC;
+                        border-radius:8px;padding:10px;margin-left:10px;">
+              <div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">عدد الطلاب</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">150</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">أعلى درجة</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">60</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">أقل درجة</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">0</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">متوسط الدرجات</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">43.0</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">نسبة التحصيل</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">71.7%</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">مجموع الدرجات</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">6450</span>
+              </div>
+            </div>
+            <div style="flex:1;">
+              <table style="width:100%;border-collapse:collapse;font-family:Tahoma,Arial,sans-serif;">
+                <thead><tr style="background:#1A3A5C;">
+                  <th style="padding:8px;color:white;font-size:10px;">المستوى</th>
+                  <th style="padding:8px;color:white;font-size:10px;">النطاق</th>
+                  <th style="padding:8px;color:white;font-size:10px;">عدد الطلاب</th>
+                  <th style="padding:8px;color:white;font-size:10px;">النسبة</th>
+                </tr></thead>
+                <tbody>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#27AE60;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">ممتاز</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">90–60</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#27AE60;font-size:13px;">41</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">27%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#2980B9;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">جيد جداً</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">75–89</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#2980B9;font-size:13px;">47</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">31%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#8E44AD;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">جيد</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">65–74</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#8E44AD;font-size:13px;">15</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">10%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#E67E22;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">مقبول</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">50–64</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#E67E22;font-size:13px;">19</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">13%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#E74C3C;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">ضعيف</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">0–49</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#E74C3C;font-size:13px;">28</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">19%</td>
+            </tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div style="margin:14px 20px 0;">
+            <div style="background:#EBF5FB;border-radius:5px;padding:5px 12px;text-align:center;
+                        font-size:10px;color:#2471A3;font-weight:bold;margin-bottom:8px;">
+              رسم بياني — توزيع الطلاب على التقديرات
+            </div>
+            <div style="display:flex;gap:20px;align-items:flex-start;">
+              <div style="flex:1;">
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#27AE60;font-weight:bold;">ممتاز</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#27AE60;width:113px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#27AE60;">41</span>
+              <span style="font-size:9px;color:#999;">(27%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#2980B9;font-weight:bold;">جيد جداً</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#2980B9;width:130px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#2980B9;">47</span>
+              <span style="font-size:9px;color:#999;">(31%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#8E44AD;font-weight:bold;">جيد</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#8E44AD;width:41px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#8E44AD;">15</span>
+              <span style="font-size:9px;color:#999;">(10%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#E67E22;font-weight:bold;">مقبول</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#E67E22;width:52px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#E67E22;">19</span>
+              <span style="font-size:9px;color:#999;">(13%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#E74C3C;font-weight:bold;">ضعيف</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#E74C3C;width:77px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#E74C3C;">28</span>
+              <span style="font-size:9px;color:#999;">(19%)</span>
+            </div></div>
+              <div style="flex:1;display:flex;flex-wrap:wrap;gap:10px;justify-content:center;">
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#27AE60 98deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#27AE60;">
+                  27%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#27AE60;">ممتاز</div>
+            </div>
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#2980B9 113deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#2980B9;">
+                  31%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#2980B9;">جيد جداً</div>
+            </div>
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#8E44AD 36deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#8E44AD;">
+                  10%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#8E44AD;">جيد</div>
+            </div>
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#E67E22 46deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#E67E22;">
+                  13%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#E67E22;">مقبول</div>
+            </div>
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#E74C3C 67deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#E74C3C;">
+                  19%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#E74C3C;">ضعيف</div>
+            </div></div>
+            </div>
+          </div>
+          <div style="position:absolute;bottom:0;left:0;right:0;padding:10px 28px;
+                      border-top:1px solid #DDE3EC;display:flex;
+                      justify-content:space-between;align-items:center;">
+            <div style="text-align:center;width:180px;">
+              <div style="font-size:9px;color:#7F8C8D;margin-bottom:4px;">معلم المادة</div>
+              <div style="font-size:10px;font-weight:bold;color:#1A3A5C;margin-bottom:12px;">_______________</div>
+              <div style="border-top:1px solid #BDC3C7;margin:0 16px;"></div>
+            </div>
+            <div style="font-size:8px;color:#BDC3C7;">www.edu-forms.com</div>
+            <div style="text-align:center;width:180px;">
+              <div style="font-size:9px;color:#7F8C8D;margin-bottom:4px;">مدير المدرسة</div>
+              <div style="font-size:10px;font-weight:bold;color:#1A3A5C;margin-bottom:12px;">_______________</div>
+              <div style="border-top:1px solid #BDC3C7;margin:0 16px;"></div>
+            </div>
+          </div>
+        </div>
+<div class="page">
+          <div style="background:linear-gradient(135deg,#0F2542,#1A3A5C);padding:14px 28px 10px;">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;">
+              <div style="text-align:right;">
+                <div style="font-size:8px;color:rgba(255,255,255,0.7);">الإدارة العامة للتعليم بالمنطقة</div>
+                <div style="font-size:10px;font-weight:bold;color:white;">ثانوية الدرب - مسارات</div>
+                <div style="font-size:8px;color:rgba(255,255,255,0.6);margin-top:2px;">مدرسة</div>
+              </div>
+              <div style="text-align:center;">
+                <div style="font-size:7px;letter-spacing:4px;color:rgba(255,255,255,0.5);margin-bottom:4px;">● ● ● ● ●</div>
+                <div style="font-size:11px;font-weight:bold;color:white;">وزارة التعليم</div>
+                <div style="font-size:7px;color:rgba(255,255,255,0.55);">Ministry of Education</div>
+              </div>
+              <div style="font-size:8px;color:rgba(255,255,255,0.8);">إشعار فترة أولى</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);
+                        border-radius:8px;margin-top:8px;padding:6px 0;text-align:center;">
+              <span style="font-size:13px;font-weight:bold;color:white;">
+                تحليل نتائج مادة &nbsp;[&nbsp;الرياضيات&nbsp;]
+              </span>
+            </div>
+          </div>
+          <div style="display:flex;background:#F5F8FE;border-bottom:2px solid #DDE3EC;">
+             <div style="flex:1;text-align:center;padding:7px;border-left:1px solid #DDE3EC;">
+              <div style="font-size:8px;color:#7F8C8D;font-weight:bold;">المرحلة / الصف</div>
+              <div style="font-size:11px;font-weight:bold;color:#1A3A5C;margin-top:3px;">الأول الثانوي</div>
+            </div><div style="flex:1;text-align:center;padding:7px;border-left:1px solid #DDE3EC;">
+              <div style="font-size:8px;color:#7F8C8D;font-weight:bold;">السنة / الفصل</div>
+              <div style="font-size:11px;font-weight:bold;color:#1A3A5C;margin-top:3px;">الفصل الأول / 1446-1447هـ</div>
+            </div><div style="flex:1;text-align:center;padding:7px;border-left:1px solid #DDE3EC;">
+              <div style="font-size:8px;color:#7F8C8D;font-weight:bold;">درجة القياس</div>
+              <div style="font-size:11px;font-weight:bold;color:#1A3A5C;margin-top:3px;">60</div>
+            </div>
+          </div>
+          <div style="text-align:center;padding:10px 0 4px;">
+            <span style="background:linear-gradient(135deg,#2471A3,#1A3A5C);color:white;
+                         border-radius:16px;padding:4px 24px;font-size:10px;font-weight:bold;">
+              الإحصائيات التفصيلية
+            </span>
+          </div>
+          <div style="display:flex;gap:0;margin:0 20px;">
+            <div style="width:190px;min-width:190px;background:#F8FBFF;border:1px solid #DDE3EC;
+                        border-radius:8px;padding:10px;margin-left:10px;">
+              <div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">عدد الطلاب</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">150</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">أعلى درجة</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">60</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">أقل درجة</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">20</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">متوسط الدرجات</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">41.3</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">نسبة التحصيل</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">68.9%</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">مجموع الدرجات</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">6200</span>
+              </div>
+            </div>
+            <div style="flex:1;">
+              <table style="width:100%;border-collapse:collapse;font-family:Tahoma,Arial,sans-serif;">
+                <thead><tr style="background:#1A3A5C;">
+                  <th style="padding:8px;color:white;font-size:10px;">المستوى</th>
+                  <th style="padding:8px;color:white;font-size:10px;">النطاق</th>
+                  <th style="padding:8px;color:white;font-size:10px;">عدد الطلاب</th>
+                  <th style="padding:8px;color:white;font-size:10px;">النسبة</th>
+                </tr></thead>
+                <tbody>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#27AE60;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">ممتاز</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">90–60</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#27AE60;font-size:13px;">26</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">17%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#2980B9;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">جيد جداً</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">75–89</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#2980B9;font-size:13px;">26</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">17%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#8E44AD;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">جيد</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">65–74</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#8E44AD;font-size:13px;">26</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">17%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#E67E22;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">مقبول</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">50–64</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#E67E22;font-size:13px;">59</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">39%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#E74C3C;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">ضعيف</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">0–49</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#E74C3C;font-size:13px;">13</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">9%</td>
+            </tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div style="margin:14px 20px 0;">
+            <div style="background:#EBF5FB;border-radius:5px;padding:5px 12px;text-align:center;
+                        font-size:10px;color:#2471A3;font-weight:bold;margin-bottom:8px;">
+              رسم بياني — توزيع الطلاب على التقديرات
+            </div>
+            <div style="display:flex;gap:20px;align-items:flex-start;">
+              <div style="flex:1;">
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#27AE60;font-weight:bold;">ممتاز</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#27AE60;width:57px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#27AE60;">26</span>
+              <span style="font-size:9px;color:#999;">(17%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#2980B9;font-weight:bold;">جيد جداً</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#2980B9;width:57px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#2980B9;">26</span>
+              <span style="font-size:9px;color:#999;">(17%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#8E44AD;font-weight:bold;">جيد</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#8E44AD;width:57px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#8E44AD;">26</span>
+              <span style="font-size:9px;color:#999;">(17%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#E67E22;font-weight:bold;">مقبول</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#E67E22;width:130px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#E67E22;">59</span>
+              <span style="font-size:9px;color:#999;">(39%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#E74C3C;font-weight:bold;">ضعيف</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#E74C3C;width:28px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#E74C3C;">13</span>
+              <span style="font-size:9px;color:#999;">(9%)</span>
+            </div></div>
+              <div style="flex:1;display:flex;flex-wrap:wrap;gap:10px;justify-content:center;">
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#27AE60 62deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#27AE60;">
+                  17%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#27AE60;">ممتاز</div>
+            </div>
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#2980B9 62deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#2980B9;">
+                  17%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#2980B9;">جيد جداً</div>
+            </div>
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#8E44AD 62deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#8E44AD;">
+                  17%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#8E44AD;">جيد</div>
+            </div>
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#E67E22 142deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#E67E22;">
+                  39%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#E67E22;">مقبول</div>
+            </div>
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#E74C3C 31deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#E74C3C;">
+                  9%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#E74C3C;">ضعيف</div>
+            </div></div>
+            </div>
+          </div>
+          <div style="position:absolute;bottom:0;left:0;right:0;padding:10px 28px;
+                      border-top:1px solid #DDE3EC;display:flex;
+                      justify-content:space-between;align-items:center;">
+            <div style="text-align:center;width:180px;">
+              <div style="font-size:9px;color:#7F8C8D;margin-bottom:4px;">معلم المادة</div>
+              <div style="font-size:10px;font-weight:bold;color:#1A3A5C;margin-bottom:12px;">_______________</div>
+              <div style="border-top:1px solid #BDC3C7;margin:0 16px;"></div>
+            </div>
+            <div style="font-size:8px;color:#BDC3C7;">www.edu-forms.com</div>
+            <div style="text-align:center;width:180px;">
+              <div style="font-size:9px;color:#7F8C8D;margin-bottom:4px;">مدير المدرسة</div>
+              <div style="font-size:10px;font-weight:bold;color:#1A3A5C;margin-bottom:12px;">_______________</div>
+              <div style="border-top:1px solid #BDC3C7;margin:0 16px;"></div>
+            </div>
+          </div>
+        </div>
+<div class="page">
+          <div style="background:linear-gradient(135deg,#0F2542,#1A3A5C);padding:14px 28px 10px;">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;">
+              <div style="text-align:right;">
+                <div style="font-size:8px;color:rgba(255,255,255,0.7);">الإدارة العامة للتعليم بالمنطقة</div>
+                <div style="font-size:10px;font-weight:bold;color:white;">ثانوية الدرب - مسارات</div>
+                <div style="font-size:8px;color:rgba(255,255,255,0.6);margin-top:2px;">مدرسة</div>
+              </div>
+              <div style="text-align:center;">
+                <div style="font-size:7px;letter-spacing:4px;color:rgba(255,255,255,0.5);margin-bottom:4px;">● ● ● ● ●</div>
+                <div style="font-size:11px;font-weight:bold;color:white;">وزارة التعليم</div>
+                <div style="font-size:7px;color:rgba(255,255,255,0.55);">Ministry of Education</div>
+              </div>
+              <div style="font-size:8px;color:rgba(255,255,255,0.8);">إشعار فترة أولى</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);
+                        border-radius:8px;margin-top:8px;padding:6px 0;text-align:center;">
+              <span style="font-size:13px;font-weight:bold;color:white;">
+                تحليل نتائج مادة &nbsp;[&nbsp;الكفايات اللغوية&nbsp;]
+              </span>
+            </div>
+          </div>
+          <div style="display:flex;background:#F5F8FE;border-bottom:2px solid #DDE3EC;">
+             <div style="flex:1;text-align:center;padding:7px;border-left:1px solid #DDE3EC;">
+              <div style="font-size:8px;color:#7F8C8D;font-weight:bold;">المرحلة / الصف</div>
+              <div style="font-size:11px;font-weight:bold;color:#1A3A5C;margin-top:3px;">الأول الثانوي</div>
+            </div><div style="flex:1;text-align:center;padding:7px;border-left:1px solid #DDE3EC;">
+              <div style="font-size:8px;color:#7F8C8D;font-weight:bold;">السنة / الفصل</div>
+              <div style="font-size:11px;font-weight:bold;color:#1A3A5C;margin-top:3px;">الفصل الأول / 1446-1447هـ</div>
+            </div><div style="flex:1;text-align:center;padding:7px;border-left:1px solid #DDE3EC;">
+              <div style="font-size:8px;color:#7F8C8D;font-weight:bold;">درجة القياس</div>
+              <div style="font-size:11px;font-weight:bold;color:#1A3A5C;margin-top:3px;">60</div>
+            </div>
+          </div>
+          <div style="text-align:center;padding:10px 0 4px;">
+            <span style="background:linear-gradient(135deg,#2471A3,#1A3A5C);color:white;
+                         border-radius:16px;padding:4px 24px;font-size:10px;font-weight:bold;">
+              الإحصائيات التفصيلية
+            </span>
+          </div>
+          <div style="display:flex;gap:0;margin:0 20px;">
+            <div style="width:190px;min-width:190px;background:#F8FBFF;border:1px solid #DDE3EC;
+                        border-radius:8px;padding:10px;margin-left:10px;">
+              <div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">عدد الطلاب</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">150</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">أعلى درجة</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">60</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">أقل درجة</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">25</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">متوسط الدرجات</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">50.6</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">نسبة التحصيل</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">84.4%</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">مجموع الدرجات</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">7594</span>
+              </div>
+            </div>
+            <div style="flex:1;">
+              <table style="width:100%;border-collapse:collapse;font-family:Tahoma,Arial,sans-serif;">
+                <thead><tr style="background:#1A3A5C;">
+                  <th style="padding:8px;color:white;font-size:10px;">المستوى</th>
+                  <th style="padding:8px;color:white;font-size:10px;">النطاق</th>
+                  <th style="padding:8px;color:white;font-size:10px;">عدد الطلاب</th>
+                  <th style="padding:8px;color:white;font-size:10px;">النسبة</th>
+                </tr></thead>
+                <tbody>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#27AE60;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">ممتاز</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">90–60</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#27AE60;font-size:13px;">69</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">46%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#2980B9;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">جيد جداً</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">75–89</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#2980B9;font-size:13px;">47</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">31%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#8E44AD;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">جيد</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">65–74</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#8E44AD;font-size:13px;">28</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">19%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#E67E22;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">مقبول</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">50–64</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#E67E22;font-size:13px;">3</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">2%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#E74C3C;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">ضعيف</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">0–49</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#E74C3C;font-size:13px;">3</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">2%</td>
+            </tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div style="margin:14px 20px 0;">
+            <div style="background:#EBF5FB;border-radius:5px;padding:5px 12px;text-align:center;
+                        font-size:10px;color:#2471A3;font-weight:bold;margin-bottom:8px;">
+              رسم بياني — توزيع الطلاب على التقديرات
+            </div>
+            <div style="display:flex;gap:20px;align-items:flex-start;">
+              <div style="flex:1;">
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#27AE60;font-weight:bold;">ممتاز</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#27AE60;width:130px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#27AE60;">69</span>
+              <span style="font-size:9px;color:#999;">(46%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#2980B9;font-weight:bold;">جيد جداً</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#2980B9;width:88px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#2980B9;">47</span>
+              <span style="font-size:9px;color:#999;">(31%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#8E44AD;font-weight:bold;">جيد</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#8E44AD;width:52px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#8E44AD;">28</span>
+              <span style="font-size:9px;color:#999;">(19%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#E67E22;font-weight:bold;">مقبول</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#E67E22;width:5px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#E67E22;">3</span>
+              <span style="font-size:9px;color:#999;">(2%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#E74C3C;font-weight:bold;">ضعيف</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#E74C3C;width:5px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#E74C3C;">3</span>
+              <span style="font-size:9px;color:#999;">(2%)</span>
+            </div></div>
+              <div style="flex:1;display:flex;flex-wrap:wrap;gap:10px;justify-content:center;">
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#27AE60 166deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#27AE60;">
+                  46%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#27AE60;">ممتاز</div>
+            </div>
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#2980B9 113deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#2980B9;">
+                  31%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#2980B9;">جيد جداً</div>
+            </div>
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#8E44AD 67deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#8E44AD;">
+                  19%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#8E44AD;">جيد</div>
+            </div>
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#E67E22 7deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#E67E22;">
+                  2%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#E67E22;">مقبول</div>
+            </div>
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#E74C3C 7deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#E74C3C;">
+                  2%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#E74C3C;">ضعيف</div>
+            </div></div>
+            </div>
+          </div>
+          <div style="position:absolute;bottom:0;left:0;right:0;padding:10px 28px;
+                      border-top:1px solid #DDE3EC;display:flex;
+                      justify-content:space-between;align-items:center;">
+            <div style="text-align:center;width:180px;">
+              <div style="font-size:9px;color:#7F8C8D;margin-bottom:4px;">معلم المادة</div>
+              <div style="font-size:10px;font-weight:bold;color:#1A3A5C;margin-bottom:12px;">_______________</div>
+              <div style="border-top:1px solid #BDC3C7;margin:0 16px;"></div>
+            </div>
+            <div style="font-size:8px;color:#BDC3C7;">www.edu-forms.com</div>
+            <div style="text-align:center;width:180px;">
+              <div style="font-size:9px;color:#7F8C8D;margin-bottom:4px;">مدير المدرسة</div>
+              <div style="font-size:10px;font-weight:bold;color:#1A3A5C;margin-bottom:12px;">_______________</div>
+              <div style="border-top:1px solid #BDC3C7;margin:0 16px;"></div>
+            </div>
+          </div>
+        </div>
+<div class="page">
+          <div style="background:linear-gradient(135deg,#0F2542,#1A3A5C);padding:14px 28px 10px;">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;">
+              <div style="text-align:right;">
+                <div style="font-size:8px;color:rgba(255,255,255,0.7);">الإدارة العامة للتعليم بالمنطقة</div>
+                <div style="font-size:10px;font-weight:bold;color:white;">ثانوية الدرب - مسارات</div>
+                <div style="font-size:8px;color:rgba(255,255,255,0.6);margin-top:2px;">مدرسة</div>
+              </div>
+              <div style="text-align:center;">
+                <div style="font-size:7px;letter-spacing:4px;color:rgba(255,255,255,0.5);margin-bottom:4px;">● ● ● ● ●</div>
+                <div style="font-size:11px;font-weight:bold;color:white;">وزارة التعليم</div>
+                <div style="font-size:7px;color:rgba(255,255,255,0.55);">Ministry of Education</div>
+              </div>
+              <div style="font-size:8px;color:rgba(255,255,255,0.8);">إشعار فترة أولى</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);
+                        border-radius:8px;margin-top:8px;padding:6px 0;text-align:center;">
+              <span style="font-size:13px;font-weight:bold;color:white;">
+                تحليل نتائج مادة &nbsp;[&nbsp;الكيمياء&nbsp;]
+              </span>
+            </div>
+          </div>
+          <div style="display:flex;background:#F5F8FE;border-bottom:2px solid #DDE3EC;">
+             <div style="flex:1;text-align:center;padding:7px;border-left:1px solid #DDE3EC;">
+              <div style="font-size:8px;color:#7F8C8D;font-weight:bold;">المرحلة / الصف</div>
+              <div style="font-size:11px;font-weight:bold;color:#1A3A5C;margin-top:3px;">الأول الثانوي</div>
+            </div><div style="flex:1;text-align:center;padding:7px;border-left:1px solid #DDE3EC;">
+              <div style="font-size:8px;color:#7F8C8D;font-weight:bold;">السنة / الفصل</div>
+              <div style="font-size:11px;font-weight:bold;color:#1A3A5C;margin-top:3px;">الفصل الأول / 1446-1447هـ</div>
+            </div><div style="flex:1;text-align:center;padding:7px;border-left:1px solid #DDE3EC;">
+              <div style="font-size:8px;color:#7F8C8D;font-weight:bold;">درجة القياس</div>
+              <div style="font-size:11px;font-weight:bold;color:#1A3A5C;margin-top:3px;">60</div>
+            </div>
+          </div>
+          <div style="text-align:center;padding:10px 0 4px;">
+            <span style="background:linear-gradient(135deg,#2471A3,#1A3A5C);color:white;
+                         border-radius:16px;padding:4px 24px;font-size:10px;font-weight:bold;">
+              الإحصائيات التفصيلية
+            </span>
+          </div>
+          <div style="display:flex;gap:0;margin:0 20px;">
+            <div style="width:190px;min-width:190px;background:#F8FBFF;border:1px solid #DDE3EC;
+                        border-radius:8px;padding:10px;margin-left:10px;">
+              <div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">عدد الطلاب</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">150</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">أعلى درجة</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">60</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">أقل درجة</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">0</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">متوسط الدرجات</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">48.6</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">نسبة التحصيل</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">81.0%</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">مجموع الدرجات</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">7289</span>
+              </div>
+            </div>
+            <div style="flex:1;">
+              <table style="width:100%;border-collapse:collapse;font-family:Tahoma,Arial,sans-serif;">
+                <thead><tr style="background:#1A3A5C;">
+                  <th style="padding:8px;color:white;font-size:10px;">المستوى</th>
+                  <th style="padding:8px;color:white;font-size:10px;">النطاق</th>
+                  <th style="padding:8px;color:white;font-size:10px;">عدد الطلاب</th>
+                  <th style="padding:8px;color:white;font-size:10px;">النسبة</th>
+                </tr></thead>
+                <tbody>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#27AE60;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">ممتاز</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">90–60</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#27AE60;font-size:13px;">63</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">42%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#2980B9;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">جيد جداً</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">75–89</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#2980B9;font-size:13px;">69</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">46%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#8E44AD;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">جيد</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">65–74</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#8E44AD;font-size:13px;">2</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">1%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#E67E22;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">مقبول</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">50–64</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#E67E22;font-size:13px;">2</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">1%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#E74C3C;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">ضعيف</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">0–49</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#E74C3C;font-size:13px;">14</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">9%</td>
+            </tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div style="margin:14px 20px 0;">
+            <div style="background:#EBF5FB;border-radius:5px;padding:5px 12px;text-align:center;
+                        font-size:10px;color:#2471A3;font-weight:bold;margin-bottom:8px;">
+              رسم بياني — توزيع الطلاب على التقديرات
+            </div>
+            <div style="display:flex;gap:20px;align-items:flex-start;">
+              <div style="flex:1;">
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#27AE60;font-weight:bold;">ممتاز</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#27AE60;width:118px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#27AE60;">63</span>
+              <span style="font-size:9px;color:#999;">(42%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#2980B9;font-weight:bold;">جيد جداً</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#2980B9;width:130px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#2980B9;">69</span>
+              <span style="font-size:9px;color:#999;">(46%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#8E44AD;font-weight:bold;">جيد</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#8E44AD;width:3px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#8E44AD;">2</span>
+              <span style="font-size:9px;color:#999;">(1%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#E67E22;font-weight:bold;">مقبول</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#E67E22;width:3px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#E67E22;">2</span>
+              <span style="font-size:9px;color:#999;">(1%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#E74C3C;font-weight:bold;">ضعيف</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#E74C3C;width:26px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#E74C3C;">14</span>
+              <span style="font-size:9px;color:#999;">(9%)</span>
+            </div></div>
+              <div style="flex:1;display:flex;flex-wrap:wrap;gap:10px;justify-content:center;">
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#27AE60 151deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#27AE60;">
+                  42%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#27AE60;">ممتاز</div>
+            </div>
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#2980B9 166deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#2980B9;">
+                  46%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#2980B9;">جيد جداً</div>
+            </div>
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#8E44AD 5deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#8E44AD;">
+                  1%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#8E44AD;">جيد</div>
+            </div>
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#E67E22 5deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#E67E22;">
+                  1%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#E67E22;">مقبول</div>
+            </div>
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#E74C3C 34deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#E74C3C;">
+                  9%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#E74C3C;">ضعيف</div>
+            </div></div>
+            </div>
+          </div>
+          <div style="position:absolute;bottom:0;left:0;right:0;padding:10px 28px;
+                      border-top:1px solid #DDE3EC;display:flex;
+                      justify-content:space-between;align-items:center;">
+            <div style="text-align:center;width:180px;">
+              <div style="font-size:9px;color:#7F8C8D;margin-bottom:4px;">معلم المادة</div>
+              <div style="font-size:10px;font-weight:bold;color:#1A3A5C;margin-bottom:12px;">_______________</div>
+              <div style="border-top:1px solid #BDC3C7;margin:0 16px;"></div>
+            </div>
+            <div style="font-size:8px;color:#BDC3C7;">www.edu-forms.com</div>
+            <div style="text-align:center;width:180px;">
+              <div style="font-size:9px;color:#7F8C8D;margin-bottom:4px;">مدير المدرسة</div>
+              <div style="font-size:10px;font-weight:bold;color:#1A3A5C;margin-bottom:12px;">_______________</div>
+              <div style="border-top:1px solid #BDC3C7;margin:0 16px;"></div>
+            </div>
+          </div>
+        </div>
+<div class="page">
+          <div style="background:linear-gradient(135deg,#0F2542,#1A3A5C);padding:14px 28px 10px;">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;">
+              <div style="text-align:right;">
+                <div style="font-size:8px;color:rgba(255,255,255,0.7);">الإدارة العامة للتعليم بالمنطقة</div>
+                <div style="font-size:10px;font-weight:bold;color:white;">ثانوية الدرب - مسارات</div>
+                <div style="font-size:8px;color:rgba(255,255,255,0.6);margin-top:2px;">مدرسة</div>
+              </div>
+              <div style="text-align:center;">
+                <div style="font-size:7px;letter-spacing:4px;color:rgba(255,255,255,0.5);margin-bottom:4px;">● ● ● ● ●</div>
+                <div style="font-size:11px;font-weight:bold;color:white;">وزارة التعليم</div>
+                <div style="font-size:7px;color:rgba(255,255,255,0.55);">Ministry of Education</div>
+              </div>
+              <div style="font-size:8px;color:rgba(255,255,255,0.8);">إشعار فترة أولى</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);
+                        border-radius:8px;margin-top:8px;padding:6px 0;text-align:center;">
+              <span style="font-size:13px;font-weight:bold;color:white;">
+                تحليل نتائج مادة &nbsp;[&nbsp;اللغة الانجليزية&nbsp;]
+              </span>
+            </div>
+          </div>
+          <div style="display:flex;background:#F5F8FE;border-bottom:2px solid #DDE3EC;">
+             <div style="flex:1;text-align:center;padding:7px;border-left:1px solid #DDE3EC;">
+              <div style="font-size:8px;color:#7F8C8D;font-weight:bold;">المرحلة / الصف</div>
+              <div style="font-size:11px;font-weight:bold;color:#1A3A5C;margin-top:3px;">الأول الثانوي</div>
+            </div><div style="flex:1;text-align:center;padding:7px;border-left:1px solid #DDE3EC;">
+              <div style="font-size:8px;color:#7F8C8D;font-weight:bold;">السنة / الفصل</div>
+              <div style="font-size:11px;font-weight:bold;color:#1A3A5C;margin-top:3px;">الفصل الأول / 1446-1447هـ</div>
+            </div><div style="flex:1;text-align:center;padding:7px;border-left:1px solid #DDE3EC;">
+              <div style="font-size:8px;color:#7F8C8D;font-weight:bold;">درجة القياس</div>
+              <div style="font-size:11px;font-weight:bold;color:#1A3A5C;margin-top:3px;">60</div>
+            </div>
+          </div>
+          <div style="text-align:center;padding:10px 0 4px;">
+            <span style="background:linear-gradient(135deg,#2471A3,#1A3A5C);color:white;
+                         border-radius:16px;padding:4px 24px;font-size:10px;font-weight:bold;">
+              الإحصائيات التفصيلية
+            </span>
+          </div>
+          <div style="display:flex;gap:0;margin:0 20px;">
+            <div style="width:190px;min-width:190px;background:#F8FBFF;border:1px solid #DDE3EC;
+                        border-radius:8px;padding:10px;margin-left:10px;">
+              <div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">عدد الطلاب</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">150</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">أعلى درجة</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">60</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">أقل درجة</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">30</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">متوسط الدرجات</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">49.2</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">نسبة التحصيل</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">82.0%</span>
+              </div><div style="background:white;border:1px solid #DDE3EC;border-radius:6px;
+                               padding:6px 8px;margin-bottom:6px;display:flex;
+                               justify-content:space-between;align-items:center;">
+                <span style="font-size:9px;color:#7F8C8D;font-weight:bold;">مجموع الدرجات</span>
+                <span style="font-size:15px;font-weight:900;color:#1A3A5C;">7379</span>
+              </div>
+            </div>
+            <div style="flex:1;">
+              <table style="width:100%;border-collapse:collapse;font-family:Tahoma,Arial,sans-serif;">
+                <thead><tr style="background:#1A3A5C;">
+                  <th style="padding:8px;color:white;font-size:10px;">المستوى</th>
+                  <th style="padding:8px;color:white;font-size:10px;">النطاق</th>
+                  <th style="padding:8px;color:white;font-size:10px;">عدد الطلاب</th>
+                  <th style="padding:8px;color:white;font-size:10px;">النسبة</th>
+                </tr></thead>
+                <tbody>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#27AE60;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">ممتاز</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">90–60</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#27AE60;font-size:13px;">49</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">33%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#2980B9;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">جيد جداً</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">75–89</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#2980B9;font-size:13px;">60</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">40%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#8E44AD;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">جيد</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">65–74</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#8E44AD;font-size:13px;">27</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">18%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#E67E22;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">مقبول</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">50–64</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#E67E22;font-size:13px;">14</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">9%</td>
+            </tr>
+<tr>
+<td style="padding:7px 10px;border-bottom:1px solid #E8ECF0;text-align:center;">
+                <span style="background:#E74C3C;color:white;border-radius:10px;
+                             padding:2px 14px;font-size:10px;font-weight:bold;">ضعيف</span></td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">0–49</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          font-weight:bold;color:#E74C3C;font-size:13px;">0</td>
+              <td style="padding:7px;border-bottom:1px solid #E8ECF0;text-align:center;
+                          color:#7F8C8D;font-size:11px;">0%</td>
+            </tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div style="margin:14px 20px 0;">
+            <div style="background:#EBF5FB;border-radius:5px;padding:5px 12px;text-align:center;
+                        font-size:10px;color:#2471A3;font-weight:bold;margin-bottom:8px;">
+              رسم بياني — توزيع الطلاب على التقديرات
+            </div>
+            <div style="display:flex;gap:20px;align-items:flex-start;">
+              <div style="flex:1;">
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#27AE60;font-weight:bold;">ممتاز</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#27AE60;width:106px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#27AE60;">49</span>
+              <span style="font-size:9px;color:#999;">(33%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#2980B9;font-weight:bold;">جيد جداً</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#2980B9;width:130px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#2980B9;">60</span>
+              <span style="font-size:9px;color:#999;">(40%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#8E44AD;font-weight:bold;">جيد</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#8E44AD;width:58px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#8E44AD;">27</span>
+              <span style="font-size:9px;color:#999;">(18%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#E67E22;font-weight:bold;">مقبول</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#E67E22;width:30px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#E67E22;">14</span>
+              <span style="font-size:9px;color:#999;">(9%)</span>
+            </div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span style="min-width:52px;text-align:right;font-size:10px;
+                            color:#E74C3C;font-weight:bold;">ضعيف</span>
+              <div style="width:130px;background:#F0F0F0;border-radius:3px;height:16px;">
+                <div style="background:#E74C3C;width:0px;
+                             height:16px;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:11px;font-weight:bold;color:#E74C3C;">0</span>
+              <span style="font-size:9px;color:#999;">(0%)</span>
+            </div></div>
+              <div style="flex:1;display:flex;flex-wrap:wrap;gap:10px;justify-content:center;">
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#27AE60 118deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#27AE60;">
+                  33%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#27AE60;">ممتاز</div>
+            </div>
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#2980B9 144deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#2980B9;">
+                  40%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#2980B9;">جيد جداً</div>
+            </div>
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#8E44AD 65deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#8E44AD;">
+                  18%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#8E44AD;">جيد</div>
+            </div>
+<div style="text-align:center;width:70px;">
+              <div style="width:60px;height:60px;border-radius:50%;
+                  background:conic-gradient(#E67E22 34deg,#E8ECF0 0deg);
+                  margin:0 auto 4px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:40px;height:40px;background:white;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             font-size:10px;font-weight:bold;color:#E67E22;">
+                  9%</div>
+              </div>
+              <div style="font-size:9px;font-weight:bold;color:#E67E22;">مقبول</div>
+            </div></div>
+            </div>
+          </div>
+          <div style="position:absolute;bottom:0;left:0;right:0;padding:10px 28px;
+                      border-top:1px solid #DDE3EC;display:flex;
+                      justify-content:space-between;align-items:center;">
+            <div style="text-align:center;width:180px;">
+              <div style="font-size:9px;color:#7F8C8D;margin-bottom:4px;">معلم المادة</div>
+              <div style="font-size:10px;font-weight:bold;color:#1A3A5C;margin-bottom:12px;">_______________</div>
+              <div style="border-top:1px solid #BDC3C7;margin:0 16px;"></div>
+            </div>
+            <div style="font-size:8px;color:#BDC3C7;">www.edu-forms.com</div>
+            <div style="text-align:center;width:180px;">
+              <div style="font-size:9px;color:#7F8C8D;margin-bottom:4px;">مدير المدرسة</div>
+              <div style="font-size:10px;font-weight:bold;color:#1A3A5C;margin-bottom:12px;">_______________</div>
+              <div style="border-top:1px solid #BDC3C7;margin:0 16px;"></div>
+            </div>
+          </div>
+        </div><script>window.onload = function() { window.print(); }</script></body></html>

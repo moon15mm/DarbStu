@@ -126,8 +126,8 @@ class AlertsTabMixin:
         abs_sb = ttk.Scrollbar(tree_frame_abs, orient="vertical",
                                 command=self.tree_alerts.yview)
         self.tree_alerts.configure(yscrollcommand=abs_sb.set)
-        self.tree_alerts.pack(side="left", fill="both", expand=True)
         abs_sb.pack(side="right", fill="y")
+        self.tree_alerts.pack(side="left", fill="both", expand=True)
         self.tree_alerts.bind("<Button-1>", self._alert_toggle_check)
 
         # سجل إرسال الغياب
@@ -176,8 +176,8 @@ class AlertsTabMixin:
         tard_sb = ttk.Scrollbar(tree_frame_tard, orient="vertical",
                                  command=self.tree_alerts_tard.yview)
         self.tree_alerts_tard.configure(yscrollcommand=tard_sb.set)
-        self.tree_alerts_tard.pack(side="left", fill="both", expand=True)
         tard_sb.pack(side="right", fill="y")
+        self.tree_alerts_tard.pack(side="left", fill="both", expand=True)
         self.tree_alerts_tard.bind("<Button-1>", self._tard_alert_toggle_check)
 
         # ─────────────────────────────────────────────────────────
@@ -205,8 +205,8 @@ class AlertsTabMixin:
         pat_sb = ttk.Scrollbar(tab_pat, orient="vertical",
                                 command=self.tree_patterns.yview)
         self.tree_patterns.configure(yscrollcommand=pat_sb.set)
-        self.tree_patterns.pack(side="left", fill="both", expand=True, padx=(6,0))
         pat_sb.pack(side="right", fill="y", pady=6, padx=(0,6))
+        self.tree_patterns.pack(side="left", fill="both", expand=True, padx=(6,0))
 
         # ══ تهيئة ══════════════════════════════════════════════════
         self._alert_checked      = set()
@@ -660,8 +660,8 @@ class AlertsTabMixin:
             self.tree_noor.column(col, width=w, anchor="center")
         sb = ttk.Scrollbar(hist, orient="vertical", command=self.tree_noor.yview)
         self.tree_noor.configure(yscrollcommand=sb.set)
-        self.tree_noor.pack(side="left", fill="both", expand=True)
         sb.pack(side="right", fill="y")
+        self.tree_noor.pack(side="left", fill="both", expand=True)
         ttk.Button(hist, text="📂 فتح المجلد",
                    command=self._noor_open_dir).pack(pady=4)
         frame.after(100, self._noor_load_history)
@@ -684,7 +684,7 @@ class AlertsTabMixin:
                     text="✅ تم التصدير: {} ({} KB)".format(
                         os.path.basename(filename), size_kb),
                     foreground="green")
-            frame.after(100, self._noor_load_history)
+            self.noor_export_frame.after(100, self._noor_load_history)
             messagebox.showinfo("تم التصدير", "تم حفظ ملف نور:\n{}".format(filename))
         except Exception as e:
             if hasattr(self,"noor_status"):

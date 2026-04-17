@@ -106,8 +106,8 @@ class TardinessMessagesTabMixin:
         sb = ttk.Scrollbar(list_lf, orient="vertical",
                             command=self.tree_tard_msg.yview)
         self.tree_tard_msg.configure(yscrollcommand=sb.set)
-        self.tree_tard_msg.pack(side="left", fill="both", expand=True)
         sb.pack(side="right", fill="y")
+        self.tree_tard_msg.pack(side="left", fill="both", expand=True)
         self.tree_tard_msg.bind("<Button-1>", self._tard_msg_toggle_row)
 
         # ─ سجل الإرسال

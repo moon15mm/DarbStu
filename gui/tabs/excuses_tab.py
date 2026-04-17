@@ -36,8 +36,8 @@ class ExcusesTabMixin:
             self.tree_excuses.column(col, width=w, anchor="center")
         sb = ttk.Scrollbar(tree_frame, orient="vertical", command=self.tree_excuses.yview)
         self.tree_excuses.configure(yscrollcommand=sb.set)
-        self.tree_excuses.pack(side="left", fill="both", expand=True)
         sb.pack(side="right", fill="y")
+        self.tree_excuses.pack(side="left", fill="both", expand=True)
 
         self.tree_excuses.tag_configure("wa_excuse", background="#E8F5E9", foreground="#2E7D32")
         self.tree_excuses.tag_configure("admin_excuse", background="#E3F2FD", foreground="#1565C0")

@@ -2,10 +2,11 @@
 """
 grade_analysis.py — دوال تحليل النتائج الدراسية (مشتركة بين الويب والمكتبة)
 """
-import os, re, io, json, base64
+import os, re, io, json, base64, datetime
 import tkinter as tk
 from tkinter import ttk
 from typing import List, Dict, Any, Optional
+
 try:
     import pandas as pd
 except ImportError:
@@ -358,6 +359,20 @@ def _ga_parse_file(filepath):
 # ════════════════════════════════════════════════════════════
 # ── HTML للعرض الداخلي ────────────────────────────────────
 # ════════════════════════════════════════════════════════════
+def _ga_placeholder_html(msg=None):
+    msg = msg or (
+        "📊 ارفع ملف نتائج للبدء في التحليل<br><br>"
+        "<span style='font-size:12px;color:#95A5A6;line-height:2;'>"
+        "📋 Excel .xlsx — ملفات إشعار فترة نور (متعدد الأوراق)<br>"
+        "📄 PDF — تقارير نور (يستخرج الدرجات تلقائياً حتى مع الخطوط المشفرة)<br>"
+        "📊 CSV — اسم الطالب / المادة / الدرجة / النهاية العظمى"
+        "</span>"
+    )
+    return f"""<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">\n<style>body{{font-family:Tahoma,Arial,sans-serif;background:#F0F4F8;display:flex;\nalign-items:center;justify-content:center;height:100vh;margin:0;direction:rtl;}}\n.ph{{text-align:center;color:#7F8C8D;}}.ph .icon{{font-size:64px;opacity:0.4;margin-bottom:16px;}}\n.ph h3{{font-size:17px;color:#1A3A5C;opacity:0.7;margin-bottom:10px;}}\n</style></head><body><div class="ph">
+<div class="icon">📊</div><h3>تحليل نتائج الطلاب</h3>
+<p style="font-size:14px;">{msg}</p></div></body></html>"""
+
+
 def _ga_build_html(students, sel_subject="الكل"):
     if not students:
         return _ga_placeholder_html("لا توجد بيانات للعرض")
@@ -596,36 +611,36 @@ def _ga_build_print_html(students, sel_subject="الكل"):
             </div>""" for lbl, _, _, col, _ in _GA_GRADES if gc[lbl] > 0)
 
         pages += f"""\n<div class="page">
-          <div style="background:linear-gradient(135deg,#0F2542,#1A3A5C);padding:18px 28px 14px;">
+          <div style="background:linear-gradient(135deg,#0F2542,#1A3A5C);padding:14px 28px 10px;">
             <div style="display:flex;align-items:flex-start;justify-content:space-between;">
               <div style="text-align:right;">
-                <div style="font-size:9px;color:rgba(255,255,255,0.7);">{reg}</div>
-                <div style="font-size:11px;font-weight:bold;color:white;">{sch}</div>
-                <div style="font-size:9px;color:rgba(255,255,255,0.6);margin-top:2px;">مدرسة</div>
+                <div style="font-size:8px;color:rgba(255,255,255,0.7);">{reg}</div>
+                <div style="font-size:10px;font-weight:bold;color:white;">{sch}</div>
+                <div style="font-size:8px;color:rgba(255,255,255,0.6);margin-top:2px;">مدرسة</div>
               </div>
               <div style="text-align:center;">
-                <div style="font-size:8px;letter-spacing:4px;color:rgba(255,255,255,0.5);margin-bottom:4px;">● ● ● ● ●</div>
-                <div style="font-size:13px;font-weight:bold;color:white;">وزارة التعليم</div>
-                <div style="font-size:8px;color:rgba(255,255,255,0.55);">Ministry of Education</div>
+                <div style="font-size:7px;letter-spacing:4px;color:rgba(255,255,255,0.5);margin-bottom:4px;">● ● ● ● ●</div>
+                <div style="font-size:11px;font-weight:bold;color:white;">وزارة التعليم</div>
+                <div style="font-size:7px;color:rgba(255,255,255,0.55);">Ministry of Education</div>
               </div>
-              <div style="font-size:9px;color:rgba(255,255,255,0.8);">{pr}</div>
+              <div style="font-size:8px;color:rgba(255,255,255,0.8);">{pr}</div>
             </div>
             <div style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);
-                        border-radius:8px;margin-top:12px;padding:9px 0;text-align:center;">
-              <span style="font-size:15px;font-weight:bold;color:white;">
+                        border-radius:8px;margin-top:8px;padding:6px 0;text-align:center;">
+              <span style="font-size:13px;font-weight:bold;color:white;">
                 تحليل نتائج مادة &nbsp;[&nbsp;{subj_name}&nbsp;]
               </span>
             </div>
           </div>
           <div style="display:flex;background:#F5F8FE;border-bottom:2px solid #DDE3EC;">
-            {"".join(f'''<div style="flex:1;text-align:center;padding:10px;border-left:1px solid #DDE3EC;">
+             {"".join(f'''<div style="flex:1;text-align:center;padding:7px;border-left:1px solid #DDE3EC;">
               <div style="font-size:8px;color:#7F8C8D;font-weight:bold;">{l}</div>
-              <div style="font-size:13px;font-weight:bold;color:#1A3A5C;margin-top:3px;">{v}</div>
+              <div style="font-size:11px;font-weight:bold;color:#1A3A5C;margin-top:3px;">{v}</div>
             </div>''' for l,v in [("المرحلة / الصف",cl),("السنة / الفصل",f"{tm} / {sy}هـ"),("درجة القياس",str(int(mx)))])}
           </div>
-          <div style="text-align:center;padding:12px 0 6px;">
+          <div style="text-align:center;padding:10px 0 4px;">
             <span style="background:linear-gradient(135deg,#2471A3,#1A3A5C);color:white;
-                         border-radius:16px;padding:4px 24px;font-size:11px;font-weight:bold;">
+                         border-radius:16px;padding:4px 24px;font-size:10px;font-weight:bold;">
               الإحصائيات التفصيلية
             </span>
           </div>
@@ -680,7 +695,7 @@ def _ga_build_print_html(students, sel_subject="الكل"):
           </div>
         </div>"""
 
-    return f"""<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">\n<title>تحليل نتائج الطلاب</title>\n<style>\n@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap');\n*{{box-sizing:border-box;margin:0;padding:0;}}\nbody{{font-family:'Cairo',Tahoma,Arial,sans-serif;background:#f0f0f0;direction:rtl;color:#1A2332;}}\n.page{{width:794px;min-height:1123px;margin:0 auto 30px;background:white;\nposition:relative;box-shadow:0 4px 30px rgba(0,0,0,0.15);\npage-break-after:always;overflow:hidden;}}\n.no-print{{background:#1A3A5C;padding:12px 24px;display:flex;align-items:center;\ngap:12px;position:sticky;top:0;z-index:99;}}\n@media print{{body{{background:white;}}.page{{box-shadow:none;margin:0;width:100%;min-height:100vh;}}\n.no-print{{display:none;}}}}\n</style></head><body>\n<div class="no-print">
+    return f"""<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">\n<title>تحليل نتائج الطلاب</title>\n<style>\n@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap');\n*{{box-sizing:border-box;margin:0;padding:0;}}\nbody{{font-family:'Cairo',Tahoma,Arial,sans-serif;background:#f0f0f0;direction:rtl;color:#1A2332;}}\n.page{{width:794px;height:1123px;margin:0 auto 30px;background:white;\nposition:relative;box-shadow:0 4px 30px rgba(0,0,0,0.15);\npage-break-after:always;overflow:hidden;zoom:0.95;}}\n.no-print{{background:#1A3A5C;padding:12px 24px;display:flex;align-items:center;\ngap:12px;position:sticky;top:0;z-index:99;}}\n@page {{ size: portrait; margin: 0; }}\n@media print{{body{{background:white;}} .page{{box-shadow:none;margin:0;width:100%;height:100vh;zoom:1;transform:scale(0.98);transform-origin:top;}}\n.no-print{{display:none;}}}}\n</style></head><body>\n<div class="no-print">
   <button onclick="window.print()" style="background:#27AE60;color:white;border:none;
      padding:8px 18px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:bold;
      font-family:Cairo,Tahoma,Arial;">🖨️ طباعة / حفظ PDF</button>
@@ -696,6 +711,9 @@ def _ga_build_print_html(students, sel_subject="الكل"):
 # ════════════════════════════════════════════════════════════
 def _ga_export_word(students, output_path, sel_subject="الكل"):
     """يصدّر تقرير تحليل النتائج بصيغة Word .docx"""
+    if not students:
+        raise ValueError("لا توجد بيانات للتصدير")
+
     try:
         from docx import Document as DocxDocument
         from docx.shared import Pt, RGBColor, Cm, Inches
@@ -703,12 +721,9 @@ def _ga_export_word(students, output_path, sel_subject="الكل"):
         from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ALIGN_VERTICAL
         from docx.oxml.ns import qn
         from docx.oxml import OxmlElement
-        import copy
     except ImportError:
         raise ImportError("مكتبة python-docx غير مثبّتة\nقم بتثبيتها: pip install python-docx")
 
-    if not students:
-        raise ValueError("لا توجد بيانات للتصدير")
 
     first = students[0]
     hdr   = _GA_HEADER_DATA
@@ -891,20 +906,6 @@ def _ga_export_word(students, output_path, sel_subject="الكل"):
     doc.save(output_path)
 
 
-def _ga_placeholder_html(msg=None):
-    msg = msg or (
-        "📊 ارفع ملف نتائج للبدء في التحليل<br><br>"
-        "<span style='font-size:12px;color:#95A5A6;line-height:2;'>"
-        "📋 Excel .xlsx — ملفات إشعار فترة نور (متعدد الأوراق)<br>"
-        "📄 PDF — تقارير نور (يستخرج الدرجات تلقائياً حتى مع الخطوط المشفرة)<br>"
-        "📊 CSV — اسم الطالب / المادة / الدرجة / النهاية العظمى"
-        "</span>"
-    )
-    return f"""<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">\n<style>body{{font-family:Tahoma,Arial,sans-serif;background:#F0F4F8;display:flex;\nalign-items:center;justify-content:center;height:100vh;margin:0;direction:rtl;}}\n.ph{{text-align:center;color:#7F8C8D;}}.ph .icon{{font-size:64px;opacity:0.4;margin-bottom:16px;}}\n.ph h3{{font-size:17px;color:#1A3A5C;opacity:0.7;margin-bottom:10px;}}\n</style></head><body><div class="ph">
-<div class="icon">📊</div><h3>تحليل نتائج الطلاب</h3>
-<p style="font-size:14px;">{msg}</p></div></body></html>"""
-
-
 # ════════════════════════════════════════════════════════════
 # ── نافذة تعديل بيانات الترويسة ──────────────────────────
 # ════════════════════════════════════════════════════════════
@@ -938,6 +939,17 @@ def _ga_open_header_editor(parent_root, on_save=None):
         ("principal",   "اسم مدير المدرسة"),
     ]
 
+    # جلب البيانات الأساسية من الإعدادات العامة إذا كانت فارغة
+    from config_manager import load_config
+    cfg = load_config()
+    
+    if not _GA_HEADER_DATA.get("school"): 
+        _GA_HEADER_DATA["school"] = cfg.get("school_name", "")
+    if not _GA_HEADER_DATA.get("principal"): 
+        _GA_HEADER_DATA["principal"] = cfg.get("principal_name", "")
+    if not _GA_HEADER_DATA.get("region"):
+        _GA_HEADER_DATA["region"] = "الإدارة العامة للتعليم بالمنطقة"
+
     vars_map = {}
     for i, (key, label) in enumerate(fields):
         row = tk.Frame(body, bg="white")
@@ -963,8 +975,3 @@ def _ga_open_header_editor(parent_root, on_save=None):
                command=_save).pack(side="right", padx=14)
     ttk.Button(btn_row, text="إلغاء",
                command=win.destroy).pack(side="right", padx=6)
-
-
-# ════════════════════════════════════════════════════════════
-# ── دالة بناء التبويب (داخل AppGUI) ─────────────────────
-# ════════════════════════════════════════════════════════════

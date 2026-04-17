@@ -36,8 +36,12 @@ class SettingsTabMixin:
 
         def _on_frame_configure(e):
             _canvas.configure(scrollregion=_canvas.bbox("all"))
+        _ss_last_w = [0]
         def _on_canvas_configure(e):
-            _canvas.itemconfig(_canvas_win, width=e.width)
+            w = e.width
+            if w == _ss_last_w[0]: return
+            _ss_last_w[0] = w
+            _canvas.itemconfig(_canvas_win, width=w)
         scroll.bind("<Configure>", _on_frame_configure)
         _canvas.bind("<Configure>", _on_canvas_configure)
 

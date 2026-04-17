@@ -1,276 +1,210 @@
 # -*- coding: utf-8 -*-
-"""
-gui/tabs/grade_analysis_tab.py — Mixin لتبويب تحليل النتائج
-"""
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
-import os, datetime, threading, webbrowser, sys
+import os, threading
 
-# ── تحذير: قد تحتاج لبعض التبعات من app_gui ──
-from gui.lib_loader import HtmlFrame
 from grade_analysis import (
-    _ga_placeholder_html, _ga_build_html, _ga_build_print_html,
-    _ga_export_word, _ga_open_header_editor, _ga_parse_file
+    _ga_parse_file, _ga_export_word, _ga_open_header_editor,
+    _GA_HEADER_DATA, _ga_grade, _ga_build_html
 )
 
+try:
+    from tkinterweb import HtmlFrame
+except ImportError:
+    HtmlFrame = None
+
 class GradeAnalysisTabMixin:
-    """Mixin: تبويب تحليل النتائج"""
-    
+    """Mixin: تبويب تحليل نتائج الطلاب (النسخة المستقرة)"""
+
     def _build_grade_analysis_tab(self):
-        """
-        تبويب تحليل نتائج الطلاب:
-        • رفع Excel/PDF/CSV — محلّل ذكي يتعامل مع خطوط PDF المشفرة
-        • عرض HTML تفاعلي داخل التطبيق
-        • تعديل بيانات الترويسة (مدرسة/فصل/معلم/مدير)
-        • تصدير HTML للطباعة كـ PDF
-        • تصدير Word .docx
-        """
+        self.ga_data = [] # لتخزين نتائج الطلاب
+        
         frame = self.grade_analysis_frame
+        frame.configure(bg="#F8FAFC")
 
-        # ── شريط العنوان ──
-        hdr = tk.Frame(frame, bg="#1A3A5C", height=48)
-        hdr.pack(fill="x"); hdr.pack_propagate(False)
-        tk.Label(hdr, text="📊 تحليل نتائج الطلاب",
-                 bg="#1A3A5C", fg="white",
-                 font=("Tahoma", 13, "bold")).pack(side="right", padx=16, pady=12)
-        tk.Label(hdr, text="تقرير تفصيلي بالتقديرات والرسوم البيانية — يدعم Excel / PDF / CSV",
-                 bg="#1A3A5C", fg="#90CAF9",
-                 font=("Tahoma", 8)).pack(side="right", pady=12)
+        # ── شريط الأدوات العلوي ────────────────────────────────────
+        toolbar = tk.Frame(frame, bg="#1E293B", pady=10)
+        toolbar.pack(fill="x")
 
-        # ── شريط الأدوات ──
-        toolbar = tk.Frame(frame, bg="#F0F4F8", pady=7)
-        toolbar.pack(fill="x", padx=0)
-        tk.Frame(frame, bg="#D0D7E3", height=1).pack(fill="x")
+        tk.Label(toolbar, text="📊 تحليل نتائج الطلاب", bg="#1E293B", fg="white",
+                 font=("Tahoma", 12, "bold")).pack(side="right", padx=15)
 
-        tb = tk.Frame(toolbar, bg="#F0F4F8")
-        tb.pack(fill="x", padx=12)
+        btn_style = {"font": ("Tahoma", 9), "padx": 10, "pady": 5}
+        
+        tk.Button(toolbar, text="📂 اختيار ملف (Excel/PDF)", command=self._ga_browse,
+                  bg="#3B82F6", fg="white", relief="flat", **btn_style).pack(side="right", padx=5)
+        
+        tk.Button(toolbar, text="⚡ بدء التحليل", command=self._ga_analyze,
+                  bg="#10B981", fg="white", relief="flat", **btn_style).pack(side="right", padx=5)
 
-        self._ga_file_path  = tk.StringVar()
-        self._ga_status_var = tk.StringVar(value="لم يتم اختيار ملف")
+        tk.Button(toolbar, text="📝 تصدير Word", command=self._ga_export,
+                  bg="#6366F1", fg="white", relief="flat", **btn_style).pack(side="right", padx=5)
 
-        tk.Label(tb, text="ملف النتائج:", bg="#F0F4F8", fg="#1A3A5C",
-                 font=("Tahoma", 9, "bold")).pack(side="right", padx=(0, 5))
-        ttk.Entry(tb, textvariable=self._ga_file_path,
-                  state="readonly", width=34, font=("Tahoma", 9)).pack(side="right", padx=3)
+        tk.Button(toolbar, text="⚙️ الترويسة", command=lambda: _ga_open_header_editor(self.root),
+                  bg="#64748B", fg="white", relief="flat", **btn_style).pack(side="right", padx=5)
 
-        def _browse():
-            p = filedialog.askopenfilename(
-                title="اختر ملف النتائج",
-                filetypes=[
-                    ("ملفات مدعومة", "*.xlsx *.xls *.pdf *.csv"),
-                    ("Excel", "*.xlsx *.xls"),
-                    ("PDF",   "*.pdf"),
-                    ("CSV",   "*.csv"),
-                ])
-            if p:
-                self._ga_file_path.set(p)
-                self._ga_status_var.set(f"📄 {os.path.basename(p)}")
-                status_lbl.config(fg="#E67E22")
+        tk.Button(toolbar, text="🌐 فتح في المتصفح", command=self._ga_open_browser,
+                  bg="#0F172A", fg="white", relief="flat", **btn_style).pack(side="right", padx=5)
 
-        def _analyze():
-            path = self._ga_file_path.get()
-            if not path:
-                messagebox.showwarning("تنبيه", "يُرجى اختيار ملف أولاً", parent=self.root)
-                return
-            self._ga_status_var.set("⏳ جارٍ تحليل الملف...")
-            status_lbl.config(fg="#E67E22")
-            frame.update_idletasks()
+        tk.Button(toolbar, text="🖨️ طباعة / PDF", command=self._ga_print_pdf,
+                  bg="#F59E0B", fg="white", relief="flat", **btn_style).pack(side="right", padx=15)
 
-            def _worker():
-                try:
-                    students = _ga_parse_file(path)
-                    if not students:
-                        self.root.after(0, lambda: (
-                            self._ga_status_var.set("❌ لم يُعثر على بيانات طلاب"),
-                            status_lbl.config(fg="#E74C3C")
-                        ))
-                        return
-                    html = _ga_build_html(students)
-                    self.root.after(0, lambda h=html, s=students: _show_html(h, s))
-                except Exception as e:
-                    err = str(e)
-                    self.root.after(0, lambda: (
-                        self._ga_status_var.set(f"❌ {err[:70]}"),
-                        status_lbl.config(fg="#E74C3C")
-                    ))
-            threading.Thread(target=_worker, daemon=True).start()
+        # ── شريط الفلترة ──────────────────────────────────────────
+        filter_bar = tk.Frame(frame, bg="white", pady=5)
+        filter_bar.pack(fill="x", padx=10, pady=5)
+        
+        tk.Label(filter_bar, text="عرض المادة:", bg="white").pack(side="right", padx=5)
+        self.ga_subject_var = tk.StringVar(value="الكل")
+        self.ga_subject_cb = ttk.Combobox(filter_bar, textvariable=self.ga_subject_var, state="readonly", width=30)
+        self.ga_subject_cb.pack(side="right", padx=5)
+        self.ga_subject_cb.bind("<<ComboboxSelected>>", lambda e: self._ga_refresh_table())
 
-        for txt, col, cmd in [
-            ("📁 اختر ملف",    "#2471A3", _browse),
-            ("⚡ تحليل",       "#27AE60", _analyze),
-        ]:
-            tk.Button(tb, text=txt, bg=col, fg="white",
-                      font=("Tahoma", 9, "bold"), relief="flat",
-                      cursor="hand2", padx=9, pady=4,
-                      command=cmd).pack(side="right", padx=3)
+        # ── عرض النتائج (جدول البيانات فقط لضمان الثبات) ──────────
+        table_frame = tk.Frame(frame, bg="white")
+        table_frame.pack(fill="both", expand=True, padx=10, pady=5)
 
-        # فاصل
-        tk.Frame(tb, bg="#D0D7E3", width=1, height=26).pack(side="right", padx=6)
+        cols = ("m", "name", "id", "score", "pct", "grade")
+        self.ga_tree = ttk.Treeview(table_frame, columns=cols, show="headings", height=15)
+        
+        headings = {"m": "م", "name": "اسم الطالب", "id": "السجل/الهوية", 
+                    "score": "الدرجة", "pct": "النسبة", "grade": "التقدير"}
+        widths = {"m": 40, "name": 250, "id": 120, "score": 80, "pct": 80, "grade": 100}
 
-        # فلاتر
-        for lbl_txt, attr in [("الفصل:", "class"), ("المادة:", "subject")]:
-            tk.Label(tb, text=lbl_txt, bg="#F0F4F8", fg="#555",
-                     font=("Tahoma", 9)).pack(side="right", padx=(6, 3))
-            var = tk.StringVar(value="الكل")
-            cb  = ttk.Combobox(tb, textvariable=var, state="readonly",
-                                width=16, font=("Tahoma", 9))
-            cb.pack(side="right", padx=3)
-            setattr(self, f"_ga_{attr}_var", var)
-            setattr(self, f"_ga_{attr}_cb",  cb)
-            cb.bind("<<ComboboxSelected>>", lambda e: _refilter())
+        for c in cols:
+            self.ga_tree.heading(c, text=headings[c])
+            self.ga_tree.column(c, width=widths[c], anchor="center" if c != "name" else "e")
 
-        # فاصل
-        tk.Frame(tb, bg="#D0D7E3", width=1, height=26).pack(side="right", padx=6)
+        sb = ttk.Scrollbar(table_frame, orient="vertical", command=self.ga_tree.yview)
+        self.ga_tree.configure(yscrollcommand=sb.set)
+        sb.pack(side="right", fill="y")
+        self.ga_tree.pack(side="left", fill="both", expand=True)
 
-        # أزرار التصدير
-        self._ga_export_html_btn = tk.Button(
-            tb, text="📄 تصدير PDF", bg="#E74C3C", fg="white",
-            font=("Tahoma", 9, "bold"), relief="flat", cursor="hand2",
-            padx=9, pady=4, state="disabled",
-            command=lambda: _export_html())
-        self._ga_export_html_btn.pack(side="right", padx=3)
+        # رسالة توضيحية للمستخدم
+        tk.Label(frame, text="💡 لمشاهدة الرسوم البيانية والتقرير الملون، اضغط على زر (🌐 فتح في المتصفح) في الأعلى لضمان أفضل ثبات.",
+                 bg="#F8FAFC", fg="#64748B", font=("Tahoma", 9)).pack(pady=5)
 
-        self._ga_export_word_btn = tk.Button(
-            tb, text="📝 تصدير Word", bg="#8E44AD", fg="white",
-            font=("Tahoma", 9, "bold"), relief="flat", cursor="hand2",
-            padx=9, pady=4, state="disabled",
-            command=lambda: _export_word())
-        self._ga_export_word_btn.pack(side="right", padx=3)
+        # ── شريط الحالة السفلي ─────────────────────────────────────
+        self.ga_status_lbl = tk.Label(frame, text="جاهز. يرجى اختيار ملف النتائج (Excel أو PDF نور).", 
+                                      anchor="e", bg="#F1F5F9", fg="#475569", padx=10)
+        self.ga_status_lbl.pack(fill="x", side="bottom")
 
-        # زر تعديل الترويسة
-        tk.Button(tb, text="✏️ بيانات التقرير", bg="#E67E22", fg="white",
-                  font=("Tahoma", 9, "bold"), relief="flat", cursor="hand2",
-                  padx=9, pady=4,
-                  command=lambda: _ga_open_header_editor(
-                      self.root,
-                      on_save=lambda: _refilter() if self._ga_all_students else None
-                  )).pack(side="right", padx=3)
+    def _ga_browse(self):
+        f = filedialog.askopenfilename(filetypes=[("Result Files", "*.xlsx *.xls *.pdf *.csv")])
+        if f:
+            self.ga_selected_file = f
+            self.ga_status_lbl.config(text=f"الملف المحدد: {os.path.basename(f)}")
 
-        status_lbl = tk.Label(tb, textvariable=self._ga_status_var,
-                               bg="#F0F4F8", fg="#7F8C8D", font=("Tahoma", 9))
-        status_lbl.pack(side="left", padx=8)
+    def _ga_analyze(self):
+        if not hasattr(self, 'ga_selected_file') or not self.ga_selected_file:
+            messagebox.showwarning("تنبيه", "يرجى اختيار ملف أولاً")
+            return
 
-        tk.Frame(frame, bg="#D0D7E3", height=1).pack(fill="x")
+        def _worker():
+            try:
+                self.root.after(0, lambda: self.ga_status_lbl.config(text="⏳ جاري التحليل... يرجى الانتظار"))
+                data = _ga_parse_file(self.ga_selected_file)
+                self.root.after(0, lambda: self._ga_on_data_ready(data))
+            except Exception as e:
+                self.root.after(0, lambda: messagebox.showerror("خطأ في التحليل", str(e)))
+                self.root.after(0, lambda: self.ga_status_lbl.config(text="❌ فشل التحليل"))
 
-        # ── منطقة المتصفح ──
-        browser_frame = tk.Frame(frame, bg="white")
-        browser_frame.pack(fill="both", expand=True)
+        threading.Thread(target=_worker, daemon=True).start()
 
-        self._ga_browser = HtmlFrame(browser_frame, horizontal_scrollbar="auto", messages_enabled=False)
-        self._ga_browser.pack(fill="both", expand=True)
-        self._ga_browser.load_html(_ga_placeholder_html())
-        self._ga_all_students = []
+    def _ga_on_data_ready(self, data):
+        try:
+            print(f"[GA-DEBUG] Analysis finished correctly. Data received: {len(data)} students.")
+            self.ga_data = data
+            subjects = set()
+            for s in data:
+                for sub in s.get('subjects', []):
+                    subjects.add(sub['subject'])
+            
+            self.ga_subject_cb['values'] = ["الكل"] + sorted(list(subjects))
+            self.ga_subject_var.set("الكل")
+            
+            print("[GA-DEBUG] Refreshing Treeview table...")
+            self._ga_refresh_table()
+            print("[GA-DEBUG] Table refreshed successfully.")
+            
+            self.ga_status_lbl.config(text=f"✅ تم تحليل {len(data)} طالب بنجاح. استخدم زر (فتح في المتصفح) للمعاينة.")
+            print("[GA-DEBUG] UI update complete. App is stable.")
+        except Exception as e:
+            print(f"[GA-DEBUG] CRITICAL ERROR in UI Thread: {e}")
+            messagebox.showerror("خطأ", f"حدث خطأ أثناء معالجة النتائج: {e}")
 
-        def _show_html(html, students):
-            self._ga_all_students = students
-            classes  = sorted(set(s.get("class", "") or "غير محدد" for s in students))
-            subjects = sorted(set(sub["subject"] for s in students for sub in s.get("subjects", [])))
-            self._ga_class_cb["values"]   = ["الكل"] + classes;   self._ga_class_var.set("الكل")
-            self._ga_subject_cb["values"] = ["الكل"] + subjects;  self._ga_subject_var.set("الكل")
-            self._ga_browser.load_html(html)
-            self._ga_status_var.set(f"✅ تم تحليل {len(students)} طالب")
-            status_lbl.config(fg="#27AE60")
-            self._ga_export_html_btn.config(state="normal")
-            self._ga_export_word_btn.config(state="normal")
+    def _ga_refresh_table(self):
+        self.ga_tree.delete(*self.ga_tree.get_children())
+        sel_subj = self.ga_subject_var.get()
+        
+        for i, s in enumerate(self.ga_data, 1):
+            if sel_subj == "الكل":
+                sc = s.get('total_score', 0)
+                mx = s.get('total_max', 100)
+                pct = (sc/mx*100) if mx > 0 else 0
+            else:
+                target = next((sub for sub in s.get('subjects', []) if sub['subject'] == sel_subj), None)
+                if not target: continue
+                sc = target['score']
+                mx = target['max_score']
+                pct = (sc/mx*100) if mx > 0 else 0
+            
+            grade_lbl, *_ = _ga_grade(pct)
+            self.ga_tree.insert("", "end", values=(i, s['name'], s.get('id', ''), sc, f"{pct:.1f}%", grade_lbl))
 
-        def _refilter():
-            if not self._ga_all_students:
-                return
-            sel_class   = self._ga_class_var.get()
-            sel_subject = self._ga_subject_var.get()
-            filtered = [s for s in self._ga_all_students
-                        if sel_class == "الكل" or (s.get("class") or "غير محدد") == sel_class]
-            html = _ga_build_html(filtered, sel_subject)
-            self._ga_browser.load_html(html)
+    def _ga_export(self):
+        if not self.ga_data:
+            messagebox.showwarning("تنبيه", "لا توجد بيانات لتصديرها. حلل ملفاً أولاً.")
+            return
+        
+        f = filedialog.asksaveasfilename(defaultextension=".docx", filetypes=[("Word Document", "*.docx")])
+        if f:
+            try:
+                from grade_analysis import _ga_export_word
+                _ga_export_word(self.ga_data, f, self.ga_subject_var.get())
+                messagebox.showinfo("نجاح", f"تم حفظ التقرير في:\n{f}")
+            except Exception as e:
+                messagebox.showerror("خطأ في التصدير", str(e))
 
-        def _get_filtered():
-            sel_class = self._ga_class_var.get()
-            return [s for s in self._ga_all_students
-                    if sel_class == "الكل" or (s.get("class") or "غير محدد") == sel_class]
+    def _ga_open_browser(self):
+        """تفتح التقرير في المتصفح الخارجي (أكثر ثباتاً من العرض الداخلي)"""
+        if not self.ga_data:
+            messagebox.showwarning("تنبيه", "لا توجد بيانات لعرضها. حلل ملفاً أولاً.")
+            return
+        
+        try:
+            html = _ga_build_html(self.ga_data, sel_subject=self.ga_subject_var.get())
+            temp_path = os.path.join(os.getcwd(), "temp_report.html")
+            with open(temp_path, "w", encoding="utf-8") as f:
+                f.write(html)
+            
+            import webbrowser
+            webbrowser.open(f"file:///{temp_path}")
+            self.ga_status_lbl.config(text="🌐 تم فتح التقرير في المتصفح بنجاح.")
+        except Exception as e:
+            messagebox.showerror("خطأ", f"فشل فتح المتصفح: {e}")
 
-        def _export_html():
-            if not self._ga_all_students:
-                return
-            filtered    = _get_filtered()
-            sel_subject = self._ga_subject_var.get()
-            if not filtered:
-                messagebox.showwarning("تنبيه", "لا توجد بيانات للتصدير", parent=self.root)
-                return
-            today = datetime.date.today().strftime("%Y-%m-%d")
-            out = filedialog.asksaveasfilename(
-                title="حفظ تقرير PDF", defaultextension=".html",
-                initialfile=f"تحليل_نتائج_{today}.html",
-                filetypes=[("HTML للطباعة كـ PDF", "*.html")])
-            if not out:
-                return
-            self._ga_status_var.set("⏳ جارٍ إنشاء التقرير...")
-            status_lbl.config(fg="#E67E22"); frame.update_idletasks()
+    def _ga_print_pdf(self):
+        """تولد نسخة مهيئة للطباعة وتفتحها في المتصفح لطلب الطباعة تلقائياً"""
+        if not self.ga_data:
+            messagebox.showwarning("تنبيه", "لا توجد بيانات للطباعة. حلل ملفاً أولاً.")
+            return
+        
+        try:
+            from grade_analysis import _ga_build_print_html
+            # جلب مادة واحدة إذا كان المستخدم يفلتر، أو الكل
+            sel = self.ga_subject_var.get()
+            html = _ga_build_print_html(self.ga_data, sel_subject=sel)
+            
+            # إضافة سكريبت للطباعة التلقائية
+            if "</body>" in html:
+                html = html.replace("</body>", "<script>window.onload = function() { window.print(); }</script></body>")
 
-            def _do():
-                try:
-                    html = _ga_build_print_html(filtered, sel_subject)
-                    with open(out, "w", encoding="utf-8") as f:
-                        f.write(html)
-                    self.root.after(0, lambda: _done_html(out))
-                except Exception as e:
-                    err = str(e)
-                    self.root.after(0, lambda: (
-                        self._ga_status_var.set(f"❌ {err[:60]}"),
-                        status_lbl.config(fg="#E74C3C")
-                    ))
-            threading.Thread(target=_do, daemon=True).start()
-
-        def _done_html(path):
-            self._ga_status_var.set("✅ تم حفظ التقرير")
-            status_lbl.config(fg="#27AE60")
-            if messagebox.askyesno("✅ تم",
-                f"تم حفظ التقرير:\n{path}\n\nفتحه في المتصفح للطباعة / حفظ PDF؟",
-                    parent=self.root):
-                try:
-                    webbrowser.open(f"file:///{os.path.abspath(path)}")
-                except Exception:
-                    pass
-
-        def _export_word():
-            if not self._ga_all_students:
-                return
-            filtered    = _get_filtered()
-            sel_subject = self._ga_subject_var.get()
-            if not filtered:
-                messagebox.showwarning("تنبيه", "لا توجد بيانات للتصدير", parent=self.root)
-                return
-            today = datetime.date.today().strftime("%Y-%m-%d")
-            out = filedialog.asksaveasfilename(
-                title="حفظ تقرير Word", defaultextension=".docx",
-                initialfile=f"تحليل_نتائج_{today}.docx",
-                filetypes=[("Word Document", "*.docx")])
-            if not out:
-                return
-            self._ga_status_var.set("⏳ جارٍ إنشاء ملف Word...")
-            status_lbl.config(fg="#E67E22"); frame.update_idletasks()
-
-            def _do():
-                try:
-                    _ga_export_word(filtered, out, sel_subject)
-                    self.root.after(0, lambda: _done_word(out))
-                except Exception as e:
-                    err = str(e)
-                    self.root.after(0, lambda: (
-                        self._ga_status_var.set(f"❌ {err[:60]}"),
-                        status_lbl.config(fg="#E74C3C")
-                    ))
-            threading.Thread(target=_do, daemon=True).start()
-
-        def _done_word(path):
-            self._ga_status_var.set("✅ تم حفظ ملف Word")
-            status_lbl.config(fg="#27AE60")
-            if messagebox.askyesno("✅ تم",
-                f"تم حفظ ملف Word:\n{path}\n\nفتحه الآن؟",
-                    parent=self.root):
-                try:
-                    if sys.platform == "win32":
-                        os.startfile(path)
-                    else:
-                        webbrowser.open(f"file:///{os.path.abspath(path)}")
-                except Exception:
-                    pass
+            temp_path = os.path.join(os.getcwd(), "temp_print_report.html")
+            with open(temp_path, "w", encoding="utf-8") as f:
+                f.write(html)
+            
+            import webbrowser
+            webbrowser.open(f"file:///{temp_path}")
+            self.ga_status_lbl.config(text="🖨️ تم تجهيز صفحة الطباعة وفتحها في المتصفح.")
+        except Exception as e:
+            messagebox.showerror("خطأ", f"فشل تجهيز الطباعة: {e}")

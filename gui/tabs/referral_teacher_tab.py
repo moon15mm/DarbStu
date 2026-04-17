@@ -40,7 +40,7 @@ class TeacherReferralTabMixin:
 
         # ─────────────────── لوحة النموذج ───────────────────
         form_outer = tk.Frame(paned, bg="white")
-        paned.add(form_outer, minsize=480)
+        paned.add(form_outer, minsize=340, stretch="always")
 
         tk.Label(form_outer, text="نموذج تحويل جديد",
                  bg="#1565C0", fg="white",
@@ -56,18 +56,29 @@ class TeacherReferralTabMixin:
         form_frame = tk.Frame(_cv, bg="white")
         _cv_win = _cv.create_window((0, 0), window=form_frame, anchor="nw")
 
+        form_frame.bind("<Configure>",
+            lambda e: _cv.configure(scrollregion=_cv.bbox("all")))
+        _cv_last_w = [0]
         def _on_cfg(e):
-            _cv.configure(scrollregion=_cv.bbox("all"))
-            _cv.itemconfig(_cv_win, width=_cv.winfo_width())
-        form_frame.bind("<Configure>", _on_cfg)
-        _cv.bind("<Configure>", lambda e: _cv.itemconfig(_cv_win, width=e.width))
+            w = _cv.winfo_width()
+            if w == _cv_last_w[0]: return
+            _cv_last_w[0] = w
+            _cv.itemconfig(_cv_win, width=w)
+        _cv.bind("<Configure>", _on_cfg)
         _cv.bind("<MouseWheel>", lambda e: _cv.yview_scroll(-1*(e.delta//120), "units"))
 
         self._build_referral_form(form_frame)
 
         # ─────────────────── لوحة السجل ───────────────────
         hist_outer = tk.Frame(paned, bg="white")
-        paned.add(hist_outer, minsize=360)
+        paned.add(hist_outer, minsize=280, stretch="always")
+
+        # ضبط موقع الـ sash نسبياً (55% للنموذج) بعد اكتمال الرسم
+        def _set_sash():
+            total = paned.winfo_width()
+            if total > 10:
+                paned.sash_place(0, int(total * 0.55), 0)
+        frame.after(150, _set_sash)
 
         tk.Label(hist_outer, text="سجل تحويلاتي",
                  bg="#7c3aed", fg="white",
@@ -132,9 +143,8 @@ class TeacherReferralTabMixin:
         self._ref_student_var = tk.StringVar()
         self._ref_students = []
         self._ref_student_cb = ttk.Combobox(r1, textvariable=self._ref_student_var,
-                                             width=30, state="readonly",
-                                             font=("Tahoma", 10))
-        self._ref_student_cb.pack(side="right", padx=4)
+                                             state="readonly", font=("Tahoma", 10))
+        self._ref_student_cb.pack(side="right", padx=4, fill="x", expand=True)
         self._ref_student_cb.bind("<<ComboboxSelected>>", self._on_ref_student_select)
         ttk.Button(r1, text="🔄", width=3,
                    command=self._reload_ref_students).pack(side="right")
