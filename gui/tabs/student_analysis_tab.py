@@ -431,7 +431,13 @@ class StudentAnalysisTabMixin:
 
         def _worker():
             try:
-                data = get_student_analytics_data(student_id)
+                from database import get_cloud_client
+                client = get_cloud_client()
+                if client and client.is_active():
+                    resp = client.get(f"/web/api/student-analytics/{student_id}")
+                    data = resp.get("data") if resp.get("ok") else get_student_analytics_data(student_id)
+                else:
+                    data = get_student_analytics_data(student_id)
                 self.root.after(0, lambda d=data: self._update_analysis_ui(d))
             except Exception as e:
                 print(f"[ANALYSIS-ERROR] {e}")
