@@ -32,6 +32,27 @@ _SKIP_FILES = {
 }
 
 
+def _get_installed_version() -> str:
+    """
+    يقرأ الإصدار الفعلي من version.json المحلي إن وُجد،
+    لأن الـ EXE يحتوي APP_VERSION مجمّداً ولا يتحدث بعد التحديث.
+    """
+    try:
+        import json as _j
+        vfile = os.path.join(BASE_DIR, "version.json")
+        if os.path.exists(vfile):
+            with open(vfile, "r", encoding="utf-8") as f:
+                local_ver = _j.load(f).get("version", APP_VERSION)
+            def _v(v):
+                try: return tuple(int(x) for x in str(v).split("."))
+                except: return (0,)
+            if _v(local_ver) >= _v(APP_VERSION):
+                return local_ver
+    except Exception:
+        pass
+    return APP_VERSION
+
+
 def check_for_updates(root_widget=None, silent=True):
     """
     يتحقق من وجود إصدار جديد على GitHub.
@@ -50,7 +71,8 @@ def check_for_updates(root_widget=None, silent=True):
             def _ver(v):
                 return tuple(int(x) for x in str(v).split("."))
 
-            if _ver(latest) > _ver(APP_VERSION):
+            current = _get_installed_version()
+            if _ver(latest) > _ver(current):
                 if root_widget:
                     root_widget.after(0, lambda: _show_update_dialog(latest, notes, dl_url))
             else:

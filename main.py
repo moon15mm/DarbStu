@@ -34,11 +34,17 @@ from api.mobile_routes import _schedule_tardiness_sender
 from report_builder import export_to_noor_excel
 from constants import now_riyadh_date
 
+import multiprocessing
 import uvicorn
+import asyncio
 import tkinter as tk
 from ttkthemes import ThemedTk
 from tkinter import messagebox
 import traceback
+
+# ─── إصلاح asyncio لـ PyInstaller على Windows (ضروري لعمل uvicorn) ──────────
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 # ─── ملف السجلات لالتقاط الأخطاء الصامتة ────────────────────────────────────
 _LOG_FILE = os.path.join(
@@ -142,9 +148,51 @@ def main():
     except Exception as _e:
         print("[MIGRATE] خطأ في الترقية:", _e)
     # ═══════════════════════════════════════════════════════════════
-    server_thread = threading.Thread(target=lambda: uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="warning"), daemon=True)
+    # ─── تشغيل السيرفر مع error logging ─────────────────────────────
+    _server_error = [None]
+    def _run_server():
+        try:
+            # في EXE بدون console يكون stdout/stderr=None فيفشل uvicorn logging
+            if sys.stdout is None:
+                sys.stdout = open(_LOG_FILE, 'a', encoding='utf-8', errors='replace')
+            if sys.stderr is None:
+                sys.stderr = open(_LOG_FILE, 'a', encoding='utf-8', errors='replace')
+            if sys.platform == 'win32':
+                asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            config = uvicorn.Config(app, host="0.0.0.0", port=PORT, log_level="warning")
+            server = uvicorn.Server(config)
+            loop.run_until_complete(server.serve())
+        except Exception as _srv_e:
+            _server_error[0] = str(_srv_e)
+            _write_log(f"[SERVER-FATAL] {_srv_e}\n{traceback.format_exc()}")
+            print(f"[SERVER] ❌ فشل تشغيل السيرفر: {_srv_e}")
+
+    server_thread = threading.Thread(target=_run_server, daemon=True)
     server_thread.start()
-    time.sleep(1)
+
+    # انتظر حتى يصبح السيرفر جاهزاً (حد أقصى 8 ثوانٍ بدلاً من 1 ثانية ثابتة)
+    import socket as _test_sock
+    _srv_ready = False
+    for _attempt in range(16):
+        time.sleep(0.5)
+        if _server_error[0]:
+            print(f"[SERVER] ❌ السيرفر فشل عند المحاولة {_attempt}: {_server_error[0]}")
+            break
+        try:
+            _s = _test_sock.socket(_test_sock.AF_INET, _test_sock.SOCK_STREAM)
+            _s.settimeout(0.3)
+            _s.connect(('127.0.0.1', PORT))
+            _s.close()
+            _srv_ready = True
+            print(f"[SERVER] ✅ جاهز على المنفذ {PORT} (بعد {(_attempt+1)*0.5:.1f}ث)")
+            break
+        except Exception:
+            pass
+    if not _srv_ready and not _server_error[0]:
+        print(f"[SERVER] ⚠️ السيرفر لم يستجب في 8 ثوانٍ — قد يكون المنفذ {PORT} محجوزاً")
+
     public_url = None
     
     # ─── Cloudflare Tunnel ───────────────────────────────────────
@@ -231,26 +279,30 @@ def main():
                 root.after(300_000, _noor_auto_check)
         root.after(60_000, _noor_auto_check)
 
-    # ─── فحص الترخيص ────────────────────────────────────────────
-    lic_ok, lic_msg, lic_info, lic_client = check_license_on_startup(root)
-
-    if not lic_ok:
-        def _after_activation():
-            _ok, _msg, _info, _ = check_license_on_startup(root)
-            if _ok:
-                LoginWindow(root, on_success=launch_main_app)
-            else:
-                messagebox.showerror("خطأ في الترخيص", _msg)
-                root.destroy()
-                sys.exit(1)
-        ActivationWindow(root, msg=lic_msg, on_success=_after_activation)
-    else:
-        # اعرض نافذة تسجيل الدخول أولاً
+    # ─── فحص الترخيص (يُتجاوز لأجهزة العميل السحابي) ──────────
+    _cfg = load_config()
+    if _cfg.get("cloud_mode", False):
+        # جهاز عميل مربوط بسيرفر خارجي — لا يحتاج ترخيص
         LoginWindow(root, on_success=launch_main_app)
+    else:
+        lic_ok, lic_msg, lic_info, lic_client = check_license_on_startup(root)
+        if not lic_ok:
+            def _after_activation():
+                _ok, _msg, _info, _ = check_license_on_startup(root)
+                if _ok:
+                    LoginWindow(root, on_success=launch_main_app)
+                else:
+                    messagebox.showerror("خطأ في الترخيص", _msg)
+                    root.destroy()
+                    sys.exit(1)
+            ActivationWindow(root, msg=lic_msg, on_success=_after_activation)
+        else:
+            LoginWindow(root, on_success=launch_main_app)
 
     root.mainloop()
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()   # ضروري لـ PyInstaller على Windows
     try: main()
     except SystemExit: pass
     except Exception as e:

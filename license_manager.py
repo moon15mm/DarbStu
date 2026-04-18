@@ -358,8 +358,9 @@ import urllib.request, urllib.error
 # ─── إعدادات (غيّرها قبل التوزيع) ───────────────────────────
 SHEET_ID         = os.environ.get("GSHEET_ID",       "1tdX9spw1sGEDeeExKouGghN_y37fUPJG3LDXi5v7Tao")
 APPS_SCRIPT_URL  = os.environ.get("APPS_SCRIPT_URL", "https://script.google.com/macros/s/AKfycbyzg2NkvN779YIsFq-w3xQTZI5AZ3bRlar7KcKfCkhUFqFeItzhWVLadBmKLFwOVWs/exec")
-LICENSE_FILE     = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                ".darb_license")
+LICENSE_FILE     = os.path.join(BASE_DIR, ".darb_license")
+TRIAL_FILE       = os.path.join(BASE_DIR, ".darb_trial")
+TRIAL_DAYS       = 7
 SHEET_CSV_URL    = "https://docs.google.com/spreadsheets/d/{}/export?format=csv&gid=0"
 
 
@@ -397,13 +398,37 @@ class LicenseClient:
     def is_activated(self) -> bool:
         return self._cache.get("activated") is True
 
+    def _get_trial(self) -> dict:
+        """يُنشئ أو يقرأ فترة التجربة المجانية."""
+        try:
+            if os.path.exists(TRIAL_FILE):
+                with open(TRIAL_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            else:
+                data = {"start": datetime.datetime.utcnow().isoformat()}
+                with open(TRIAL_FILE, "w", encoding="utf-8") as f:
+                    json.dump(data, f)
+            start     = datetime.datetime.fromisoformat(data["start"])
+            elapsed   = (datetime.datetime.utcnow() - start).days
+            days_left = max(0, TRIAL_DAYS - elapsed)
+            return {"valid": days_left > 0, "days_left": days_left}
+        except Exception:
+            return {"valid": True, "days_left": TRIAL_DAYS}
+
     def check(self) -> tuple:
         """فحص محلي — بدون إنترنت بعد التفعيل."""
         if self.is_activated():
             school = self._cache.get("school_name", "")
             plan   = self._cache.get("plan", "basic")
             return True, "✅ البرنامج مُفعَّل — {}".format(school or plan), self._cache
-        return False, "البرنامج غير مُفعَّل — أدخل مفتاح الترخيص", {}
+
+        # فترة التجربة
+        trial = self._get_trial()
+        if trial["valid"]:
+            days_left = trial["days_left"]
+            return True, "⏳ فترة التجربة — متبقي {} يوم".format(days_left), {"trial": True, "days_left": days_left}
+
+        return False, "انتهت فترة التجربة (7 أيام) — أدخل مفتاح الترخيص للاستمرار", {}
 
     def activate(self, license_key: str, school_name: str = "") -> tuple:
         """

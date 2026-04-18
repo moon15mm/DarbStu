@@ -188,72 +188,156 @@ class CloudTabMixin:
         from tkinter import scrolledtext
         import requests
         import socket
+        import threading as _th
 
         diag_win = tk.Toplevel(self.root)
         diag_win.title("أداة تشخيص الربط السحابي")
-        diag_win.geometry("600x500")
+        diag_win.geometry("640x540")
         diag_win.transient(self.root)
         diag_win.grab_set()
 
-        lbl = tk.Label(diag_win, text="🔍 جاري فحص حالة الربط السحابي...", font=("Tahoma", 12, "bold"), pady=15)
+        lbl = tk.Label(diag_win, text="🔍 جاري فحص حالة الربط السحابي...",
+                       font=("Tahoma", 12, "bold"), pady=15)
         lbl.pack()
 
-        txt = scrolledtext.ScrolledText(diag_win, font=("Consolas", 10), bg="#1e293b", fg="#f1f5f9", padx=10, pady=10)
-        txt.pack(fill="both", expand=True, padx=20, pady=10)
+        txt = scrolledtext.ScrolledText(diag_win, font=("Consolas", 10),
+                                         bg="#1e293b", fg="#f1f5f9", padx=10, pady=10)
+        txt.pack(fill="both", expand=True, padx=20, pady=(0, 5))
 
-        def log(msg): 
+        btn_frame = tk.Frame(diag_win); btn_frame.pack(pady=6)
+        restart_btn = tk.Button(btn_frame, text="🔄 إعادة تشغيل السيرفر المحلي",
+                                bg="#2563eb", fg="white", font=("Tahoma", 10, "bold"),
+                                padx=16, pady=5, state="disabled")
+        restart_btn.pack(side="right", padx=6)
+        tk.Button(btn_frame, text="✖ إغلاق", command=diag_win.destroy,
+                  font=("Tahoma", 10), padx=14, pady=5).pack(side="right", padx=6)
+
+        def log(msg):
             txt.insert(tk.END, msg + "\n")
             txt.see(tk.END)
-            diag_win.update()
+            diag_win.update_idletasks()
 
-        cfg = load_config()
-        
-        # 1. فحص برنامج cloudflared
-        log("--- [1] فحص ملفات النظام ---")
-        cf_path = find_cloudflared_executable()
-        if cf_path:
-            log(f"✅ تم العثور على برنامج النفق: {cf_path}")
-        else:
-            log("❌ خطأ: برنامج cloudflared.exe غير موجود في الجهاز.")
-            log("   الحل: تأكد من وجود ملف cloudflared.exe في مجلد البرنامج.")
+        def _do_check():
+            cfg = load_config()
 
-        # 2. فحص الخادم المحلي
-        log("\n--- [2] فحص الخادم المحلي (API) ---")
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.settimeout(2)
-            s.connect(('127.0.0.1', PORT))
-            log(f"✅ الخادم المحلي يعمل على المنفذ {PORT}")
-            s.close()
-            
-            # فحص الـ Health check المحلي
-            resp = requests.get(f"http://127.0.0.1:{PORT}/health", timeout=2)
-            if resp.status_code == 200:
-                log("✅ استجابة مسار الصحة: OK")
+            # ── 1. cloudflared ──────────────────────────────────
+            log("--- [1] فحص ملفات النظام ---")
+            cf_path = find_cloudflared_executable()
+            if cf_path:
+                log(f"✅ تم العثور على برنامج النفق: {cf_path}")
             else:
-                log(f"⚠️ الخادم المحلي استجاب برمز خطأ: {resp.status_code}")
-        except Exception as e:
-            log(f"❌ الخادم المحلي لا يستجيب: {e}")
-            log("   الحل: أعد تشغيل البرنامج بالكامل.")
+                log("❌ cloudflared.exe غير موجود.")
+                log("   الحل: ضع ملف cloudflared.exe في نفس مجلد البرنامج.")
 
-        # 3. فحص الرابط العام
-        log("\n--- [3] فحص الرابط العام ---")
-        public_url = cfg.get("cloud_url_internal", "").rstrip("/")
-        if not public_url:
-            log("⚠️ لا يوجد رابط عام مسجل حالياً.")
-        else:
-            log(f"فحص الرابط: {public_url}")
+            # ── 2. السيرفر المحلي ───────────────────────────────
+            log("\n--- [2] فحص الخادم المحلي (API) ---")
+            api_ok = False
+
+            # محاولة الاتصال مع timeout أطول (5 ثوانٍ)
+            for _host in ('127.0.0.1', 'localhost', '::1'):
+                try:
+                    s = socket.socket(socket.AF_INET6 if _host == '::1' else socket.AF_INET,
+                                      socket.SOCK_STREAM)
+                    s.settimeout(5)
+                    s.connect((_host, PORT))
+                    s.close()
+                    log(f"✅ السيرفر يستجيب على {_host}:{PORT}")
+                    api_ok = True
+                    break
+                except ConnectionRefusedError:
+                    log(f"❌ {_host}:{PORT} — connection refused (السيرفر لم يبدأ)")
+                    break
+                except socket.timeout:
+                    log(f"⚠️ {_host}:{PORT} — timeout (يبدو أن Firewall يحجب المنفذ)")
+                except Exception as _e:
+                    pass
+
+            if api_ok:
+                try:
+                    resp = requests.get(f"http://127.0.0.1:{PORT}/health", timeout=5)
+                    if resp.status_code == 200:
+                        log("✅ مسار /health يستجيب بـ OK")
+                    else:
+                        log(f"⚠️ /health أعاد رمز: {resp.status_code}")
+                except Exception as _e:
+                    log(f"⚠️ فحص /health فشل: {_e}")
+            else:
+                log(f"\n💡 الأسباب المحتملة لعدم عمل السيرفر:")
+                log(f"   • المنفذ {PORT} محجوز بواسطة برنامج آخر")
+                log(f"   • Windows Firewall يمنع الاتصال — أضف استثناء للمنفذ {PORT}")
+                log(f"   • السيرفر فشل عند التشغيل (تحقق من error.log)")
+                log(f"   • الحل السريع: اضغط زر 'إعادة تشغيل السيرفر المحلي' أدناه")
+                diag_win.after(0, lambda: restart_btn.config(state="normal"))
+
+            # ── 3. الرابط العام ─────────────────────────────────
+            log("\n--- [3] فحص الرابط العام ---")
+            public_url = cfg.get("cloud_url_internal", "").rstrip("/")
+            if not public_url:
+                log("⚠️ لا يوجد رابط عام مسجل (النفق لم يبدأ بعد).")
+            else:
+                log(f"فحص الرابط: {public_url}")
+                try:
+                    resp = requests.get(f"{public_url}/health", timeout=8)
+                    if resp.status_code == 200:
+                        log("✅ الرابط العام متصل ويعمل بشكل مثالي!")
+                    elif resp.status_code == 502:
+                        log("❌ رمز 502: الرابط العام متصل لكن السيرفر المحلي لا يستجيب.")
+                        log("   الحل: شغّل السيرفر المحلي أولاً ثم أعد فتح البرنامج.")
+                    elif resp.status_code == 530:
+                        log("❌ رمز 530: النفق منقطع عن Cloudflare.")
+                        log("   الحل: تحقق من الإنترنت أو أعد تشغيل البرنامج.")
+                    else:
+                        log(f"⚠️ الرابط العام أعاد رمز غير متوقع: {resp.status_code}")
+                except Exception as _e:
+                    log(f"❌ تعذر الوصول للرابط العام: {_e}")
+
+            # ── 4. فحص المنفذ (netstat) ─────────────────────────
+            log("\n--- [4] فحص المنفذ في النظام ---")
             try:
-                resp = requests.get(f"{public_url}/health", timeout=5)
-                if resp.status_code == 200:
-                    log("✅ الرابط العام متصل ويعمل بشكل ممتاز!")
-                elif resp.status_code == 530:
-                    log("❌ خطأ 530: النفق متوقف أو غير متصل بـ Cloudflare.")
-                    log("   الحل: تأكد من جودة الإنترنت أو أعد تشغيل النفق.")
+                import subprocess
+                result = subprocess.run(
+                    ["netstat", "-ano", "-p", "TCP"],
+                    capture_output=True, text=True, timeout=5,
+                    creationflags=subprocess.CREATE_NO_WINDOW)
+                lines = [l for l in result.stdout.splitlines()
+                         if f":{PORT}" in l and "LISTENING" in l]
+                if lines:
+                    log(f"✅ المنفذ {PORT} مفتوح وفي وضع LISTENING:")
+                    for l in lines[:3]:
+                        log(f"   {l.strip()}")
                 else:
-                    log(f"⚠️ الرابط العام أعاد رمز: {resp.status_code}")
-            except Exception as e:
-                log(f"❌ تعذر الوصول للرابط العام: {e}")
+                    log(f"❌ المنفذ {PORT} ليس في وضع LISTENING — السيرفر لم يبدأ.")
+            except Exception as _e:
+                log(f"⚠️ تعذر فحص netstat: {_e}")
 
-        log("\n--- تم الفحص بنجاح ---")
-        lbl.config(text="✅ اكتمل الفحص")
+            log("\n--- ✅ اكتمل الفحص ---")
+            diag_win.after(0, lambda: lbl.config(text="✅ اكتمل الفحص"))
+
+        def _restart_server():
+            import uvicorn, asyncio, sys
+            restart_btn.config(state="disabled", text="⏳ جارٍ التشغيل...")
+            log("\n--- إعادة تشغيل السيرفر المحلي ---")
+
+            def _do_restart():
+                try:
+                    if sys.platform == 'win32':
+                        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+                    from api.app import app as _app
+                    uvicorn.run(_app, host="0.0.0.0", port=PORT, log_level="warning")
+                except Exception as _e:
+                    diag_win.after(0, lambda e=_e: log(f"❌ فشل: {e}"))
+
+            _th.Thread(target=_do_restart, daemon=True).start()
+
+            # انتظر 5 ثوانٍ ثم أعد الفحص
+            import time as _t
+
+            def _recheck():
+                _t.sleep(5)
+                diag_win.after(0, lambda: log("🔄 إعادة الفحص بعد التشغيل..."))
+                diag_win.after(200, _do_check)
+
+            _th.Thread(target=_recheck, daemon=True).start()
+
+        restart_btn.config(command=_restart_server)
+        _th.Thread(target=_do_check, daemon=True).start()
