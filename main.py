@@ -258,7 +258,7 @@ def main():
         # جدول التقرير اليومي للإدارة
         schedule_daily_report(root)
         # جدول الإشعارات الذكية اليومية
-        schedule_daily_alerts(root, run_hour=14)
+        schedule_daily_alerts(root, run_hour=load_config().get("alert_run_hour", 14))
         # جدول تصدير نور التلقائي
         def _noor_auto_check():
             now = datetime.datetime.now()

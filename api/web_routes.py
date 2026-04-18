@@ -1859,7 +1859,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
     <button class="btn bp2 bsm" onclick="loadCirculars()"><i class="fas fa-sync-alt"></i> تحديث</button>
   </div>
   
-  <div id="circ-add" class="ip" style="display:none">
+  <div id="circ-add" class="ip">
     <div class="section">
       <div class="st">إصدار تعميم جديد</div>
       <div class="fg2">

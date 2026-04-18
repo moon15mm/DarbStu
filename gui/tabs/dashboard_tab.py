@@ -23,7 +23,7 @@ class DashboardTabMixin:
         style.configure("Treeview",         rowheight=26, font=("Tahoma", 10))
         style.configure("Treeview.Heading", font=("Tahoma", 10, "bold"))
 
-        # ─ شريط التحكم العلوي
+        # ─ شريط التحكم العلوي (ثابت خارج الـ scroll)
         top_bar = ttk.Frame(self.dashboard_frame)
         top_bar.pack(fill="x", padx=10, pady=(10,4))
         ttk.Label(top_bar, text="تاريخ اليوم:",
@@ -37,8 +37,40 @@ class DashboardTabMixin:
                                         foreground="#5A6A7E", font=("Tahoma",9))
         self.dash_week_lbl.pack(side="left", padx=8)
 
+        # ─ Canvas قابل للتمرير يحتوي كل المحتوى ──────────────────
+        _dash_sb = ttk.Scrollbar(self.dashboard_frame, orient="vertical")
+        _dash_sb.pack(side="right", fill="y")
+        _dash_canvas = tk.Canvas(self.dashboard_frame, yscrollcommand=_dash_sb.set,
+                                  highlightthickness=0)
+        _dash_canvas.pack(side="left", fill="both", expand=True)
+        _dash_sb.config(command=_dash_canvas.yview)
+
+        _dash_inner = ttk.Frame(_dash_canvas)
+        _dash_win   = _dash_canvas.create_window((0,0), window=_dash_inner, anchor="nw")
+
+        def _on_inner_conf(e):
+            _dash_canvas.configure(scrollregion=_dash_canvas.bbox("all"))
+        _dash_inner.bind("<Configure>", _on_inner_conf)
+
+        _last_cw = [0]
+        def _on_canvas_conf(e):
+            w = _dash_canvas.winfo_width()
+            if w == _last_cw[0]: return
+            _last_cw[0] = w
+            _dash_canvas.itemconfig(_dash_win, width=w)
+        _dash_canvas.bind("<Configure>", _on_canvas_conf)
+
+        _dash_canvas.bind("<Enter>",
+            lambda e: _dash_canvas.bind_all("<MouseWheel>",
+                lambda ev: _dash_canvas.yview_scroll(int(-1*(ev.delta/120)), "units")))
+        _dash_canvas.bind("<Leave>",
+            lambda e: _dash_canvas.unbind_all("<MouseWheel>"))
+
+        # كل المحتوى داخل _dash_inner بدلاً من self.dashboard_frame
+        _f = _dash_inner  # اختصار
+
         # ─ بطاقات الإحصاء (صف واحد)
-        cards_row = ttk.Frame(self.dashboard_frame)
+        cards_row = ttk.Frame(_f)
         cards_row.pack(fill="x", padx=10, pady=6)
 
         def make_card(parent, title, color, sub=""):
@@ -63,7 +95,7 @@ class DashboardTabMixin:
                                                               "مقارنة بالأسبوع الماضي")
 
         # ─ الجسم الرئيسي: جدول + رسوم بيانية
-        body = ttk.Frame(self.dashboard_frame)
+        body = ttk.Frame(_f)
         body.pack(fill="both", expand=True, padx=10, pady=4)
         body.columnconfigure(0, weight=3)
         body.columnconfigure(1, weight=2)
@@ -139,30 +171,48 @@ class DashboardTabMixin:
         self.canvas_dow.get_tk_widget().pack(fill="both", expand=True)
 
 
+    # ── بيانات مُخزَّنة مؤقتاً للمخططات الثقيلة ──────────────────
+    _dash_cache_wk       = None
+    _dash_cache_top      = None
+    _dash_cache_dow      = None
+    _dash_slow_tick      = 0   # عداد دورات لتحديث المخططات كل 10 دورات (5 دقائق)
+
     def _dashboard_tick(self):
-        """يُحدَّث كل 30 ث — فقط إذا كان تبويب لوحة المراقبة نشطاً لتجنب اهتزاز التبويبات الأخرى."""
+        """دورة سريعة كل 30ث — المخططات الثقيلة تُحدَّث كل 5 دقائق فقط."""
         if hasattr(self, "_current_tab") and self._current_tab.get() == "لوحة المراقبة":
-            self.update_dashboard_metrics()
+            DashboardTabMixin._dash_slow_tick += 1
+            refresh_heavy = DashboardTabMixin._dash_slow_tick >= 10
+            if refresh_heavy:
+                DashboardTabMixin._dash_slow_tick = 0
+            self.update_dashboard_metrics(refresh_heavy=refresh_heavy)
         self.root.after(30000, self._dashboard_tick)
 
-    def update_dashboard_metrics(self):
-        """جلب كل البيانات في خيط خلفي ثم تحديث الواجهة لتجنب تجميد UI."""
+    def update_dashboard_metrics(self, refresh_heavy=True):
+        """جلب البيانات في خيط خلفي — الاستعلامات الثقيلة فقط عند refresh_heavy=True."""
         date_str = self.dash_date_var.get().strip() or now_riyadh_date()
 
         def _fetch():
             try:
                 metrics    = compute_today_metrics(date_str)
                 tard_today = len(query_tardiness(date_filter=date_str))
-                wk         = get_week_comparison()
-                month      = date_str[:7]
-                top_absent = get_top_absent_students(month, limit=8)
-                dow_data   = get_absence_by_day_of_week()
+                if refresh_heavy or DashboardTabMixin._dash_cache_wk is None:
+                    month      = date_str[:7]
+                    wk         = get_week_comparison()
+                    top_absent = get_top_absent_students(month, limit=8)
+                    dow_data   = get_absence_by_day_of_week()
+                    DashboardTabMixin._dash_cache_wk  = wk
+                    DashboardTabMixin._dash_cache_top = top_absent
+                    DashboardTabMixin._dash_cache_dow = dow_data
+                else:
+                    wk         = DashboardTabMixin._dash_cache_wk
+                    top_absent = DashboardTabMixin._dash_cache_top
+                    dow_data   = DashboardTabMixin._dash_cache_dow
             except Exception as e:
                 self.root.after(0, lambda: messagebox.showerror("خطأ", str(e)))
                 return
-            self.root.after(0, lambda: _update_ui(metrics, tard_today, wk, top_absent, dow_data))
+            self.root.after(0, lambda: _update_ui(metrics, tard_today, wk, top_absent, dow_data, refresh_heavy))
 
-        def _update_ui(metrics, tard_today, wk, top_absent, dow_data):
+        def _update_ui(metrics, tard_today, wk, top_absent, dow_data, refresh_heavy=True):
             t = metrics["totals"]
             pct_absent = round(t["absent"] / max(t["students"], 1) * 100, 1)
 
@@ -203,8 +253,8 @@ class DashboardTabMixin:
                             "🔴 {}".format(r["absent"]),
                             "{}%".format(int(pct))))
 
-            # ─ أكثر الطلاب غياباً
-            if hasattr(self, "tree_top_absent"):
+            # ─ أكثر الطلاب غياباً (فقط في دورة ثقيلة)
+            if refresh_heavy and hasattr(self, "tree_top_absent"):
                 for i in self.tree_top_absent.get_children():
                     self.tree_top_absent.delete(i)
                 for idx, s in enumerate(top_absent):
@@ -212,6 +262,9 @@ class DashboardTabMixin:
                     self.tree_top_absent.insert("", "end", tags=(tag,),
                         values=(s["name"], s["class_name"],
                                 "{} يوم".format(s["days"]), s["last_date"]))
+
+            if not refresh_heavy:
+                return  # تخطي رسم المخططات في الدورات السريعة
 
             # ─ رسم الدائرة
             try:
@@ -227,7 +280,7 @@ class DashboardTabMixin:
             except Exception as e:
                 print("[DASH-PIE]", e)
 
-            # ─ رسم مقارنة الأسبوعين (يستخدم wk المُحضَّر مسبقاً — لا استدعاء ثانٍ)
+            # ─ رسم مقارنة الأسبوعين
             try:
                 self.ax_week.clear()
                 day_names_short = ["أحد", "إثنين", "ثلاث", "أربع", "خميس"]
@@ -299,7 +352,8 @@ class DashboardTabMixin:
             self.sync_info_text.config(state="disabled")
 
     def _start_dashboard_tick(self):
-        # الـ after(500) في _switch_tab يغطي التحميل الأول — نبدأ الـ tick بعد 30ث لتجنب الاستدعاء المزدوج
+        DashboardTabMixin._dash_slow_tick = 0
+        DashboardTabMixin._dash_cache_wk  = None
         self.root.after(30000, self._dashboard_tick)
 
     def _on_dash_dblclick(self, event):

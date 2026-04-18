@@ -53,7 +53,7 @@ class AlertsTabMixin:
                   width=18, justify="right").pack(side="right", padx=2)
 
         r3 = ttk.Frame(cfg_lf); r3.pack(fill="x", pady=2)
-        self.alert_hour_var = tk.IntVar(value=14)
+        self.alert_hour_var = tk.IntVar(value=cfg.get("alert_run_hour", 14))
         ttk.Label(r3, text="وقت التشغيل اليومي:", anchor="e").pack(side="right")
         ttk.Spinbox(r3, from_=8, to=20, textvariable=self.alert_hour_var,
                     width=5).pack(side="right", padx=4)
@@ -460,6 +460,8 @@ class AlertsTabMixin:
         cfg["alert_notify_parent"]     = self.alert_parent_var.get()
         cfg["alert_notify_admin"]      = self.alert_admin_var.get()
         cfg["alert_admin_phone"]       = self.alert_admin_phone_var.get().strip()
+        if hasattr(self, "alert_hour_var"):
+            cfg["alert_run_hour"]       = self.alert_hour_var.get()
         if hasattr(self, "daily_report_var"):
             cfg["daily_report_enabled"] = self.daily_report_var.get()
             cfg["daily_report_hour"]    = self.dr_hour_var.get()

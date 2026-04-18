@@ -198,59 +198,58 @@ class UsersTabMixin:
         vals     = self.tree_users.item(sel[0], "values")
         username = vals[1]
         role_lbl = vals[3]
+        is_admin = (role_lbl == "مدير")
 
         self._current_perm_user = username
-
-        # تحديث العنوان
+        self._tabs_save_btn.configure(state="disabled")
         label = "{} — {}".format(vals[2] or username, role_lbl)
         self._tabs_perm_user_lbl.configure(
             text="تبويبات المستخدم: " + label,
-            foreground="#1565C0" if role_lbl != "مدير" else "#7C3AED")
+            foreground="#1565C0" if not is_admin else "#7C3AED")
 
-        # تعطيل التعديل للمدير
-        is_admin = (role_lbl == "مدير")
-        state = "disabled" if is_admin else "normal"
-        self._tabs_save_btn.configure(state="disabled")
+        def _fetch():
+            import json as _j, sqlite3 as _sq
+            con = _sq.connect(DB_PATH); con.row_factory = _sq.Row; cur = con.cursor()
+            cur.execute("SELECT role, allowed_tabs FROM users WHERE username=?", (username,))
+            row = cur.fetchone(); con.close()
+            self.root.after(0, lambda: self._apply_user_perms(row, is_admin))
 
-        # حمّل التبويبات الحالية
-        import json as _j, sqlite3 as _sq
-        con = _sq.connect(DB_PATH); con.row_factory = _sq.Row; cur = con.cursor()
-        cur.execute("SELECT role, allowed_tabs FROM users WHERE username=?", (username,))
-        row = cur.fetchone(); con.close()
+        threading.Thread(target=_fetch, daemon=True).start()
 
-        if not row:
-            return
+    def _apply_user_perms(self, row, is_admin):
+        """يُطبَّق بعد جلب البيانات في الخلفية."""
+        import json as _j
+        if not row: return
 
-        # تعطيل حدث Configure مؤقتاً لمنع التقطيع أثناء التحديث الجماعي
+        # تعطيل Configure وcommand مؤقتاً لمنع التقطيع
         self._tabs_inner.unbind("<Configure>")
+        for cb in self._tabs_inner.winfo_children():
+            if isinstance(cb, ttk.Checkbutton):
+                cb.configure(command="")
+
         try:
             if row["role"] == "admin":
                 for var in self._tab_vars.values(): var.set(True)
-                for child in self._tabs_inner.winfo_children():
-                    if isinstance(child, ttk.Checkbutton):
-                        child.configure(state="disabled")
-                return
-
-            for child in self._tabs_inner.winfo_children():
-                if isinstance(child, ttk.Checkbutton):
-                    child.configure(state="normal")
-
-            if row["allowed_tabs"]:
-                try:
-                    allowed = _j.loads(row["allowed_tabs"])
-                except:
-                    allowed = ROLE_TABS.get(row["role"]) or []
+                for cb in self._tabs_inner.winfo_children():
+                    if isinstance(cb, ttk.Checkbutton):
+                        cb.configure(state="disabled")
             else:
-                allowed = ROLE_TABS.get(row["role"]) or []
-
-            allowed_set = set(allowed) if allowed else set()
-            for tab_name, var in self._tab_vars.items():
-                var.set(tab_name in allowed_set)
-
-            if not is_admin:
-                self._tabs_save_btn.configure(state="normal")
+                for cb in self._tabs_inner.winfo_children():
+                    if isinstance(cb, ttk.Checkbutton):
+                        cb.configure(state="normal")
+                if row["allowed_tabs"]:
+                    try:    allowed = set(_j.loads(row["allowed_tabs"]))
+                    except: allowed = set(ROLE_TABS.get(row["role"]) or [])
+                else:
+                    allowed = set(ROLE_TABS.get(row["role"]) or [])
+                for tab_name, var in self._tab_vars.items():
+                    var.set(tab_name in allowed)
+                if not is_admin:
+                    self._tabs_save_btn.configure(state="normal")
         finally:
-            # إعادة الربط وتحديث واحد فقط
+            for cb in self._tabs_inner.winfo_children():
+                if isinstance(cb, ttk.Checkbutton):
+                    cb.configure(command=self._on_tab_perm_change)
             self._tabs_inner.bind("<Configure>",
                 lambda e: self._tabs_canvas.configure(
                     scrollregion=self._tabs_canvas.bbox("all")))
