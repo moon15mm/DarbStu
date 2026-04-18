@@ -50,11 +50,19 @@ class ScheduleTabMixin:
         web_buttons_frame.pack(fill="x", pady=(10, 0))
         
         web_menu = tk.Menu(web_buttons_frame, tearoff=0)
-        web_menu.add_command(label="فتح الرابط المحلي", command=lambda: self.open_schedule_editor('local'))
-        if self.public_url:
-            web_menu.add_command(label="فتح الرابط العالمي", command=lambda: self.open_schedule_editor('public'))
+        try:
+            from database import get_cloud_client as _gcc
+            _cl2 = _gcc(); _cloud_mode = bool(_cl2 and _cl2.is_active())
+        except Exception:
+            _cloud_mode = False
+        if _cloud_mode:
+            web_menu.add_command(label="فتح من السيرفر", command=lambda: self.open_schedule_editor('cloud'))
         else:
-            web_menu.add_command(label="فتح الرابط العالمي (معطل)", state="disabled")
+            web_menu.add_command(label="فتح الرابط المحلي", command=lambda: self.open_schedule_editor('local'))
+            if self.public_url:
+                web_menu.add_command(label="فتح الرابط العالمي", command=lambda: self.open_schedule_editor('public'))
+            else:
+                web_menu.add_command(label="فتح الرابط العالمي (معطل)", state="disabled")
 
         menubutton = ttk.Menubutton(web_buttons_frame, text="✏️ تعديل الجدول من الويب", menu=web_menu, direction="below")
         menubutton.pack(fill="x", pady=2)
@@ -132,11 +140,22 @@ class ScheduleTabMixin:
         frame.after(120_000, _auto_refresh_schedule)
 
     def open_schedule_editor(self, link_type: str):
-        if link_type == 'local':
+        if link_type == 'cloud':
+            try:
+                from database import get_cloud_client
+                _cl = get_cloud_client()
+                if _cl and _cl.is_active():
+                    url = f"{_cl.url.rstrip('/')}/schedule/edit"
+                else:
+                    messagebox.showerror("خطأ", "تعذّر الاتصال بالسيرفر.")
+                    return
+            except Exception as e:
+                messagebox.showerror("خطأ", str(e)); return
+        elif link_type == 'local':
             url = f"http://{self.ip}:{PORT}/schedule/edit"
         elif link_type == 'public':
             if not self.public_url:
-                messagebox.showerror("خطأ", "الرابط العالمي غير متاح حاليًا." )
+                messagebox.showerror("خطأ", "الرابط العالمي غير متاح حاليًا.")
                 return
             url = f"{self.public_url}/schedule/edit"
         else:
@@ -232,8 +251,15 @@ class ScheduleTabMixin:
         )
         lf.pack(fill="both", expand=True, padx=10, pady=(8,4))
 
-        # رابط التأخر للنسخ — يُحسب دائماً من local_ip الحي
+        # رابط التأخر للنسخ — يأخذ من السيرفر في وضع العميل
         def get_tard_url():
+            try:
+                from database import get_cloud_client as _gcc
+                _cl = _gcc()
+                if _cl and _cl.is_active():
+                    return "{}/tardiness".format(_cl.url.rstrip("/"))
+            except Exception:
+                pass
             base = (STATIC_DOMAIN if STATIC_DOMAIN and not debug_on()
                     else "http://{}:{}".format(local_ip(), PORT))
             return "{}/tardiness".format(base)
@@ -519,7 +545,12 @@ class ScheduleTabMixin:
             return
 
         now = datetime.datetime.now()
-        base_url = self.public_url or f"http://{self.ip}:{PORT}"
+        try:
+            from database import get_cloud_client as _gcc
+            _cl3 = _gcc()
+            base_url = _cl3.url.rstrip("/") if (_cl3 and _cl3.is_active()) else (self.public_url or f"http://{self.ip}:{PORT}")
+        except Exception:
+            base_url = self.public_url or f"http://{self.ip}:{PORT}"
         
         for period in range(1, 8  ):
             time_str = self.schedule_time_vars[period].get()
