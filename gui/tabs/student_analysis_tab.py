@@ -41,14 +41,28 @@ class StudentAnalysisTabMixin:
 
         sf = tk.Frame(search_bar, bg="#1E293B", padx=8, pady=6)
         sf.pack(side="left", padx=20, pady=8)
-        tk.Label(sf, text="🔍 اختر طالباً:", bg="#1E293B", fg="#CBD5E1",
-                 font=("Tahoma", 9)).pack(side="right", padx=5)
+
+        # قائمة الفصول
+        tk.Label(sf, text="🏫 الفصل:", bg="#1E293B", fg="#CBD5E1",
+                 font=("Tahoma", 9)).pack(side="right", padx=(10, 3))
+        self.analysis_class_var = tk.StringVar()
+        self.analysis_class_cb = ttk.Combobox(
+            sf, textvariable=self.analysis_class_var,
+            width=22, font=("Tahoma", 10), state="readonly")
+        self.analysis_class_cb.pack(side="right", padx=3)
+
+        # قائمة الطلاب
+        tk.Label(sf, text="👤 الطالب:", bg="#1E293B", fg="#CBD5E1",
+                 font=("Tahoma", 9)).pack(side="right", padx=(10, 3))
         self.analysis_search_var = tk.StringVar()
         self.analysis_student_cb = ttk.Combobox(
             sf, textvariable=self.analysis_search_var,
-            width=42, font=("Tahoma", 10))
-        self.analysis_student_cb.pack(side="right", padx=5)
+            width=36, font=("Tahoma", 10))
+        self.analysis_student_cb.pack(side="right", padx=3)
+
         self.refresh_analysis_students()
+        self.analysis_class_cb.bind("<<ComboboxSelected>>",
+                                    self._on_analysis_class_selected)
         self.analysis_student_cb.bind("<<ComboboxSelected>>",
                                       self._on_analysis_student_selected)
 
@@ -274,6 +288,9 @@ class StudentAnalysisTabMixin:
         self._res_year_lbl = tk.Label(_yr_card, text="—", bg="#F0FDF4",
                                        fg="#065F46", font=("Tahoma", 14, "bold"))
         self._res_year_lbl.pack()
+        self._res_rank_lbl = tk.Label(_yr_card, text="", bg="#F0FDF4",
+                                       fg="#6B7280", font=("Tahoma", 9))
+        self._res_rank_lbl.pack(pady=(4, 0))
 
         self._results_expanded = True
         def _toggle_results():
@@ -353,12 +370,32 @@ class StudentAnalysisTabMixin:
         store = constants.STUDENTS_STORE
         if not store or "list" not in store:
             return
+        # ملء قائمة الفصول
+        classes = ["الكل"] + [cls["name"] for cls in store["list"] if cls.get("name")]
+        self.analysis_class_cb['values'] = classes
+        if not self.analysis_class_var.get():
+            self.analysis_class_var.set("الكل")
+        # ملء قائمة الطلاب
+        self._filter_analysis_students()
+
+    def _filter_analysis_students(self):
+        import constants
+        store = constants.STUDENTS_STORE
+        if not store or "list" not in store:
+            return
+        selected_class = self.analysis_class_var.get()
         student_list = []
         for cls in store["list"]:
+            if selected_class and selected_class != "الكل" and cls.get("name") != selected_class:
+                continue
             for s in cls.get("students", []):
                 if s.get("id") and s.get("name"):
                     student_list.append(f"{s['name']} - {s['id']}")
         self.analysis_student_cb['values'] = sorted(set(student_list))
+        self.analysis_search_var.set("")
+
+    def _on_analysis_class_selected(self, event=None):
+        self._filter_analysis_students()
 
     def _on_analysis_student_selected(self, event=None):
         val = self.analysis_search_var.get()
@@ -459,9 +496,14 @@ class StudentAnalysisTabMixin:
         if res:
             self._res_gpa_lbl.config(text=str(res.get("gpa") or "—"))
             self._res_year_lbl.config(text=str(res.get("year") or "—"))
+            rank_txt = ""
+            if res.get("rank"):         rank_txt += f"ترتيب الفصل: #{res['rank']}"
+            if res.get("section_rank"): rank_txt += f"  |  ترتيب المستوى: #{res['section_rank']}"
+            self._res_rank_lbl.config(text=rank_txt)
         else:
             self._res_gpa_lbl.config(text="—")
             self._res_year_lbl.config(text="—")
+            self._res_rank_lbl.config(text="")
 
         # الملاحظات
         self._refresh_notes_tree(data.get("notes", []))

@@ -2072,14 +2072,15 @@ def get_student_analytics_data(student_id: str) -> Dict[str, Any]:
     data["sessions"] = [{"date": r[0], "reason": r[1], "action": r[2]} for r in cur.fetchall()]
 
     # 5. آخر نتيجة دراسية
-    cur.execute("SELECT gpa, class_rank, subjects_json, school_year FROM student_results WHERE identity_no=? ORDER BY uploaded_at DESC LIMIT 1", (student_id,))
+    cur.execute("SELECT gpa, class_rank, subjects_json, school_year, section_rank FROM student_results WHERE identity_no=? ORDER BY uploaded_at DESC LIMIT 1", (student_id,))
     row = cur.fetchone()
     if row:
         data["results"] = {
-            "gpa": row[0],
-            "rank": row[1],
-            "subjects": json.loads(row[2]) if row[2] else [],
-            "year": row[3]
+            "gpa":          row[0],
+            "rank":         row[1],
+            "subjects":     json.loads(row[2]) if row[2] else [],
+            "year":         row[3],
+            "section_rank": row[4],
         }
 
     # 6. تجميع البيانات المحسوبة للويب والرسوم البيانية

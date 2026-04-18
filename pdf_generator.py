@@ -503,13 +503,17 @@ def parse_results_pdf(pdf_path: str) -> List[Dict]:
                 section      = m_sec.group(1).strip()  if m_sec  else ""
 
                 # استخراج المعدل — أنماط متعددة لتغطية تنسيقات نور
+                # ملاحظة: في PDF نور تظهر قيمة المعدل (مثل 85.11) على سطر
+                # Excused Absence بسبب اتجاه النص العربي
                 gpa = ""
                 for pat in [
                     r'GPA\s*[.:\s]+(\d+\.?\d*)',
                     r'Average\s*[.:\s]+(\d+\.?\d*)',
                     r'Overall\s+Average\s*[.:\s]+(\d+\.?\d*)',
                     r'المعدل\s*[.:\s]+(\d+\.?\d*)',
-                    r'المجموع\s+(\d+\.?\d*)\s*/\s*\d+',
+                    r'Excused Absence[^\n]*?(\d{2,3}\.\d{2})',
+                    r'Unexcused Absence[^\n]*?(\d{2,3}\.\d{2})',
+                    r'Class Ranking[^\n]*?(\d{2,3}\.\d{2})',
                 ]:
                     m_gpa = _re.search(pat, text, _re.IGNORECASE)
                     if m_gpa:

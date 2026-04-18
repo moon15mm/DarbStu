@@ -271,6 +271,11 @@ class SettingsTabMixin:
 
         self._wa_servers_load()
 
+        # ─── قسم الترخيص (للمدير فقط، في وضع السيرفر) ────────────
+        from config_manager import load_config as _lcfg
+        if CURRENT_USER.get("role") == "admin" and not _lcfg().get("cloud_mode", False):
+            self._build_license_section(scroll)
+
         # ─── قسم إدارة الفصل الدراسي (للمدير فقط) ───────────────
         if CURRENT_USER.get("role") == "admin":
             self._build_term_management_section(scroll)
@@ -675,6 +680,82 @@ class SettingsTabMixin:
 
 
 
+
+    def _build_license_section(self, parent):
+        """قسم الترخيص — يظهر فقط إذا لم يكن البرنامج مفعّلاً."""
+        from license_manager import LicenseClient, TRIAL_FILE, TRIAL_DAYS
+        import datetime, json as _j
+
+        client = LicenseClient()
+
+        # لا تُظهر القسم إذا كان البرنامج مفعّلاً
+        if client.is_activated():
+            return
+
+        lf = ttk.LabelFrame(parent, text=" 🔐 الترخيص والتفعيل ", padding=16)
+        lf.pack(fill="x", padx=20, pady=(0, 16))
+
+        # حساب أيام التجربة
+        try:
+            if os.path.exists(TRIAL_FILE):
+                with open(TRIAL_FILE, "r", encoding="utf-8") as f:
+                    tdata = _j.load(f)
+                start = datetime.datetime.fromisoformat(tdata["start"])
+                days_left = max(0, TRIAL_DAYS - (datetime.datetime.utcnow() - start).days)
+            else:
+                days_left = TRIAL_DAYS
+        except Exception:
+            days_left = TRIAL_DAYS
+
+        status_text  = "⏳ فترة التجربة — متبقي {} يوم".format(days_left) if days_left > 0 else "❌ انتهت فترة التجربة"
+        status_color = "#d97706" if days_left > 0 else "#dc2626"
+
+        self._lic_status_lbl = tk.Label(lf, text=status_text, fg=status_color,
+                                         font=("Tahoma", 11, "bold"))
+        self._lic_status_lbl.pack(anchor="e", pady=(0, 10))
+
+        row = tk.Frame(lf); row.pack(fill="x", pady=4)
+        tk.Label(row, text="مفتاح الترخيص:", font=("Tahoma", 10, "bold"),
+                 width=18, anchor="e").pack(side="right")
+        self._lic_key_var = tk.StringVar()
+        tk.Entry(row, textvariable=self._lic_key_var,
+                 font=("Courier", 12), justify="center", width=26).pack(side="right", padx=8)
+
+        row2 = tk.Frame(lf); row2.pack(fill="x", pady=4)
+        tk.Label(row2, text="اسم المدرسة:", font=("Tahoma", 10),
+                 width=18, anchor="e").pack(side="right")
+        self._lic_school_var = tk.StringVar()
+        tk.Entry(row2, textvariable=self._lic_school_var,
+                 font=("Tahoma", 10), justify="right", width=26).pack(side="right", padx=8)
+
+        self._lic_msg_lbl = tk.Label(lf, text="", font=("Tahoma", 9))
+        self._lic_msg_lbl.pack(anchor="e", pady=4)
+
+        tk.Button(lf, text="✅ تفعيل البرنامج",
+                  bg="#1565C0", fg="white", font=("Tahoma", 10, "bold"),
+                  relief="flat", padx=20, pady=6, cursor="hand2",
+                  command=self._do_activate).pack(anchor="e")
+
+    def _do_activate(self):
+        from license_manager import LicenseClient
+        import threading as _th
+        key    = self._lic_key_var.get().strip()
+        school = self._lic_school_var.get().strip()
+        if not key:
+            self._lic_msg_lbl.config(text="أدخل مفتاح الترخيص", fg="#dc2626"); return
+        self._lic_msg_lbl.config(text="⏳ جارٍ التحقق...", fg="#1565C0")
+        def _run():
+            client = LicenseClient()
+            ok, msg, _ = client.activate(key, school)
+            def _done():
+                if ok:
+                    self._lic_msg_lbl.config(text=msg, fg="#16a34a")
+                    self._lic_status_lbl.config(
+                        text="✅ مفعّل — {}".format(school or ""), fg="#16a34a")
+                else:
+                    self._lic_msg_lbl.config(text=msg, fg="#dc2626")
+            self._lic_msg_lbl.after(0, _done)
+        _th.Thread(target=_run, daemon=True).start()
 
     def _wa_servers_load(self):
         if not hasattr(self, "_tree_wa_servers"): return
