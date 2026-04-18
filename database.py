@@ -1530,10 +1530,43 @@ def force_sync_cloud_data():
     try:
         load_students(force_reload=True)
         load_teachers()
+        _sync_config_from_server()
         return True
     except Exception as e:
         print(f"[FORCE-SYNC-ERROR] {e}")
         return False
+
+def _sync_config_from_server():
+    """يسحب config.json من السيرفر ويدمج الإعدادات المهمة محلياً."""
+    try:
+        client = get_cloud_client()
+        if not client or not client.is_active():
+            return
+        resp = client.get("/web/api/config")
+        # الـ endpoint يُرجع الإعدادات مباشرة بدون مغلف ok/config
+        remote = resp if isinstance(resp, dict) and "school_name" in resp else resp.get("config", {})
+        if not remote:
+            return
+        from config_manager import load_config, save_config, invalidate_config_cache
+        local = load_config()
+        # المفاتيح التي يجب مزامنتها من السيرفر
+        SYNC_KEYS = [
+            "school_name", "school_gender",
+            "tardiness_message_template", "message_template",
+            "alert_absence_threshold", "alert_tardiness_threshold",
+            "period_times", "school_start_time",
+        ]
+        changed = False
+        for key in SYNC_KEYS:
+            if key in remote and remote[key] != local.get(key):
+                local[key] = remote[key]
+                changed = True
+        if changed:
+            save_config(local)
+            invalidate_config_cache()
+            print("[CLOUD-SYNC] تم تحديث الإعدادات من السيرفر")
+    except Exception as e:
+        print(f"[CLOUD-SYNC-CONFIG-ERROR] {e}")
 
 def _apply_class_name_fix(rows: List[Dict[str,Any]]) -> List[Dict[str,Any]]:
     if not rows: return rows

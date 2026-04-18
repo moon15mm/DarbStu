@@ -252,45 +252,66 @@ class AlertsTabMixin:
         month     = self.alert_tard_month_var.get().strip() if hasattr(self, "alert_tard_month_var") else datetime.datetime.now().strftime("%Y-%m")
         threshold = self.alert_tard_thresh_var.get() if hasattr(self, "alert_tard_thresh_var") else 3
 
-        con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
-        cur.execute("""
-            SELECT student_id,
-                   MAX(student_name) as student_name,
-                   MAX(class_name)   as class_name,
-                   COUNT(*)          as tardiness_count,
-                   MAX(date)         as last_date
-            FROM tardiness
-            WHERE date LIKE ?
-            GROUP BY student_id
-            HAVING tardiness_count >= ?
-            ORDER BY tardiness_count DESC
-        """, (month + "%", threshold))
-        rows = [dict(r) for r in cur.fetchall()]
-        con.close()
+        def _worker():
+            try:
+                from database import get_cloud_client
+                client = get_cloud_client()
+                if client and client.is_active():
+                    resp = client.get("/web/api/alerts-tardiness")
+                    if resp.get("ok"):
+                        rows = resp.get("rows", [])
+                        referred_ids = set()
+                        self.root.after(0, lambda r=rows, ri=referred_ids: self._fill_tard_alert_tree(r, ri, threshold))
+                        return
+            except Exception:
+                pass
+            # محلي
+            con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
+            cur.execute("""
+                SELECT student_id,
+                       MAX(student_name) as student_name,
+                       MAX(class_name)   as class_name,
+                       COUNT(*)          as tardiness_count,
+                       MAX(date)         as last_date
+                FROM tardiness
+                WHERE date LIKE ?
+                GROUP BY student_id
+                HAVING tardiness_count >= ?
+                ORDER BY tardiness_count DESC
+            """, (month + "%", threshold))
+            rows = [dict(r) for r in cur.fetchall()]
+            con.close()
+            store = load_students()
+            phone_map = {s["id"]: s.get("phone","") for cls in store["list"] for s in cls["students"]}
+            for r in rows:
+                r["parent_phone"] = phone_map.get(r["student_id"], "")
+            con2 = get_db(); con2.row_factory = sqlite3.Row; cur2 = con2.cursor()
+            cur2.execute("SELECT student_id FROM counselor_referrals WHERE referral_type='تأخر'")
+            referred_ids = {r["student_id"] for r in cur2.fetchall()}
+            con2.close()
+            self.root.after(0, lambda r=rows, ri=referred_ids: self._fill_tard_alert_tree(r, ri, threshold))
 
-        # أضف جوال ولي الأمر
-        store = load_students()
-        phone_map = {s["id"]: s.get("phone","") for cls in store["list"] for s in cls["students"]}
+        threading.Thread(target=_worker, daemon=True).start()
 
-        # اقرأ المحوّلين لتلوين الصف
-        con2 = get_db(); con2.row_factory = sqlite3.Row; cur2 = con2.cursor()
-        cur2.execute("SELECT student_id FROM counselor_referrals WHERE referral_type='تأخر'")
-        referred_ids = {r["student_id"] for r in cur2.fetchall()}
-        con2.close()
-
+    def _fill_tard_alert_tree(self, rows, referred_ids, threshold):
+        if not hasattr(self, "tree_alerts_tard"): return
+        for i in self.tree_alerts_tard.get_children():
+            self.tree_alerts_tard.delete(i)
+        if hasattr(self, "_tard_alert_checked"):
+            self._tard_alert_checked.clear()
         for r in rows:
-            cnt   = r["tardiness_count"]
-            tag   = "referred" if r["student_id"] in referred_ids else ("high" if cnt >= threshold * 2 else "medium")
-            phone = phone_map.get(r["student_id"], "") or "—"
-            status = "✅ محوّل للموجّه" if r["student_id"] in referred_ids else ""
+            cnt    = r.get("tardiness_count", 0)
+            sid    = r["student_id"]
+            is_ref = r.get("already_referred", sid in referred_ids)
+            tag    = "referred" if is_ref else ("high" if cnt >= threshold * 2 else "medium")
+            phone  = r.get("parent_phone","") or "—"
+            status = "✅ محوّل للموجّه" if is_ref else ""
             self.tree_alerts_tard.insert("", "end", tags=(tag,),
-                iid="tard_" + r["student_id"],
+                iid="tard_" + sid,
                 values=("☐", r["student_name"], r["class_name"],
-                        "{} مرة".format(cnt), r["last_date"], phone, status))
-
-        lbl_text = "إجمالي: {} طالب".format(len(rows))
+                        "{} مرة".format(cnt), r.get("last_date",""), phone, status))
         if hasattr(self, "alert_tard_sel_lbl"):
-            self.alert_tard_sel_lbl.configure(text=lbl_text)
+            self.alert_tard_sel_lbl.configure(text="إجمالي: {} طالب".format(len(rows)))
 
     def _tard_alert_toggle_check(self, event):
         """تبديل تحديد الطلاب في قسم التأخر."""
@@ -492,15 +513,34 @@ class AlertsTabMixin:
         self._alert_checked.clear()
         month     = self.alert_month_var.get().strip() if hasattr(self,"alert_month_var") else datetime.datetime.now().strftime("%Y-%m")
         threshold = self.alert_thresh_var.get() if hasattr(self,"alert_thresh_var") else 5
-        students  = get_students_exceeding_threshold(threshold, month)
+
+        def _worker():
+            try:
+                from database import get_cloud_client
+                client = get_cloud_client()
+                if client and client.is_active():
+                    resp = client.get("/web/api/alerts-students")
+                    students = resp.get("rows", []) if resp.get("ok") else get_students_exceeding_threshold(threshold, month)
+                else:
+                    students = get_students_exceeding_threshold(threshold, month)
+            except Exception:
+                students = get_students_exceeding_threshold(threshold, month)
+            self.root.after(0, lambda s=students: self._fill_alert_tree(s, threshold))
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _fill_alert_tree(self, students, threshold):
+        if not hasattr(self, "tree_alerts"): return
+        for i in self.tree_alerts.get_children(): self.tree_alerts.delete(i)
+        self._alert_checked.clear()
         for s in students:
-            cnt   = s["absence_count"]
+            cnt   = s.get("absence_count", 0)
             tag   = "high" if cnt >= threshold * 2 else "medium"
             phone = s.get("parent_phone","") or "—"
             self.tree_alerts.insert("", "end", tags=(tag,),
                 iid=s["student_id"],
                 values=("☐", s["student_name"], s["class_name"],
-                        "{} يوم".format(cnt), s["last_date"],
+                        "{} يوم".format(cnt), s.get("last_date",""),
                         phone, ""))
         self.alert_sel_lbl.configure(
             text="إجمالي: {} طالب".format(len(students)))

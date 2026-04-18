@@ -2,7 +2,7 @@
 """
 api/web_routes.py — مسارات لوحة التحكم الويب /web/*
 """
-import datetime, json, base64, os, io, hashlib, hmac, re, sqlite3, subprocess, zipfile, urllib.request
+import datetime, json, base64, os, io, hashlib, hmac, re, sqlite3, subprocess, zipfile, urllib.request, threading
 from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, Request, File, UploadFile, Form
 from fastapi.responses import HTMLResponse, JSONResponse, Response
