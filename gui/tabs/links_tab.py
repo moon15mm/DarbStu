@@ -46,7 +46,16 @@ class LinksTabMixin:
         if not hasattr(self, "tree_links") or not self.tree_links.winfo_exists():
             return
         for i in self.tree_links.get_children(): self.tree_links.delete(i)
-        base_url = self.public_url or f"http://{self.ip}:{PORT}"
+        # في وضع العميل السحابي استخدم رابط السيرفر
+        try:
+            from database import get_cloud_client
+            _cl = get_cloud_client()
+            if _cl and _cl.is_active():
+                base_url = _cl.url.rstrip("/")
+            else:
+                base_url = self.public_url or f"http://{self.ip}:{PORT}"
+        except Exception:
+            base_url = self.public_url or f"http://{self.ip}:{PORT}"
         for c in self.store["list"]:
             link = f"{base_url}/c/{c['id']}"
             self.tree_links.insert("", "end", values=(c["id"], c["name"], len(c["students"] ), link))

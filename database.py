@@ -1193,7 +1193,8 @@ def insert_tardiness(date_str, class_id, class_name, student_id,
     if client.is_active():
         res = client.post("/web/api/add-tardiness", {
             "date": date_str, "student_id": student_id, "student_name": student_name,
-            "class_id": class_id, "class_name": class_name, "minutes_late": minutes_late
+            "class_id": class_id, "class_name": class_name,
+            "period": period, "minutes_late": minutes_late
         })
         return res.get("ok", False)
 

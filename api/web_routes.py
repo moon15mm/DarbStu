@@ -51,7 +51,8 @@ from alerts_service import (log_message_status, run_smart_alerts,
                              query_permissions, insert_permission,
                              update_permission_status, load_schedule, save_schedule,
                              send_permission_request, build_absent_groups,
-                             delete_permission, query_today_messages)
+                             delete_permission, query_today_messages,
+                             get_week_comparison, get_absence_by_day_of_week)
 from report_builder import (generate_daily_report, generate_monthly_report,
                              generate_weekly_report, export_to_noor_excel,
                              build_daily_report_df, get_live_monitor_status,
@@ -185,6 +186,27 @@ async def web_dashboard_data(request: Request, date: str = None):
         tard = query_tardiness(date_filter=d)
         metrics["totals"]["tardiness"] = len(tard)
         return JSONResponse({"ok": True, "date": d, "metrics": metrics})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/sync-info", response_class=JSONResponse)
+async def api_sync_info(request: Request):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    try:
+        con = get_db(); cur = con.cursor()
+        cur.execute("SELECT COUNT(*) FROM absences")
+        abs_count = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM tardiness")
+        tard_count = cur.fetchone()[0]
+        con.close()
+        return JSONResponse({
+            "ok": True,
+            "last_sync": now_riyadh_date(),
+            "total_records": abs_count + tard_count,
+            "absences": abs_count,
+            "tardiness": tard_count,
+        })
     except Exception as e:
         return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
 
@@ -499,9 +521,9 @@ async def web_add_tardiness(req: Request):
     try:
         data = await req.json()
         insert_tardiness(
-            data["date"], data["student_id"], data["student_name"],
-            data.get("class_id",""), data.get("class_name",""),
-            user["sub"], int(data.get("minutes_late", 5)))
+            data["date"], data.get("class_id",""), data.get("class_name",""),
+            data["student_id"], data["student_name"],
+            user["sub"], int(data.get("period", 1)), int(data.get("minutes_late", 5)))
         return JSONResponse({"ok": True})
     except Exception as e:
         return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)

@@ -140,22 +140,31 @@ class TardinessMessagesTabMixin:
         self._tard_msg_checked.clear()
         self._tard_msg_vars.clear()
 
-        date_str = self.tard_msg_date_var.get().strip()                    if hasattr(self,"tard_msg_date_var") else now_riyadh_date()
-        rows = query_tardiness(date_filter=date_str)
+        date_str = self.tard_msg_date_var.get().strip() if hasattr(self,"tard_msg_date_var") else now_riyadh_date()
+        if hasattr(self, "tard_msg_status"):
+            self.tard_msg_status.configure(text="جارٍ التحميل...", foreground="gray")
+
+        def _worker():
+            rows      = query_tardiness(date_filter=date_str)
+            store     = load_students()
+            phone_map = {s["id"]: s.get("phone","") for cls in store["list"] for s in cls["students"]}
+            sent_map  = self._tard_msg_get_sent_map(date_str)
+            self.root.after(0, lambda: self._tard_msg_fill(rows, phone_map, sent_map, date_str))
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _tard_msg_fill(self, rows, phone_map, sent_map, date_str):
+        """يملأ الجدول بعد انتهاء التحميل في الخلفية."""
+        if not hasattr(self, "tree_tard_msg"): return
+        for i in self.tree_tard_msg.get_children():
+            self.tree_tard_msg.delete(i)
+        self._tard_msg_checked.clear()
 
         if not rows:
             self.tard_msg_status.configure(
                 text="لا يوجد متأخرون بتاريخ {}".format(date_str),
                 foreground="orange")
             return
-
-        # ابحث عن أرقام جوالات الطلاب
-        store = load_students()
-        phone_map = {s["id"]: s.get("phone","")
-                     for cls in store["list"] for s in cls["students"]}
-
-        # فحص الرسائل المُرسَلة مسبقاً
-        sent_map = self._tard_msg_get_sent_map(date_str)
 
         count = 0
         for r in rows:

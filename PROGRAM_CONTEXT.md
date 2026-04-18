@@ -1,10 +1,10 @@
 # DarbStu — وصف شامل للبرنامج
 > **نظام إدارة الغياب والتأخر المدرسي**  
-> الإصدار: **2.9.0** | المطوّر: moon15mm | المنصة: Windows  
+> الإصدار: **2.9.9** | المطوّر: moon15mm | المنصة: Windows  
 > المستودع: `https://github.com/moon15mm/DarbStu`
 
 > [!IMPORTANT]
-> آخر تحديث لهذا الملف: 17 أبريل 2026 — يشمل إصلاحات تبويب المستخدمين، فصل أزرار المعلمين، وإصلاح حلقات Canvas في تبويبات التحويلات.
+> آخر تحديث لهذا الملف: 18 أبريل 2026 — يشمل إصلاحات Cloud Client شاملة: مزامنة الإعدادات، الإشعارات الذكية، روابط الفصول، خطأ threading في التعاميم، ترتيب arguments التأخر، وتحسين أداء تبويب رسائل التأخر.
 
 ---
 
@@ -15,7 +15,7 @@
 2. **وضع السحاب (Cloud Mode):** يتصل بقاعدة بيانات عن بُعد عبر API، مما يسمح بتعدد الأجهزة والمزامنة الفورية.
 
 **المكونات الرئيسية:**
-- **Tkinter GUI** — واجهة الإدارة على سطح المكتب (تضم الآن أكثر من 28 تبويباً).
+- **Tkinter GUI** — واجهة الإدارة على سطح المكتب (تضم أكثر من 28 تبويباً).
 - **FastAPI Server** — خادم ويب لاستقبال طلبات المعلمين والأولياء (المنفذ 8000).
 - **CloudDBClient** — محرك مزامنة سحابي ذكي مدمج في `database.py`.
 - **Node.js WhatsApp Server** — خادم محلي لإدارة إرسال الرسائل عبر مكتبة `whatsapp-web.js`.
@@ -43,108 +43,152 @@ DarbStu/
 │   ├── app_gui.py               ← الكلاس الرئيسي (تجميع كل الـ Mixins والتبويبات)
 │   ├── login_window.py          ← نافذة الدخول مع إعدادات الربط السحابي
 │   └── tabs/
-│       ├── circulars_tab.py     ← ★ جديد: إدارة التعاميم الرسمية
+│       ├── alerts_tab.py        ← الإشعارات الذكية (تدعم Cloud API)
+│       ├── circulars_tab.py     ← إدارة التعاميم الرسمية
 │       ├── cloud_tab.py         ← إدارة المزامنة والربط مع السيرفر
 │       ├── dashboard_tab.py     ← لوحة المراقبة والإحصاءات الحية
 │       ├── counselor_tab.py     ← الموجّه الطلابي (إرشاد + استفسارات)
-│       ├── teacher_forms_tab.py  ← نماذج التحضير وتقارير البرامج
+│       ├── links_tab.py         ← روابط الفصول (تستخدم URL السيرفر في Cloud)
+│       ├── student_analysis_tab.py ← تحليل الطالب (يجلب GPA من السيرفر في Cloud)
+│       ├── tardiness_msg_tab.py ← رسائل التأخر (تحميل في thread خلفي)
+│       ├── teacher_forms_tab.py ← نماذج التحضير وتقارير البرامج
 │       └── ... (بقية التبويبات الـ 25+)
 │
 └── data/
     ├── attachments/
-    │   └── circulars/           ← ★ جديد: تخزين مرفقات التعاميم (PDF/Images)
+    │   └── circulars/           ← تخزين مرفقات التعاميم (PDF/Images)
     └── backups/                 ← نسخ احتياطية دورية
 ```
 
 ---
 
-## 3. الميزات الجديدة الكبرى (تحديث 2.9.0)
+## 3. نظام الصلاحيات (RBAC)
 
-### أ. نظام التعاميم الرسمية (Circulars System) 📑
-نظام اتجاه واحد (من المدير إلى الموظفين) يتيح:
-- إرسال تعاميم نصية مع **مرفقات** (PDF أو صور) بحد أقصى 10MB.
-- استهداف فئات محددة (معلمين، وكلاء، موجهين، أو الجميع).
-- **تتبع القراءة:** المدير يرى عدد من قرأ التعميم، والموظف يظهر له تنبيه بالتعاميم الجديدة.
-- **تنبيهات واتساب:** إرسال رسالة آلية للمستهدفين فور صدور التعميم.
+| الدور | المفتاح | التبويبات |
+|-------|---------|-----------|
+| **مدير (admin)** | `admin` | كل شيء (None = بلا قيود) |
+| **وكيل (deputy)** | `deputy` | لوحة المراقبة، التأخر، الأعذار، الرسائل، إدارة الواتساب، استلام التحويلات، التعاميم |
+| **معلم (teacher)** | `teacher` | لوحة المراقبة، تحليل النتائج، تحويل طالب، نماذج المعلم، خطابات الاستفسار، التعاميم |
+| **حارس (guard)** | `guard` | لوحة القيادة، التأخر، المراقبة الحية |
 
-### ب. الربط السحابي المتقدم (Cloud Synchronization) ☁️
-- تحول البرنامج من نظام محلي بحت إلى نظام "عميل-سيرفر".
-- `CloudDBClient` يقوم بتحويل كافة طلبات قاعدة البيانات إلى طلبات `REST API` في حال تفعيل وضع السحاب.
-- دعم رفع وتحميل المرفقات (الصور والـ PDF) عبر السحاب.
-
-### ج. تحسينات وضع العميل (Client UX) 💻
-- أصبح البرنامج يسمح بالدخول للواجهة وضبط إعدادات السحاب حتى لو لم تتوفر ملفات الطلاب/المعلمين محلياً.
-- معالجة ذكية للأخطاء تمنع إغلاق البرنامج القسري عند فقدان بيانات الاستيراد.
+**ملاحظة:** تبويب "إدارة الواتساب" مخصص للوكيل والمدير فقط.
 
 ---
 
-## 4. نظام الصلاحيات المحدث (RBAC)
+## 4. هيكل قاعدة البيانات (الجداول الرئيسية)
 
-توسيع الصلاحيات لتشمل الميزات الجديدة:
-
-| الدور | الصلاحيات الإضافية الجديدة |
-|-------|--------------------------|
-| **مدير (admin)** | إنشاء التعاميم، إدارة المرفقات، ضبط السحاب، رؤية إحصاءات القراءة |
-| **وكيل (deputy)** | استلام التحويلات، عرض التعاميم الموجهة له، إدارة الاستئذان |
-| **معلم (teacher)** | نماذج التحضير، الرد على الاستفسارات الأكاديمية، عرض التعاميم |
-| **موجه (counselor)** | إرسال استفسارات أكاديمية للمعلمين، إدارة جلسات الإرشاد |
-
----
-
-## 5. هيكل قاعدة البيانات المطور (الجداول الجديدة)
-
-#### circulars (التعاميم)
-- `id`, `date`, `title`, `content`, `attachment_path`
-- `created_by`, `target_role` (all / teacher / deputy / counselor)
-- `created_at`
-
-#### circular_reads (تتبع القراءة)
-- `id`, `circular_id`, `username`, `read_at`
-- `UNIQUE(circular_id, username)`
+| الجدول | الوصف |
+|--------|-------|
+| `absences` | سجلات الغياب اليومي |
+| `tardiness` | سجلات التأخر (date, class_id, class_name, student_id, student_name, teacher_name, period, minutes_late) |
+| `excuses` | الأعذار المقدمة |
+| `permissions` | الاستئذان |
+| `messages_log` | سجل الرسائل المرسلة (WhatsApp) |
+| `student_results` | نتائج الطلاب (gpa, class_rank, section_rank, subjects_json) |
+| `student_notes` | ملاحظات إدارية مرتبطة بطلاب |
+| `counselor_sessions` | جلسات الإرشاد |
+| `counselor_referrals` | تحويلات الموجه |
+| `student_referrals` | تحويلات المعلمين |
+| `counselor_alerts` | إنذارات الموجه |
+| `circulars` | التعاميم الرسمية |
+| `circular_reads` | تتبع قراءة التعاميم |
+| `academic_inquiries` | الاستفسارات الأكاديمية |
+| `users` | المستخدمون والصلاحيات |
 
 ---
 
-## 6. المسارات البرمجية المتأثرة (تنبيه للمطور)
+## 5. نمط Cloud Client (مرجع مهم)
 
-1. **دورة حياة المرفقات:**
-   - في الوضع المحلي: تُفتح الملفات عبر `os.startfile` من مجلد `data/attachments`.
-   - في وضع السحاب: يتم جلب الملف عبر الرابط المحمي `https://darbte.uk/web/api/circulars/attachment/{filename}`.
+في وضع العميل السحابي، جميع دوال البيانات يجب أن تتحقق من `get_cloud_client()` أولاً:
 
-2. **معالجة الترقية (Migrations):**
-   - البرنامج يقوم بفحص تلقائي في `main.py` عند التشغيل لإصلاح جداول `tardiness` أو `message_log` في حال وجود تضارب في الفهارس (Indexes).
+```python
+def _worker():
+    from database import get_cloud_client
+    client = get_cloud_client()
+    if client and client.is_active():
+        resp = client.get("/web/api/endpoint")
+        data = resp.get("data") if resp.get("ok") else local_fallback()
+    else:
+        data = local_fallback()
+    self.root.after(0, lambda d=data: self._update_ui(d))
+threading.Thread(target=_worker, daemon=True).start()
+```
 
-3. **التنبيهات (Badges):**
-   - توجد وظيفة خلفية (Background Thread) في `app_gui.py` تقوم بفحص عدد التعاميم غير المقروءة كل 5 دقائق وتحديث الرقم الأحمر في القائمة الجانبية.
+**التبويبات التي تدعم Cloud حالياً:**
+- `student_analysis_tab.py` ← `/web/api/student-analytics/{student_id}`
+- `alerts_tab.py` ← `/web/api/alerts-students` و `/web/api/alerts-tardiness`
+- `links_tab.py` ← يستخدم `client.url` كـ base URL للروابط
 
 ---
 
-## 7. إصلاحات جلسة 17 أبريل 2026
+## 6. Endpoints السيرفر المهمة (web_routes.py)
 
-### أ. إصلاح Mixins مفقودة في AppGUI
-ثلاث Mixins كانت مستوردة لكنها غير مُضافة لتعريف الكلاس، مما يسبب `AttributeError` عند فتح التبويبات:
-- `ClassNamingTabMixin` → تبويب "إدارة الفصول"
-- `TeacherFormsTabMixin` → تبويب "نماذج المعلم"
-- `CircularsTabMixin` → تبويب "التعاميم والنشرات"
-- **الملف:** `gui/app_gui.py` — أُضيفت للـ class inheritance
+| الـ Endpoint | الوصف |
+|-------------|-------|
+| `GET /web/api/sync-info` | معلومات المزامنة (عدد السجلات، آخر تحديث) |
+| `GET /web/api/config` | إعدادات المدرسة (قوالب الرسائل، الحدود، إلخ) |
+| `GET /web/api/alerts-students` | الطلاب المتجاوزين لحد الغياب |
+| `GET /web/api/alerts-tardiness` | الطلاب المتجاوزين لحد التأخر |
+| `GET /web/api/analytics/dashboard` | بيانات لوحة المراقبة |
+| `GET /web/api/analytics/weekly-comparison` | مقارنة أسبوعية للغياب |
+| `GET /web/api/analytics/absence-by-dow` | توزيع الغياب على أيام الأسبوع |
+| `GET /web/api/student-analytics/{id}` | تحليل طالب محدد (GPA + الغياب) |
+| `POST /web/api/add-tardiness` | إضافة تأخر (date, class_id, class_name, student_id, student_name, period, minutes_late) |
+| `POST /web/api/circulars/create` | إنشاء تعميم جديد |
 
-### ب. إصلاح حلقة Canvas اللانهائية في تبويبات التحويلات
-نمط خاطئ: callback واحد مربوط بالـ inner frame يجمع `scrollregion` + `itemconfig(width)` → حلقة لا نهائية.
-- **الملفات المُصلحة:** `gui/tabs/referral_deputy_tab.py`، `gui/tabs/referral_teacher_tab.py`
-- **القاعدة الثابتة:** inner frame → `scrollregion` فقط | canvas → `itemconfig(width)` فقط مع guard
+---
 
-### ج. إصلاحات شاملة في تبويب المستخدمين (`gui/tabs/users_tab.py`)
+## 7. مزامنة الإعدادات في Cloud Mode
 
-| المشكلة | السبب | الحل |
-|---------|-------|------|
-| `frame.after()` يرفع NameError | `frame` متغير محلي في `_build_users_tab` | استبدل بـ `self.users_frame.after()` |
-| Scrollbar لا يظهر | `canvas.pack()` قبل `sb2.pack()` → canvas يستولي على كل المساحة | عكس الترتيب: `sb2` أولاً ثم `canvas` |
-| زر تفعيل/تعطيل لا يعمل | يبحث عن نص `"فعّال"` لكن القيمة `"✅"` | صُحح إلى `"✅" in str(vals[4])` |
-| تقطيع عند اختيار مستخدم | كل `var.set()` يُطلق `<Configure>` → 30+ تحديث للـ canvas | تعطيل `<Configure>` مؤقتاً أثناء التحديث الجماعي، تحديث واحد في النهاية |
-| أزرار المعلمين مدمجة | زر واحد يجمع التوليد والإرسال | فُصل إلى: "⚙️ توليد حسابات المعلمين" + "📤 إرسال بيانات الدخول" |
+عند تسجيل الدخول في وضع العميل، تُستدعى `force_sync_cloud_data()` في `database.py` التي تقوم بـ:
+1. مزامنة الطلاب (`load_students(force_reload=True)`)
+2. مزامنة المعلمين (`load_teachers()`)
+3. مزامنة الإعدادات من السيرفر (`_sync_config_from_server()`)
 
-**دالة الإرسال الجديدة `_user_send_teacher_creds`:** تُعيد توليد كلمة مرور عشوائية لكل معلم موجود في DB وترسلها بالواتساب.
+**المفاتيح التي تُزامَن من السيرفر:**
+- `school_name`, `school_gender`
+- `tardiness_message_template`, `message_template`
+- `alert_absence_threshold`, `alert_tardiness_threshold`
+- `period_times`, `school_start_time`
 
-### د. النمط الصحيح لـ Canvas القابل للتمرير (مرجع دائم)
+---
+
+## 8. نظام الترخيص
+
+| الحالة | السلوك |
+|--------|--------|
+| **جهاز عميل** (cloud_mode=True) | يتجاوز فحص الترخيص مباشرة |
+| **مُفعَّل** (license activated) | يعمل بلا قيود |
+| **فترة تجربة** (≤7 أيام) | يعمل مع إشعار بالأيام المتبقية |
+| **انتهت التجربة** | يفتح نافذة التفعيل قبل الدخول |
+
+- ملف التجربة: `.darb_trial` في `BASE_DIR`
+- ملف الترخيص: `.darb_license` في `BASE_DIR`
+- زر التفعيل يظهر في الإعدادات للمدير فقط في وضع السيرفر وأثناء فترة التجربة.
+
+---
+
+## 9. نظام التحديث (updater.py)
+
+- يُنزّل ZIP من `https://github.com/moon15mm/DarbStu/archive/refs/heads/main.zip`
+- يُحدّث ملفات `.py, .txt, .json, .iss, .bat, .spec, .ico`
+- يحمي مجلد `data/` وملفات الإعدادات من الكتابة فوقها
+- **مهم:** في وضع EXE المجمّد، تحديث `.py` لا يؤثر — يجب بناء EXE جديد
+- يقرأ الإصدار المثبّت من `version.json` (لا من `APP_VERSION` المجمّد) لتجنب حلقة التحديث
+
+---
+
+## 10. WhatsApp
+
+- يعمل محلياً بالكامل على كل جهاز عبر Node.js (`whatsapp-web.js`)
+- كل جهاز مستقل بواتسابه — لا مشاركة بين السيرفر والعميل
+- يدعم Round-Robin بين عدة خوادم واتساب عبر `wa_servers` في الإعدادات
+- المنفذ الافتراضي: `3000`، نقطة الإرسال: `http://127.0.0.1:{port}/send-message`
+
+---
+
+## 11. النمط الصحيح لـ Canvas القابل للتمرير (مرجع دائم)
+
 ```python
 # 1. الـ scrollbar يُعبأ أولاً دائماً
 sb.pack(side="right", fill="y")
@@ -153,7 +197,7 @@ canvas.pack(side="left", fill="both", expand=True)
 # 2. inner frame → scrollregion فقط
 inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
 
-# 3. canvas → itemconfig(width) فقط مع guard
+# 3. canvas → itemconfig(width) فقط مع guard لتجنب حلقة لا نهائية
 _last_w = [0]
 def _on_canvas_conf(e):
     w = canvas.winfo_width()
@@ -161,46 +205,46 @@ def _on_canvas_conf(e):
     _last_w[0] = w
     canvas.itemconfig(win_id, width=w)
 canvas.bind("<Configure>", _on_canvas_conf)
-
-# 4. عند التحديث الجماعي للعناصر → عطّل <Configure> مؤقتاً
-inner.unbind("<Configure>")
-# ... التحديثات ...
-inner.bind("<Configure>", ...)
-canvas.configure(scrollregion=canvas.bbox("all"))  # تحديث واحد
 ```
 
 ---
 
+## 12. إصلاحات جلسة 18 أبريل 2026
+
+### أ. خطأ threading في إرسال التعاميم (`api/web_routes.py`)
+- `threading` كان مستخدماً لإرسال تنبيهات واتساب عند نشر تعميم لكنه غير مستورد
+- **الإصلاح:** إضافة `threading` لسطر الـ imports
+
+### ب. الإشعارات الذكية لا تتحدث في العميل (`gui/tabs/alerts_tab.py`)
+- `_load_alert_students()` و `_load_tardiness_alert_students()` كانتا تستعلمان من قاعدة البيانات المحلية
+- **الإصلاح:** تشغيل في thread خلفي، في Cloud Mode تجلبان من `/web/api/alerts-students` و `/web/api/alerts-tardiness`
+
+### ج. رسائل التأخر مختصرة في العميل (`database.py`)
+- `force_sync_cloud_data()` لم تكن تزامن `config.json` (قوالب الرسائل)
+- **الإصلاح:** إضافة `_sync_config_from_server()` تجلب الإعدادات المهمة من السيرفر عند الدخول
+
+### د. خطأ `get_week_comparison` و `get_absence_by_day_of_week` (`api/web_routes.py`)
+- الدالتان موجودتان في `alerts_service.py` لكنهما غير مستوردتان في `web_routes.py`
+- **الإصلاح:** إضافتهما لسطر الـ import
+
+### هـ. endpoint `/web/api/sync-info` مفقود (`api/web_routes.py`)
+- لوحة المراقبة في العميل تستعلم عنه كل دقيقتين → 404 متكرر
+- **الإصلاح:** إضافة الـ endpoint يُرجع عدد سجلات الغياب والتأخر
+
+### و. خلط بين الحصة ودقائق التأخر (`api/web_routes.py` + `database.py`)
+- في `web_routes.py`: ترتيب arguments في استدعاء `insert_tardiness` مقلوب (`student_id` ↔ `class_id`، و`minutes_late` يدخل خانة `period`)
+- في `database.py`: العميل لم يُرسل `period` في payload
+- **الإصلاح:** تصحيح الترتيب وإضافة `period` للـ payload
+
+### ز. روابط الفصول تعرض IP محلي في العميل (`gui/tabs/links_tab.py`)
+- `self.public_url` يكون `None` في العميل → يتراجع للـ IP المحلي
+- **الإصلاح:** في Cloud Mode يستخدم `client.url` (رابط السيرفر الفعلي)
+
+### ح. تجميد تبويب رسائل التأخر (`gui/tabs/tardiness_msg_tab.py`)
+- `_tard_msg_load()` كانت تستعلم من DB مباشرة على الـ main thread
+- **الإصلاح:** تشغيل الاستعلام في thread خلفي مع عرض "جارٍ التحميل..." فوراً
+
 ---
 
-## 8. تطوير تبويب تحليل الطالب (17 أبريل 2026)
-
-### الميزات المُضافة في `gui/tabs/student_analysis_tab.py`
-
-| الميزة | التفاصيل |
-|--------|----------|
-| **بطاقة الطالب الشخصية** | الاسم + الفصل + رقم الطالب + زر واتساب مباشر لولي الأمر |
-| **مؤشر الخطر التلقائي** | يحسب: `غياب×3 + تأخر÷10 + مخالفات×5` ← أخضر/أصفر/أحمر |
-| **6 كروت KPI** | إجمالي الغياب، مبرر، غير مبرر، دقائق التأخر، المخالفات، المعدل |
-| **خريطة أيام الأسبوع** | رسم بياني يوضح أي الأيام تتكرر فيها غيابات الطالب |
-| **فصل الغياب المبرر** | يُقارن غيابات قاعدة `excuses` بإجمالي الغياب |
-| **ملاحظات إدارية** | إضافة/حذف ملاحظات مرتبطة بـ DB — جدول `student_notes` |
-| **تصدير HTML للطباعة** | تقرير كامل بكل البيانات يُفتح في المتصفح |
-| **تمرير عمودي كامل** | الصفحة كلها داخل Canvas قابل للتمرير |
-
-### التغييرات في `database.py`
-- جدول جديد `student_notes` (id, student_id, note, author, created_at)
-- دوال جديدة: `get_student_notes()`, `add_student_note()`, `delete_student_note()`
-- تحديث `get_student_analytics_data()` ليرجع:
-  - `excused_count` / `unexcused_count` (من جدول `excuses`)
-  - `absence_by_dow` (توزيع الغياب على أيام الأسبوع)
-  - `notes` (ملاحظات الطالب)
-
-### إصلاح ترتيب pack في 9 ملفات
-الـ Scrollbar يجب أن يُعبأ **قبل** الـ Treeview/Canvas دائماً — إلا يختفي.
-ملفات مُصلحة: `term_report_tab`, `referral_deputy_tab`, `dashboard_tab`, `tardiness_msg_tab`, `counselor_tab` (موضعان), `teacher_inquiries_tab`, `excuses_tab`, `noor_tab`, `alerts_tab` (4 مواضع).
-
----
-
-*آخر تحديث: 17 أبريل 2026*
-*الحالة: مستقر وجاهز للنشر*
+*آخر تحديث: 18 أبريل 2026*
+*الحالة: مستقر وجاهز للبناء النهائي*
