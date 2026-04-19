@@ -60,15 +60,43 @@ def _write_log(msg: str):
     except Exception:
         pass
 
+def _cleanup_environment():
+    """تنظيف بيئة العمل عند البدء — يوقف أي عمليات قديمة تتعارض"""
+    import subprocess, os
+    _nw = dict(creationflags=subprocess.CREATE_NO_WINDOW) if sys.platform == 'win32' else {}
+
+    # أوقف أي cloudflared قديم (يمنع تعدد الاتصالات بنفس النفق)
+    try:
+        subprocess.run(["taskkill", "/F", "/IM", "cloudflared.exe"],
+                       capture_output=True, **_nw)
+        time.sleep(1)
+        print("[CLEANUP] ✅ cloudflared القديم أُوقف")
+    except Exception:
+        pass
+
+    # أوقف أي uvicorn/python قديم يحجز المنفذ
+    try:
+        result = subprocess.check_output(
+            ["netstat", "-ano"], encoding="utf-8", errors="replace", **_nw)
+        for line in result.splitlines():
+            if f":{PORT}" in line and "LISTENING" in line:
+                parts = line.split()
+                pid = parts[-1] if parts else None
+                if pid and pid != str(os.getpid()):
+                    subprocess.run(["taskkill", "/F", "/PID", pid],
+                                   capture_output=True, **_nw)
+                    print(f"[CLEANUP] ✅ تم تحرير المنفذ {PORT} (PID={pid})")
+                    time.sleep(1)
+    except Exception:
+        pass
+
+
 def main():
     # --- START: CLOUDFLARE TUNNEL CONFIGURATION ---
     MY_STATIC_DOMAIN = CLOUDFLARE_DOMAIN  # النطاق الثابت: darbte.uk
     # --- END: CLOUDFLARE TUNNEL CONFIGURATION ---
-    
-    # ─── تأمين السيرفر من الدوران اللانهائي ───────────────
-    # سيتم الاعتماد على منطق البرنامج للتمييز بين السيرفر والعميل
-    # os.environ["DARB_SERVER_MODE"] = "1"
-    # ──────────────────────────────────────────────────
+
+    _cleanup_environment()
 
     ensure_dirs(); init_db()
 
