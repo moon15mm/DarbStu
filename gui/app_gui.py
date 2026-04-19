@@ -335,6 +335,30 @@ class AppGUI(
                 btn.bind("<Leave>", lambda e, b=btn: b.config(bg="#f0f0f0") if self._current_tab.get() != b.cget("text") else None)
                 self._nav_buttons[tab_name] = btn
 
+        # ─── مؤشر حالة Cloudflare (يظهر للمدير فقط) ──────────────
+        if _allowed is None and public_url:  # مدير + السيرفر لديه نفق
+            cf_bar = tk.Frame(sidebar, bg="#f0f0f0")
+            cf_bar.pack(fill="x", padx=8, pady=(4, 0))
+            self._cf_dot  = tk.Label(cf_bar, text="⬤", fg="#22c55e",
+                                     bg="#f0f0f0", font=("Tahoma", 9))
+            self._cf_dot.pack(side="right", padx=(0, 2))
+            self._cf_text = tk.Label(cf_bar, text="النفق متصل",
+                                     fg="#166534", bg="#f0f0f0",
+                                     font=("Tahoma", 8))
+            self._cf_text.pack(side="right")
+
+            def _cf_status_update(is_alive: bool):
+                color_dot  = "#22c55e" if is_alive else "#ef4444"
+                color_text = "#166534" if is_alive else "#991b1b"
+                label      = "النفق متصل" if is_alive else "النفق منقطع ⚠"
+                self.root.after(0, lambda: (
+                    self._cf_dot.config(fg=color_dot),
+                    self._cf_text.config(text=label, fg=color_text)
+                ))
+
+            from cloudflare_tunnel import set_tunnel_status_callback
+            set_tunnel_status_callback(_cf_status_update)
+
         # ─── تنبيهات التعاميم (Badge) ────────────────────────────
         self.unread_circ_lbl = tk.Label(sidebar, text="", bg="#f0f0f0", fg="red", font=("Tahoma", 9, "bold"))
         self._check_unread_circulars()

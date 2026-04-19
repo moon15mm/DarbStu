@@ -5,7 +5,49 @@ cloudflare_tunnel.py — إدارة نفق Cloudflare
 import os, re, subprocess, shutil, threading, time
 from constants import CLOUDFLARE_DOMAIN
 
-_cf_process = None  # مرجع لعملية cloudflared
+_cf_process       = None   # مرجع لعملية cloudflared
+_cf_saved_port    = None   # حُفظ لإعادة الاستخدام عند الـ watchdog
+_cf_saved_domain  = None
+_cf_watchdog_on   = False  # علم تشغيل الـ watchdog
+_cf_status_cb     = None   # callback(is_alive: bool) → GUI يستدعيه الـ watchdog
+
+
+def set_tunnel_status_callback(cb):
+    """يسجّل دالة يُستدعى بها عند تغيير حالة النفق."""
+    global _cf_status_cb
+    _cf_status_cb = cb
+
+
+def _notify(is_alive: bool):
+    if _cf_status_cb:
+        try: _cf_status_cb(is_alive)
+        except Exception: pass
+
+
+def _watchdog_loop():
+    """خيط خلفية يراقب cloudflared ويعيد تشغيله عند الانهيار."""
+    global _cf_process, _cf_watchdog_on
+    while _cf_watchdog_on:
+        time.sleep(60)
+        if not _cf_watchdog_on:
+            break
+        alive = _cf_process and _cf_process.poll() is None
+        if not alive:
+            print("[CF-WATCHDOG] ⚠️ cloudflared متوقف — جارٍ إعادة التشغيل...")
+            _notify(False)
+            if _cf_saved_port and _cf_saved_domain:
+                start_cloudflare_tunnel(_cf_saved_port, _cf_saved_domain)
+        else:
+            _notify(True)
+
+
+def _start_watchdog():
+    global _cf_watchdog_on
+    if _cf_watchdog_on:
+        return
+    _cf_watchdog_on = True
+    threading.Thread(target=_watchdog_loop, daemon=True, name="cf-watchdog").start()
+    print("[CF-WATCHDOG] ✅ بدأ المراقبة")
 
 def _has_named_tunnel_config() -> bool:
     """يتحقق إذا كان هناك إعداد Named Tunnel (config.yml أو credentials)."""
@@ -62,7 +104,9 @@ def start_cloudflare_tunnel(port: int, domain: str):
     - إذا وُجد Named Tunnel مُعدّ (credentials JSON) → يستخدمه مع دومين darbte.uk
     - إذا لم يوجد → يستخدم Quick Tunnel ويلتقط الرابط العشوائي تلقائياً
     """
-    global _cf_process
+    global _cf_process, _cf_saved_port, _cf_saved_domain
+    _cf_saved_port   = port
+    _cf_saved_domain = domain
     cloudflared = find_cloudflared_executable()
     if not cloudflared:
         print("[CLOUDFLARE] ⚠️ cloudflared غير مثبّت — يعمل محلياً فقط")
@@ -150,6 +194,10 @@ def start_cloudflare_tunnel(port: int, domain: str):
         if not detected_url:
             print("[CLOUDFLARE] ⚠️ لم يُكتشف رابط في المهلة المحددة")
 
+        if detected_url:
+            _notify(True)
+            _start_watchdog()  # ابدأ المراقبة بعد نجاح التشغيل
+
         return detected_url
 
     except Exception as e:
@@ -157,8 +205,9 @@ def start_cloudflare_tunnel(port: int, domain: str):
         return None
 
 def stop_cloudflare_tunnel():
-    """يوقف عملية cloudflared."""
-    global _cf_process
+    """يوقف عملية cloudflared والـ watchdog."""
+    global _cf_process, _cf_watchdog_on
+    _cf_watchdog_on = False
     if _cf_process:
         try:
             _cf_process.terminate()

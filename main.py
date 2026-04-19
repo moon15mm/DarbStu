@@ -150,9 +150,9 @@ def main():
     # ═══════════════════════════════════════════════════════════════
     # ─── تشغيل السيرفر مع error logging ─────────────────────────────
     _server_error = [None]
+
     def _run_server():
         try:
-            # في EXE بدون console يكون stdout/stderr=None فيفشل uvicorn logging
             if sys.stdout is None:
                 sys.stdout = open(_LOG_FILE, 'a', encoding='utf-8', errors='replace')
             if sys.stderr is None:
@@ -169,8 +169,32 @@ def main():
             _write_log(f"[SERVER-FATAL] {_srv_e}\n{traceback.format_exc()}")
             print(f"[SERVER] ❌ فشل تشغيل السيرفر: {_srv_e}")
 
-    server_thread = threading.Thread(target=_run_server, daemon=True)
-    server_thread.start()
+    def _start_server_thread():
+        t = threading.Thread(target=_run_server, daemon=True, name="uvicorn")
+        t.start()
+        return t
+
+    server_thread = _start_server_thread()
+
+    # ─── Watchdog للسيرفر: يعيد تشغيل uvicorn إذا توقف ──────────
+    def _server_watchdog():
+        import socket as _ws
+        while True:
+            time.sleep(30)
+            # فحص بسيط: هل المنفذ يستجيب؟
+            try:
+                _s = _ws.socket(_ws.AF_INET, _ws.SOCK_STREAM)
+                _s.settimeout(2)
+                _s.connect(('127.0.0.1', PORT))
+                _s.close()
+            except Exception:
+                _write_log("[SERVER-WATCHDOG] المنفذ لا يستجيب — جارٍ إعادة تشغيل uvicorn")
+                print("[SERVER-WATCHDOG] ⚠️ السيرفر لا يستجيب — إعادة تشغيل...")
+                time.sleep(3)
+                _start_server_thread()
+                time.sleep(10)  # انتظر قبل الفحص التالي
+
+    threading.Thread(target=_server_watchdog, daemon=True, name="srv-watchdog").start()
 
     # انتظر حتى يصبح السيرفر جاهزاً (حد أقصى 8 ثوانٍ بدلاً من 1 ثانية ثابتة)
     import socket as _test_sock

@@ -4,11 +4,14 @@ updater.py — نظام التحديث التلقائي (متعدد الملفا
 يحمّل حزمة ZIP من GitHub ويستبدل ملفات الكود فقط،
 دون المساس بمجلد data أو my-whatsapp-server أو أي بيانات مستخدم.
 """
-import os, sys, io, zipfile, shutil, threading, subprocess
+import os, sys, io, zipfile, shutil, threading, subprocess, ssl
 import urllib.request
 import tkinter as tk
 from tkinter import ttk
 from constants import APP_VERSION, UPDATE_URL, BASE_DIR
+
+# الـ EXE المجمّد على Windows لا يحمل شهادات SSL — نتجاوز التحقق
+_SSL_CTX = ssl._create_unverified_context()
 
 # رابط ZIP الكامل للمشروع (فرع main)
 _ZIP_FALLBACK = "https://github.com/moon15mm/DarbStu/archive/refs/heads/main.zip"
@@ -62,8 +65,13 @@ def check_for_updates(root_widget=None, silent=True):
     def _check():
         try:
             import json as _j
-            with urllib.request.urlopen(UPDATE_URL, timeout=5) as r:
-                data = _j.loads(r.read().decode())
+            # حاول أولاً بدون تحقق SSL (يعمل على Windows EXE)، ثم الطريقة العادية
+            try:
+                with urllib.request.urlopen(UPDATE_URL, timeout=5, context=_SSL_CTX) as r:
+                    data = _j.loads(r.read().decode())
+            except Exception:
+                with urllib.request.urlopen(UPDATE_URL, timeout=5) as r:
+                    data = _j.loads(r.read().decode())
             latest  = data.get("version", "0.0.0")
             notes   = data.get("notes", "")
             dl_url  = data.get("download_url", "") or _ZIP_FALLBACK
@@ -112,7 +120,11 @@ def _auto_update(latest, dl_url, win, status_lbl, btn):
         _ui("⬇️  جارٍ تحميل التحديث...")
 
         # ٢. تحميل ملف ZIP
-        with urllib.request.urlopen(url, timeout=90) as resp:
+        try:
+            resp_obj = urllib.request.urlopen(url, timeout=90, context=_SSL_CTX)
+        except Exception:
+            resp_obj = urllib.request.urlopen(url, timeout=90)
+        with resp_obj as resp:
             zip_bytes = resp.read()
 
         _ui("📦  جارٍ تثبيت الملفات...")
