@@ -37,6 +37,7 @@ from constants import now_riyadh_date
 import multiprocessing
 import uvicorn
 import asyncio
+import atexit
 import tkinter as tk
 from ttkthemes import ThemedTk
 from tkinter import messagebox
@@ -59,6 +60,19 @@ def _write_log(msg: str):
             _f.write(f"[{datetime.datetime.now()}] {msg}\n{'='*60}\n")
     except Exception:
         pass
+
+def _force_cleanup_at_exit():
+    """يُنفَّذ دائماً عند أي خروج (X زر / كراش / Task Manager طبيعي)"""
+    import subprocess
+    try:
+        _nw = dict(creationflags=subprocess.CREATE_NO_WINDOW) if sys.platform == 'win32' else {}
+        subprocess.run(["taskkill", "/F", "/IM", "cloudflared.exe"],
+                       capture_output=True, **_nw)
+    except Exception:
+        pass
+
+atexit.register(_force_cleanup_at_exit)
+
 
 def _cleanup_environment():
     """تنظيف بيئة العمل عند البدء — يوقف أي عمليات قديمة تتعارض"""

@@ -2,7 +2,7 @@
 """
 cloudflare_tunnel.py — إدارة نفق Cloudflare
 """
-import os, re, subprocess, shutil, threading, time
+import os, re, subprocess, shutil, threading, time, atexit
 from constants import CLOUDFLARE_DOMAIN
 
 _cf_process       = None   # مرجع لعملية cloudflared
@@ -215,4 +215,24 @@ def stop_cloudflare_tunnel():
             print("[CLOUDFLARE] 🛑 تم إيقاف النفق")
         except Exception as e:
             print(f"[CLOUDFLARE] خطأ عند الإيقاف: {e}")
+
+
+def _atexit_kill_cloudflared():
+    """يُنفَّذ تلقائياً عند أي خروج — يضمن إغلاق cloudflared حتى لو أُغلق بشكل غير طبيعي"""
+    global _cf_process, _cf_watchdog_on
+    _cf_watchdog_on = False
+    try:
+        if _cf_process and _cf_process.poll() is None:
+            _cf_process.terminate()
+    except Exception:
+        pass
+    _nw = dict(creationflags=subprocess.CREATE_NO_WINDOW) if os.name == 'nt' else {}
+    try:
+        subprocess.run(["taskkill", "/F", "/IM", "cloudflared.exe"],
+                       capture_output=True, **_nw)
+    except Exception:
+        pass
+
+
+atexit.register(_atexit_kill_cloudflared)
 
