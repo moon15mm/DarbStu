@@ -11,7 +11,22 @@
       "Bash(where npm:*)",
       "Bash(python3 -c ':*)",
       "Bash(python -c ':*)",
-      "Bash(python split_project.py)"
+      "Bash(python split_project.py)",
+      "Bash(cloudflared --version)",
+      "Read(//c/Users/maher/.cloudflared/**)",
+      "Bash(tasklist)",
+      "Bash(taskkill //F //IM cloudflared.exe)",
+      "Bash(powershell.exe -Command \"Stop-Process -Name cloudflared -Force -ErrorAction SilentlyContinue; Start-Sleep 2; Get-Process cloudflared -ErrorAction SilentlyContinue | Select-Object Id,Name\")",
+      "Bash(cmd.exe /c \"taskkill /F /PID 8036 /PID 18068\")",
+      "Bash(cmd.exe /c \"tasklist | findstr /i cloudflared\")",
+      "Bash(cmd.exe /c \"nslookup darbte.uk 8.8.8.8\")",
+      "Bash(cmd.exe /c \"nslookup darbte.uk 8.8.8.8 2>&1\")",
+      "Bash(cmd.exe /c \"nslookup -type=CNAME darbte.uk 8.8.8.8 2>&1\")",
+      "Bash(nslookup darbte.uk 8.8.8.8)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" --max-time 8 -k https://darbte.uk/web/dashboard)",
+      "Bash(cmd.exe /c \"tasklist | findstr DarbStu\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:8000/)",
+      "Bash(cmd.exe /c \"cloudflared tunnel route dns darb-tunnel darbte.uk 2>&1\")"
     ]
   }
 }

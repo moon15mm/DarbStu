@@ -3,7 +3,7 @@
 
 #define AppName      "DarbStu"
 #define AppNameAr    "درب الطلاب"
-#define AppVersion   "3.0.1"
+#define AppVersion   "3.0.3"
 #define AppPublisher "DarbStu"
 #define AppURL       "https://github.com/moon15mm/DarbStu"
 #define AppExeName   "DarbStu.exe"
