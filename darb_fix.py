@@ -8,13 +8,20 @@ import urllib.request, tkinter as tk
 from tkinter import ttk, scrolledtext
 
 # ── إعدادات ────────────────────────────────────────────────────────
-CHECK_URL  = "https://darbte.uk/web/dashboard"
-LOCAL_PORT = 8000
-SSL_CTX    = ssl._create_unverified_context()
-BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
-LOG_FILE   = os.path.join(BASE_DIR, "darb_fix_log.txt")
-CF_DL_URL  = ("https://github.com/cloudflare/cloudflared/releases/latest"
-               "/download/cloudflared-windows-amd64.exe")
+CHECK_URL   = "https://darbte.uk/web/dashboard"
+LOCAL_PORT  = 8000
+SSL_CTX     = ssl._create_unverified_context()
+BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
+LOG_FILE    = os.path.join(BASE_DIR, "darb_fix_log.txt")
+CF_DL_URL   = ("https://github.com/cloudflare/cloudflared/releases/latest"
+                "/download/cloudflared-windows-amd64.exe")
+VERSION_URL = "https://raw.githubusercontent.com/moon15mm/DarbStu/main/version.json"
+ZIP_URL     = "https://github.com/moon15mm/DarbStu/archive/refs/heads/main.zip"
+PROTECTED   = {"data", "my-whatsapp-server", "__pycache__", ".git", ".github",
+               "Output", "build", "dist"}
+UPDATE_EXTS = {".py", ".txt", ".json", ".iss", ".bat", ".spec", ".ico"}
+SKIP_FILES  = {"data/config.json","data/students.json",
+               "data/users.json","data/teachers.json"}
 
 # ══════════════════════════════════════════════════════════════════
 class DarbFixApp:
@@ -101,6 +108,13 @@ class DarbFixApp:
             command=self._quick_diag)
         self._diag_btn.pack(side="right", padx=4)
 
+        self._upd_btn = tk.Button(
+            btn_f, text="⬆️  تحديث يدوي",
+            bg="#7c3aed", fg="white", font=("Tahoma", 10),
+            relief="flat", padx=12, pady=9, cursor="hand2",
+            command=self._manual_update)
+        self._upd_btn.pack(side="right", padx=4)
+
         tk.Button(btn_f, text="مسح السجل", command=self._clear,
                   bg="#e5e7eb", relief="flat", padx=12, pady=9,
                   font=("Tahoma", 10), cursor="hand2").pack(side="right", padx=4)
@@ -137,9 +151,11 @@ class DarbFixApp:
 
     def _set_btn(self, enabled):
         text = "▶  ابدأ الفحص والإصلاح" if enabled else "⏳  جارٍ الإصلاح..."
+        st = "normal" if enabled else "disabled"
         self.root.after(0, lambda: (
-            self._start_btn.config(state="normal" if enabled else "disabled", text=text),
-            self._diag_btn.config(state="normal" if enabled else "disabled")
+            self._start_btn.config(state=st, text=text),
+            self._diag_btn.config(state=st),
+            self._upd_btn.config(state=st),
         ))
 
     # ── دوال الفحص ─────────────────────────────────────────────────
@@ -580,6 +596,138 @@ class DarbFixApp:
             creationflags=subprocess.CREATE_NO_WINDOW,
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         self._log("   ✅  تم تشغيل cloudflared الجديد", "ok")
+
+    # ══════════════════════════════════════════════════════════════
+    # التحديث اليدوي
+    # ══════════════════════════════════════════════════════════════
+    def _manual_update(self):
+        """زر التحديث اليدوي — مستقل عن دورة الإصلاح"""
+        self._set_btn(False)
+        threading.Thread(target=self._run_manual_update, daemon=True).start()
+
+    def _run_manual_update(self):
+        import io, zipfile, json as _j
+        self._log("━" * 52, "head")
+        self._log("  ⬆️  بدء التحديث اليدوي من GitHub", "head")
+        self._log("━" * 52, "head")
+
+        darb = self._find_exe("DarbStu.exe")
+        install_dir = os.path.dirname(darb) if darb else BASE_DIR
+
+        # ── فحص الإصدار ───────────────────────────────────────────
+        self._log("   🔍  فحص إصدار GitHub...", "info")
+        try:
+            for ctx in [SSL_CTX, None]:
+                try:
+                    kw = {"context": ctx} if ctx else {}
+                    with urllib.request.urlopen(VERSION_URL, timeout=8, **kw) as r:
+                        data = _j.loads(r.read().decode())
+                    break
+                except: continue
+            else:
+                raise Exception("تعذّر الوصول إلى GitHub")
+
+            latest = data.get("version", "?")
+            notes  = data.get("notes", "")
+
+            # قراءة الإصدار المحلي
+            vfile = os.path.join(install_dir, "version.json")
+            local = "0.0.0"
+            if os.path.exists(vfile):
+                try:
+                    local = _j.load(open(vfile, encoding="utf-8")).get("version", "0.0.0")
+                except: pass
+
+            def _v(v):
+                try: return tuple(int(x) for x in str(v).split("."))
+                except: return (0,)
+
+            self._log(f"   📌  الإصدار المحلي : {local}", "info")
+            self._log(f"   🆕  إصدار GitHub  : {latest}", "info")
+            if notes:
+                self._log(f"   📝  الجديد        : {notes}", "gray")
+
+            if _v(latest) <= _v(local):
+                self._log("   ✅  أنت على أحدث إصدار — لا يحتاج تحديث", "ok")
+                self._status("✅ أحدث إصدار مثبّت", "#166534", "#4ade80")
+                self._set_btn(True); return
+
+        except Exception as e:
+            self._log(f"   ⚠️  تعذّر فحص الإصدار: {e}", "warn")
+            self._log("   → سأتابع التحديث على أي حال...", "gray")
+            latest = "?"
+
+        # ── تنزيل ZIP ─────────────────────────────────────────────
+        self._log(f"   ⬇️  تنزيل حزمة التحديث...", "info")
+        self._status("⬇️ جارٍ التنزيل...", dot="#fbbf24")
+        try:
+            for ctx in [SSL_CTX, None]:
+                try:
+                    kw = {"context": ctx} if ctx else {}
+                    with urllib.request.urlopen(ZIP_URL, timeout=120, **kw) as r:
+                        zip_bytes = r.read()
+                    break
+                except: continue
+            else:
+                raise Exception("فشل التنزيل من GitHub")
+            self._log(f"   ✅  تم التنزيل ({len(zip_bytes)//1024} KB)", "ok")
+        except Exception as e:
+            self._log(f"   ❌  فشل التنزيل: {e}", "err")
+            self._status("❌ فشل التنزيل", "#991b1b", "#f87171")
+            self._set_btn(True); return
+
+        # ── استخراج الملفات ───────────────────────────────────────
+        self._log("   📦  استخراج ملفات الكود...", "info")
+        self._status("📦 جارٍ التثبيت...", dot="#fbbf24")
+        try:
+            with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+                names = zf.namelist()
+                prefix = ""
+                if names:
+                    top = names[0].split("/")[0]
+                    if all(n.startswith(top+"/") or n == top+"/" for n in names[:5]):
+                        prefix = top + "/"
+
+                updated = skipped = 0
+                for item in names:
+                    rel = item[len(prefix):] if prefix and item.startswith(prefix) else item
+                    if not rel or rel.endswith("/"): continue
+                    top_dir = rel.split("/")[0]
+                    if top_dir in PROTECTED: skipped += 1; continue
+                    if rel in SKIP_FILES: skipped += 1; continue
+                    ext = os.path.splitext(rel)[1].lower()
+                    if ext not in UPDATE_EXTS: skipped += 1; continue
+
+                    dest = os.path.join(install_dir, rel.replace("/", os.sep))
+                    os.makedirs(os.path.dirname(dest), exist_ok=True)
+                    with zf.open(item) as src:
+                        content = src.read()
+                    with open(dest, "wb") as dst:
+                        dst.write(content)
+                    updated += 1
+
+            self._log(f"   ✅  تم تحديث {updated} ملف  |  تجاوز {skipped}", "ok")
+        except Exception as e:
+            self._log(f"   ❌  خطأ في الاستخراج: {e}", "err")
+            self._status("❌ فشل الاستخراج", "#991b1b", "#f87171")
+            self._set_btn(True); return
+
+        # ── إعادة التشغيل ─────────────────────────────────────────
+        self._log("━" * 52, "head")
+        self._log(f"   ✅  تم التحديث إلى الإصدار {latest} بنجاح!", "ok")
+        self._log("   🔄  سيُعاد تشغيل DarbStu خلال 5 ثوانٍ...", "warn")
+        self._status("✅ تم التحديث! إعادة تشغيل...", "#166534", "#4ade80")
+        time.sleep(5)
+
+        if darb and os.path.exists(darb):
+            self._kill("DarbStu.exe")
+            time.sleep(2)
+            subprocess.Popen([darb], cwd=os.path.dirname(darb))
+            self._log("   ✅  تم تشغيل DarbStu بالإصدار الجديد", "ok")
+        else:
+            self._log("   ℹ️  أغلق هذه الأداة وافتح DarbStu يدوياً", "gray")
+
+        self._set_btn(True)
 
     # ── تشغيل التطبيق ─────────────────────────────────────────────
     def run(self):
