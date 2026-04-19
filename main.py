@@ -276,6 +276,13 @@ def main():
         try:
             stop_cloudflare_tunnel()
         except Exception: pass
+        try:
+            import subprocess as _sp
+            _nw = dict(creationflags=_sp.CREATE_NO_WINDOW) if sys.platform == 'win32' else {}
+            _sp.run(["taskkill", "/F", "/IM", "cloudflared.exe"],
+                    capture_output=True, **_nw)
+            print("[CLEANUP] ✅ cloudflared أُوقف عند الإغلاق")
+        except Exception: pass
         root.destroy()
     root.protocol("WM_DELETE_WINDOW", on_closing)
 
