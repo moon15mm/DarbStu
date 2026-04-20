@@ -260,20 +260,25 @@ def main():
         print(f"[SERVER] ⚠️ السيرفر لم يستجب في 8 ثوانٍ — قد يكون المنفذ {PORT} محجوزاً")
 
     public_url = None
-    
+
     # ─── Cloudflare Tunnel ───────────────────────────────────────
-    public_url = start_cloudflare_tunnel(PORT, MY_STATIC_DOMAIN)
-    if public_url:
-        print(f"\n{'='*60}")
-        print(f"  ✅ الرابط العام: {public_url}")
-        print(f"{'='*60}\n")
-        # حفظ الرابط في الإعدادات لعرضه في واجهة المشرف
-        from config_manager import load_config, save_config
-        _c = load_config()
-        _c["cloud_url_internal"] = public_url # استخدم مسمى داخلي لا يتعارض مع cloud_url الخاص بالعميل
-        save_config(_c)
+    _cfg = load_config()
+    if _cfg.get("cloud_mode") and _cfg.get("cloud_url"):
+        # جهاز عميل — الرابط العام هو عنوان السيرفر الرئيسي، لا نشغّل نفقاً محلياً
+        public_url = _cfg["cloud_url"].rstrip("/")
+        print(f"[CLIENT] 🌐 الرابط العام من السيرفر: {public_url}")
     else:
-        print(f"\n[CLOUDFLARE] يعمل محلياً فقط — http://localhost:{PORT}\n")
+        public_url = start_cloudflare_tunnel(PORT, MY_STATIC_DOMAIN)
+        if public_url:
+            print(f"\n{'='*60}")
+            print(f"  ✅ الرابط العام: {public_url}")
+            print(f"{'='*60}\n")
+            from config_manager import save_config
+            _c = load_config()
+            _c["cloud_url_internal"] = public_url
+            save_config(_c)
+        else:
+            print(f"\n[CLOUDFLARE] يعمل محلياً فقط — http://localhost:{PORT}\n")
     root = ThemedTk(theme="arc"); root.set_theme("arc")
 
     # ─── التقط كل استثناء Tkinter صامت وأظهره ─────────────────────────────
