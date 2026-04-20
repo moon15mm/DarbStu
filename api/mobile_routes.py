@@ -7,7 +7,7 @@ from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 
-from constants import (DB_PATH, DATA_DIR, HOST, PORT, TZ_OFFSET,
+from constants import (DB_PATH, DATA_DIR, TEACHERS_JSON, HOST, PORT, TZ_OFFSET,
                        STATIC_DOMAIN, STUDENTS_STORE, BASE_DIR,
                        now_riyadh_date, local_ip, navbar_html, debug_on,
                        CURRENT_USER, ROLES)
