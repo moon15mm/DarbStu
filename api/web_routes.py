@@ -139,9 +139,11 @@ async def web_login(req: Request):
         user = authenticate(data.get("username",""), data.get("password",""))
         if not user:
             return JSONResponse({"ok": False, "msg": "اسم المستخدم أو كلمة المرور غير صحيحة"})
-        token = _create_token(user["username"], user["role"])
+        token        = _create_token(user["username"], user["role"])
+        allowed_tabs = get_user_allowed_tabs(user["username"])
         resp  = JSONResponse({"ok": True, "role": user["role"],
-                               "name": user.get("full_name") or user["username"]})
+                               "name": user.get("full_name") or user["username"],
+                               "allowed_tabs": allowed_tabs})
         resp.set_cookie("darb_token", token, httponly=True,
                         max_age=_JWT_EXPIRE*3600, samesite="lax")
         return resp

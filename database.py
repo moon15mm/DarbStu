@@ -1051,7 +1051,24 @@ def authenticate(username: str, password: str):
         # في وضع السحاب، نستخدم الـ API للتحقق
         res = client.post("/web/api/login", {"username": username, "password": password})
         if res.get("ok"):
-            return {"username": username, "role": res.get("role", "teacher"), "full_name": res.get("name", username)}
+            role      = res.get("role", "teacher")
+            full_name = res.get("name", username)
+            # احفظ المستخدم محلياً حتى تعمل get_user_allowed_tabs بشكل صحيح
+            try:
+                _con = get_db(); _cur = _con.cursor()
+                _cur.execute("""
+                    INSERT INTO users (username,password,role,full_name,active,created_at,allowed_tabs)
+                    VALUES (?,?,?,?,1,?,?)
+                    ON CONFLICT(username) DO UPDATE
+                    SET role=excluded.role, full_name=excluded.full_name,
+                        allowed_tabs=COALESCE(excluded.allowed_tabs, allowed_tabs)
+                """, (username, "", role, full_name,
+                      datetime.datetime.utcnow().isoformat(),
+                      json.dumps(res.get("allowed_tabs")) if res.get("allowed_tabs") else None))
+                _con.commit(); _con.close()
+            except Exception as _e:
+                print(f"[AUTH-CACHE] {_e}")
+            return {"username": username, "role": role, "full_name": full_name}
         return None
 
     con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
@@ -1078,7 +1095,12 @@ def get_user_allowed_tabs(username: str):
     con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
     cur.execute("SELECT role, allowed_tabs FROM users WHERE username=?", (username,))
     row = cur.fetchone(); con.close()
-    if not row: return None
+    if not row:
+        # المستخدم غير موجود محلياً (وضع السحاب) — استخدم الدور من CURRENT_USER
+        from constants import CURRENT_USER, ROLE_TABS as _RT
+        role = CURRENT_USER.get("role", "teacher")
+        if role == "admin": return None
+        return _RT.get(role)
     if row["role"] == "admin": return None  # admin يرى كل شيء
     if row["allowed_tabs"]:
         import json as _j
