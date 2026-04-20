@@ -323,12 +323,22 @@ class SetupWizard(tk.Toplevel):
 
         # ── الخطوة 3: ربط الدومين ─────────────────────────
         self._mlog(f"\n─── الخطوة 3: ربط {TUNNEL_DOMAIN} بالنفق ───")
-        ok, _ = self._run_cmd(
-            [self._cf, "tunnel", "route", "dns", name, TUNNEL_DOMAIN],
+        self._mlog("⚠️ إذا كان هناك record قديم سيُتجاوز تلقائياً...")
+        ok, out = self._run_cmd(
+            [self._cf, "tunnel", "route", "dns", "--overwrite-dns", name, TUNNEL_DOMAIN],
             step_num=3, timeout=30)
+        if not ok:
+            # جرب بدون --overwrite-dns
+            ok, out = self._run_cmd(
+                [self._cf, "tunnel", "route", "dns", name, TUNNEL_DOMAIN],
+                step_num=3, timeout=30)
         ok2, _ = self._run_cmd(
-            [self._cf, "tunnel", "route", "dns", name, f"www.{TUNNEL_DOMAIN}"],
+            [self._cf, "tunnel", "route", "dns", "--overwrite-dns", name, f"www.{TUNNEL_DOMAIN}"],
             step_num=3, timeout=30)
+        if not ok2:
+            self._run_cmd(
+                [self._cf, "tunnel", "route", "dns", name, f"www.{TUNNEL_DOMAIN}"],
+                step_num=3, timeout=30)
         self._set_step(3, "ok")
 
         # ── الخطوة 4: إنشاء config.yml ────────────────────
@@ -459,6 +469,39 @@ class CFManager:
                       command=cmd).grid(row=0, column=i, padx=5, sticky="ew")
         for c in range(3):
             wbf.columnconfigure(c, weight=1)
+
+        # ── قسم إدارة الـ Service ────────────────────────────────────
+        svf = tk.LabelFrame(self.root, text="  تشغيل تلقائي مع Windows (Service)  ",
+                            font=("Tahoma", 11, "bold"),
+                            bg=C_BG, fg=C_MUTED, bd=1, relief="flat",
+                            highlightbackground=C_BORDER, highlightthickness=1)
+        svf.pack(fill="x", padx=14, pady=4)
+
+        tk.Label(svf,
+                 text="تثبيت cloudflared كـ Service يجعله يعمل تلقائياً مع Windows بدون تدخل",
+                 font=("Tahoma", 10), bg=C_BG, fg=C_MUTED).pack(pady=(6, 2))
+
+        self._svc_status = tk.Label(svf, text="الحالة: غير معروفة",
+                                    font=("Tahoma", 10), bg=C_BG, fg=C_MUTED)
+        self._svc_status.pack()
+
+        svbtns = [
+            ("⚙️  تثبيت Service",   C_GREEN,  self._svc_install),
+            ("▶  تشغيل Service",    C_BLUE,   self._svc_start),
+            ("⏹  إيقاف Service",    C_RED,    self._svc_stop),
+            ("🗑  إلغاء Service",   C_YELLOW, self._svc_uninstall),
+        ]
+        svbf = tk.Frame(svf, bg=C_BG)
+        svbf.pack(fill="x", padx=8, pady=6)
+        for i, (txt, color, cmd) in enumerate(svbtns):
+            tk.Button(svbf, text=txt, font=("Tahoma", 10, "bold"),
+                      bg=color, fg="white", activebackground=color,
+                      relief="flat", cursor="hand2", pady=7,
+                      command=cmd).grid(row=0, column=i, padx=4, sticky="ew")
+        for c in range(4):
+            svbf.columnconfigure(c, weight=1)
+
+        threading.Thread(target=self._refresh_svc_status, daemon=True).start()
 
         # ── زر تحديث ─────────────────────────────────────────────
         tk.Button(self.root, text="🔃  تحديث الحالة الآن",
@@ -660,6 +703,92 @@ class CFManager:
         st.pack(fill="both", expand=True, padx=10, pady=10)
         st.insert("end", "\n".join(lines))
         st.configure(state="disabled")
+
+    # ── إدارة الـ Windows Service ──────────────────────────────────
+    def _refresh_svc_status(self):
+        try:
+            out = subprocess.check_output(
+                ["sc", "query", "cloudflared"],
+                encoding="utf-8", errors="replace", **NW)
+            if "RUNNING" in out:
+                self.root.after(0, lambda: self._svc_status.config(
+                    text="الحالة: يعمل ✅", fg=C_GREEN))
+            elif "STOPPED" in out:
+                self.root.after(0, lambda: self._svc_status.config(
+                    text="الحالة: متوقف ⏹", fg=C_YELLOW))
+            else:
+                self.root.after(0, lambda: self._svc_status.config(
+                    text="الحالة: مثبت لكن غير نشط", fg=C_MUTED))
+        except:
+            self.root.after(0, lambda: self._svc_status.config(
+                text="الحالة: غير مثبت", fg=C_RED))
+
+    def _svc_install(self):
+        cf = find_cloudflared()
+        if not cf:
+            messagebox.showerror("خطأ", "cloudflared.exe غير موجود"); return
+        if not has_tunnel_config():
+            messagebox.showwarning("تنبيه",
+                "يجب إنشاء النفق أولاً قبل التثبيت كـ Service\n"
+                "استخدم 'معالج إنشاء نفق جديد'"); return
+
+        def _do():
+            self._log_msg("⚙️ جارٍ تثبيت cloudflared كـ Service...")
+            try:
+                r = subprocess.run(
+                    [cf, "service", "install"],
+                    capture_output=True, text=True,
+                    encoding="utf-8", errors="replace")
+                if r.returncode == 0 or "already" in (r.stderr or "").lower():
+                    self._log_msg("✅ تم تثبيت Service — يعمل تلقائياً مع Windows")
+                    # تشغيل فوري
+                    subprocess.run(["net", "start", "cloudflared"],
+                                   capture_output=True, **NW)
+                    self._log_msg("▶ تم تشغيل Service")
+                else:
+                    self._log_msg(f"❌ {r.stderr[:200]}")
+                    self._log_msg("⚠️ جرّب التشغيل كـ Administrator")
+            except Exception as e:
+                self._log_msg(f"❌ {e}")
+            self._refresh_svc_status()
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _svc_start(self):
+        def _do():
+            self._log_msg("▶ جارٍ تشغيل Service...")
+            r = subprocess.run(["net", "start", "cloudflared"],
+                               capture_output=True, text=True,
+                               encoding="utf-8", errors="replace")
+            if r.returncode == 0 or "already" in (r.stdout or "").lower():
+                self._log_msg("✅ Service يعمل")
+            else:
+                self._log_msg(f"❌ {r.stdout.strip() or r.stderr.strip()}")
+            self._refresh_svc_status()
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _svc_stop(self):
+        def _do():
+            self._log_msg("⏹ جارٍ إيقاف Service...")
+            subprocess.run(["net", "stop", "cloudflared"],
+                           capture_output=True, **NW)
+            self._log_msg("✅ Service متوقف")
+            self._refresh_svc_status()
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _svc_uninstall(self):
+        if not messagebox.askyesno("تأكيد", "إلغاء تثبيت cloudflared Service؟\n"
+                                   "لن يعمل تلقائياً مع Windows بعد الآن"):
+            return
+        def _do():
+            self._log_msg("🗑 جارٍ إلغاء Service...")
+            subprocess.run(["net", "stop", "cloudflared"], capture_output=True, **NW)
+            cf = find_cloudflared()
+            if cf:
+                subprocess.run([cf, "service", "uninstall"],
+                               capture_output=True, **NW)
+            self._log_msg("✅ تم إلغاء Service")
+            self._refresh_svc_status()
+        threading.Thread(target=_do, daemon=True).start()
 
     def _on_close(self):
         self._running = False
