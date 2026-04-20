@@ -1,6 +1,6 @@
 {
-  "version": "3.0.5",
-  "notes": "إصلاح قائمة المعلمين في روابط الفصول + إصلاح الصلاحيات على أجهزة العملاء + إصلاح الرابط العام",
+  "version": "3.0.6",
+  "notes": "إصلاح الرابط العام على أجهزة العملاء بدون إعادة بناء EXE",
   "download_url": "https://github.com/moon15mm/DarbStu/archive/refs/heads/main.zip",
   "release_date": "2026-04-20"
 }
