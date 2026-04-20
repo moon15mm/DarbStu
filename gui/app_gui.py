@@ -160,7 +160,15 @@ class AppGUI(
         # 1. تعيين المتغيرات الأساسية أولاً
         self.root = root
         self.root.title(APP_TITLE)
-        self.public_url = public_url
+        # في وضع السحاب: الرابط العام = عنوان السيرفر الرئيسي
+        try:
+            _cfg = load_config()
+            if _cfg.get("cloud_mode") and _cfg.get("cloud_url"):
+                self.public_url = _cfg["cloud_url"].rstrip("/")
+            else:
+                self.public_url = public_url
+        except Exception:
+            self.public_url = public_url
         
         self.scheduler_running = False
         self.scheduler_timers = []
