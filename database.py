@@ -99,6 +99,15 @@ def refresh_cloud_client():
     global _cloud_client
     _cloud_client = CloudDBClient()
 
+def is_client_mode():
+    """يتحقق إذا كان الجهاز يعمل كعميل (ليس سيرفر) — يُستخدم لمنع الحذف من أجهزة العميل."""
+    try:
+        from config_manager import load_config
+        cfg = load_config()
+        return cfg.get("cloud_mode", False) and cfg.get("cloud_url", "")
+    except Exception:
+        return False
+
 def get_db():
     """يُنشئ اتصال DB مع إعدادات مُحسَّنة."""
     con = sqlite3.connect(DB_PATH, check_same_thread=False)

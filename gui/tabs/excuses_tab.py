@@ -118,10 +118,20 @@ class ExcusesTabMixin:
         ttk.Button(win, text="💾 حفظ العذر", command=save).pack(pady=10)
 
     def _exc_delete(self):
+        from database import authenticate
+        from constants import CURRENT_USER
+        from tkinter import simpledialog
         sel = self.tree_excuses.selection()
         if not sel: messagebox.showwarning("تنبيه","حدد سجلاً"); return
         rid = self.tree_excuses.item(sel[0])["values"][0]
         if not messagebox.askyesno("تأكيد","حذف هذا العذر؟"): return
+
+        pw = simpledialog.askstring("تأكيد الهوية", "أدخل كلمة مرور حسابك لتأكيد الحذف:", show="*")
+        if not pw: return
+        if authenticate(CURRENT_USER.get("username"), pw) is None:
+            messagebox.showerror("خطأ", "كلمة المرور غير صحيحة.")
+            return
+
         delete_excuse(rid); self._exc_load()
 
     # ══════════════════════════════════════════════════════════

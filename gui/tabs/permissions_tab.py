@@ -193,10 +193,20 @@ class PermissionsTabMixin:
             messagebox.showwarning("فشل","❌ " + msg)
 
     def _perm_delete(self):
+        from database import authenticate
+        from constants import CURRENT_USER
+        from tkinter import simpledialog
         sel = self.tree_perm.selection() if hasattr(self,"tree_perm") else []
         if not sel:
             messagebox.showwarning("تنبيه","حدد سجلاً"); return
         if not messagebox.askyesno("تأكيد","حذف هذا السجل؟"): return
+
+        pw = simpledialog.askstring("تأكيد الهوية", "أدخل كلمة مرور حسابك لتأكيد الحذف:", show="*")
+        if not pw: return
+        if authenticate(CURRENT_USER.get("username"), pw) is None:
+            messagebox.showerror("خطأ", "كلمة المرور غير صحيحة.")
+            return
+
         delete_permission(int(self.tree_perm.item(sel[0],"values")[0]))
         self._perm_load()
 

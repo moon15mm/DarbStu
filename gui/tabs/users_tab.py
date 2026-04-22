@@ -386,6 +386,9 @@ class UsersTabMixin:
         self.users_frame.after(100, self._users_load)
 
     def _user_delete(self):
+        from database import authenticate
+        from constants import CURRENT_USER
+        from tkinter import simpledialog
         sel = self.tree_users.selection()
         if not sel: messagebox.showwarning("تنبيه","حدد مستخدماً"); return
         vals    = self.tree_users.item(sel[0])["values"]
@@ -393,6 +396,13 @@ class UsersTabMixin:
         if username == "admin":
             messagebox.showwarning("تنبيه","لا يمكن حذف حساب المدير الرئيسي"); return
         if not messagebox.askyesno("تأكيد",f"حذف المستخدم '{username}'؟"): return
+
+        pw = simpledialog.askstring("تأكيد الهوية", "أدخل كلمة مرور حسابك لتأكيد الحذف:", show="*")
+        if not pw: return
+        if authenticate(CURRENT_USER.get("username"), pw) is None:
+            messagebox.showerror("خطأ", "كلمة المرور غير صحيحة.")
+            return
+
         delete_user(user_id); self._users_load()
 
     def _user_generate_teachers(self):

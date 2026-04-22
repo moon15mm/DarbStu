@@ -140,6 +140,9 @@ class AbsenceTabMixin:
         self.delete_absence_button.config(state="disabled")
 
     def delete_selected_absence(self):
+        from database import authenticate
+        from constants import CURRENT_USER
+        from tkinter import simpledialog
         if not (selected_items := self.tree_absences.selection()):
             messagebox.showwarning("تنبيه", "الرجاء تحديد سجل الغياب الذي تريد حذفه أولاً.")
             return
@@ -148,6 +151,12 @@ class AbsenceTabMixin:
         db_id = record_values[0]; student_name = record_values[2]; class_name = record_values[3]; period = record_values[4]
         confirmation_message = (f"هل أنت متأكد من حذف سجل الغياب التالي؟\n\nالطالب: {student_name}\nالفصل: {class_name}\nالحصة: {period}\n\nهذا الإجراء سيحول الطالب إلى 'حاضر' في هذه الحصة ولا يمكن التراجع عنه.")
         if not messagebox.askyesno("تأكيد الحذف", confirmation_message): return
+
+        pw = simpledialog.askstring("تأكيد الهوية", "أدخل كلمة مرور حسابك لتأكيد الحذف:", show="*")
+        if not pw: return
+        if authenticate(CURRENT_USER.get("username"), pw) is None:
+            messagebox.showerror("خطأ", "كلمة المرور غير صحيحة.")
+            return
         try:
             con = get_db(); cur = con.cursor()
             cur.execute("DELETE FROM absences WHERE id = ?", (db_id,)); con.commit(); con.close()

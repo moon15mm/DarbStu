@@ -121,6 +121,8 @@ class StudentsTabMixin:
 
     def delete_selected_student(self):
         from constants import CURRENT_USER, STUDENTS_JSON
+        from database import authenticate
+        from tkinter import simpledialog
         import json
 
         if CURRENT_USER.get("role") not in ["admin", "deputy"]:
@@ -137,6 +139,12 @@ class StudentsTabMixin:
         student_name = values[1]
 
         if not messagebox.askyesno("تأكيد الحذف", f"هل أنت متأكد من حذف الطالب:\n{student_name}؟", icon="warning"):
+            return
+
+        pw = simpledialog.askstring("تأكيد الهوية", "أدخل كلمة مرور حسابك لتأكيد الحذف:", show="*")
+        if not pw: return
+        if authenticate(CURRENT_USER.get("username"), pw) is None:
+            messagebox.showerror("خطأ", "كلمة المرور غير صحيحة.")
             return
 
         student_removed = False
@@ -161,6 +169,7 @@ class StudentsTabMixin:
     def delete_selected_class(self):
         from constants import CURRENT_USER, STUDENTS_JSON
         from database import authenticate
+        from tkinter import simpledialog
         import json
 
         if CURRENT_USER.get("role") != "admin":
@@ -178,11 +187,11 @@ class StudentsTabMixin:
         if not messagebox.askyesno("تأكيد حذف الفصل", f"هل أنت متأكد من حذف الفصل بالكامل ({class_name}) وجميع طلابه؟\nهذا الإجراء لا يمكن التراجع عنه.", icon="warning"):
             return
 
-        pw = simpledialog.askstring("تأكيد الهوية", "أدخل كلمة مرور المدير للمتابعة:", show="*")
+        pw = simpledialog.askstring("تأكيد الهوية", "أدخل كلمة مرور حسابك للمتابعة:", show="*")
         if not pw:
             return
             
-        if authenticate(CURRENT_USER.get("username", "admin"), pw) is None:
+        if authenticate(CURRENT_USER.get("username"), pw) is None:
             messagebox.showerror("خطأ", "كلمة المرور غير صحيحة.")
             return
 

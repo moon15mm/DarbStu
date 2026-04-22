@@ -405,11 +405,10 @@ class SettingsTabMixin:
             return
 
         pw = simpledialog.askstring("تأكيد الهوية",
-            "أدخل كلمة مرور المدير للمتابعة:", show="*")
+            "أدخل كلمة مرور حسابك للمتابعة:", show="*")
         if not pw:
             return
-        from hashlib import sha256
-        if authenticate(CURRENT_USER.get("username", "admin"), pw) is None:
+        if authenticate(CURRENT_USER.get("username"), pw) is None:
             messagebox.showerror("خطأ", "كلمة المرور غير صحيحة.")
             return
 
@@ -442,10 +441,10 @@ class SettingsTabMixin:
             return
 
         pw = simpledialog.askstring("تأكيد الهوية",
-            "أدخل كلمة مرور المدير للمتابعة:", show="*")
+            "أدخل كلمة مرور حسابك للمتابعة:", show="*")
         if not pw:
             return
-        if authenticate(CURRENT_USER.get("username", "admin"), pw) is None:
+        if authenticate(CURRENT_USER.get("username"), pw) is None:
             messagebox.showerror("خطأ", "كلمة المرور غير صحيحة.")
             return
 
@@ -551,10 +550,10 @@ class SettingsTabMixin:
             return
 
         pw = simpledialog.askstring("تأكيد الهوية",
-            "أدخل كلمة مرور المدير للمتابعة:", show="*")
+            "أدخل كلمة مرور حسابك للمتابعة:", show="*")
         if not pw:
             return
-        if authenticate(CURRENT_USER.get("username", "admin"), pw) is None:
+        if authenticate(CURRENT_USER.get("username"), pw) is None:
             messagebox.showerror("خطأ", "كلمة المرور غير صحيحة.")
             return
 
@@ -665,16 +664,26 @@ class SettingsTabMixin:
             self.backup_dir_var.set(d)
 
     def _delete_backup(self):
+        from database import authenticate
+        from constants import CURRENT_USER
+        from tkinter import simpledialog
         sel = self.tree_backup.selection()
         if not sel: messagebox.showwarning("تنبيه","حدد نسخة"); return
         fname = self.tree_backup.item(sel[0])["values"][0]
         d = self.backup_dir_var.get() if hasattr(self,"backup_dir_var") else BACKUP_DIR
         full_path = os.path.join(d, fname)
         if not messagebox.askyesno("تأكيد",f"حذف النسخة: {fname}؟"): return
+
+        pw = simpledialog.askstring("تأكيد الهوية", "أدخل كلمة مرور حسابك لتأكيد الحذف:", show="*")
+        if not pw: return
+        if authenticate(CURRENT_USER.get("username"), pw) is None:
+            messagebox.showerror("خطأ", "كلمة المرور غير صحيحة.")
+            return
+
         try:
             if os.path.exists(full_path): os.remove(full_path)
             messagebox.showinfo("تم","تم حذف النسخة الاحتياطية")
-            frame.after(100, self._backup_load)
+            self.backup_frame.after(100, self._backup_load)
         except Exception as e:
             messagebox.showerror("خطأ",str(e))
 

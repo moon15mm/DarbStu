@@ -150,11 +150,11 @@ class ClassNamingTabMixin:
         if not messagebox.askyesno("تأكيد حذف الفصل", f"هل أنت متأكد من حذف الفصل بالكامل ({class_name}) وجميع طلابه؟\nهذا الإجراء لا يمكن التراجع عنه.", icon="warning"):
             return
 
-        pw = simpledialog.askstring("تأكيد الهوية", "أدخل كلمة مرور المدير للمتابعة:", show="*")
+        pw = simpledialog.askstring("تأكيد الهوية", "أدخل كلمة مرور حسابك للمتابعة:", show="*")
         if not pw:
             return
             
-        if authenticate(CURRENT_USER.get("username", "admin"), pw) is None:
+        if authenticate(CURRENT_USER.get("username"), pw) is None:
             messagebox.showerror("خطأ", "كلمة المرور غير صحيحة.")
             return
 

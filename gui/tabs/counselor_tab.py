@@ -486,6 +486,9 @@ class CounselorTabMixin:
 
     def _delete_student_from_counselor(self):
         """حذف الطالب المحدد من قائمة الموجّه الطلابي (جميع سجلاته في counselor_referrals)."""
+        from database import authenticate
+        from constants import CURRENT_USER
+        from tkinter import simpledialog
         sel = self.tree_counselor.selection()
         if not sel:
             messagebox.showwarning("تنبيه", "الرجاء اختيار طالب أولاً لحذفه")
@@ -501,6 +504,12 @@ class CounselorTabMixin:
             f"هل أنت متأكد من حذف الطالب:\n\n👤 {sname}\n🏫 {scls}\n\nمن قائمة الموجّه الطلابي؟\n"
             "(سيتم حذف جميع سجلات تحويله فقط، ولن يُحذف من بيانات المدرسة)"
         ):
+            return
+
+        pw = simpledialog.askstring("تأكيد الهوية", "أدخل كلمة مرور حسابك لتأكيد الحذف:", show="*")
+        if not pw: return
+        if authenticate(CURRENT_USER.get("username"), pw) is None:
+            messagebox.showerror("خطأ", "كلمة المرور غير صحيحة.")
             return
 
         try:

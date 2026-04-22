@@ -143,10 +143,20 @@ class TardinessTabMixin:
         ttk.Button(win, text="💾 حفظ", command=save).pack(pady=10)
 
     def _tard_delete(self):
+        from database import authenticate
+        from constants import CURRENT_USER
+        from tkinter import simpledialog
         sel = self.tree_tard.selection()
         if not sel: messagebox.showwarning("تنبيه","حدد سجلاً أولاً"); return
         rid = self.tree_tard.item(sel[0])["values"][0]
         if not messagebox.askyesno("تأكيد","هل تريد حذف هذا السجل؟"): return
+
+        pw = simpledialog.askstring("تأكيد الهوية", "أدخل كلمة مرور حسابك لتأكيد الحذف:", show="*")
+        if not pw: return
+        if authenticate(CURRENT_USER.get("username"), pw) is None:
+            messagebox.showerror("خطأ", "كلمة المرور غير صحيحة.")
+            return
+
         delete_tardiness(rid)
         self._tard_load()
 

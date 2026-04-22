@@ -89,6 +89,8 @@ class AddStudentTabMixin:
             messagebox.showerror("خطأ", f"فشل الحفظ:\n{e}")
             
     def delete_selected_student(self):
+        from database import authenticate
+        from constants import CURRENT_USER
         if not (selection := self.tree_student_management.selection()):
             messagebox.showwarning("تنبيه", "الرجاء تحديد طالب من القائمة أولاً.")
             return
@@ -96,6 +98,12 @@ class AddStudentTabMixin:
         student_id = values[0]
         student_name = values[1]
         if not messagebox.askyesno("تأكيد الحذف", f"هل أنت متأكد من حذف الطالب:\nالاسم: {student_name}\nالرقم: {student_id}\n\nلا يمكن التراجع عن هذا الإجراء!"):
+            return
+
+        pw = simpledialog.askstring("تأكيد الهوية", "أدخل كلمة مرور حسابك لتأكيد الحذف:", show="*")
+        if not pw: return
+        if authenticate(CURRENT_USER.get("username"), pw) is None:
+            messagebox.showerror("خطأ", "كلمة المرور غير صحيحة.")
             return
 
     # ← ابدأ المسافة البادئة هنا (4 مسافات)
@@ -124,12 +132,20 @@ class AddStudentTabMixin:
             messagebox.showerror("خطأ", f"فشل الحذف:\n{e}")
 
     def delete_selected_class(self):
+        from database import authenticate
+        from constants import CURRENT_USER
         class_names = [c["name"] for c in self.store["list"]]
         class_name = simpledialog.askstring("حذف فصل", "اكتب اسم الفصل الذي تريد حذفه بالضبط:", parent=self.root)
         if not class_name:
             return
         if class_name not in class_names:
             messagebox.showerror("خطأ", "اسم الفصل غير موجود!")
+            return
+
+        pw = simpledialog.askstring("تأكيد الهوية", "أدخل كلمة مرور حسابك لتأكيد الحذف:", show="*")
+        if not pw: return
+        if authenticate(CURRENT_USER.get("username"), pw) is None:
+            messagebox.showerror("خطأ", "كلمة المرور غير صحيحة.")
             return
     
         class_id = next(c["id"] for c in self.store["list"] if c["name"] == class_name)

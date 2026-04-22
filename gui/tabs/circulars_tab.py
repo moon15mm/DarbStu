@@ -258,6 +258,9 @@ class CircularsTabMixin:
 
     def _delete_circular(self):
         """حذف التعميم المحدد من قبل المدير."""
+        from database import authenticate
+        from constants import CURRENT_USER
+        from tkinter import simpledialog
         sel = self.circ_tree.selection()
         if not sel:
             messagebox.showwarning("تنبيه", "يرجى اختيار تعميم لحذفه أولاً.")
@@ -267,6 +270,12 @@ class CircularsTabMixin:
         title = self.circ_tree.item(sel[0])["values"][2]
         
         if not messagebox.askyesno("تأكيد الحذف", f"هل أنت متأكد من حذف التعميم: '{title}'؟\nلا يمكن التراجع عن هذه الخطوة."):
+            return
+
+        pw = simpledialog.askstring("تأكيد الهوية", "أدخل كلمة مرور حسابك لتأكيد الحذف:", show="*")
+        if not pw: return
+        if authenticate(CURRENT_USER.get("username"), pw) is None:
+            messagebox.showerror("خطأ", "كلمة المرور غير صحيحة.")
             return
         
         from database import delete_circular

@@ -614,9 +614,19 @@ class StudentAnalysisTabMixin:
                     _dt.datetime.now().strftime("%Y-%m-%d")))
 
     def _ana_delete_note(self):
+        from database import authenticate
+        from constants import CURRENT_USER
+        from tkinter import simpledialog
         sel = self._ana_notes_tree.selection()
         if not sel: messagebox.showwarning("تنبيه", "اختر ملاحظة أولاً"); return
         if not messagebox.askyesno("تأكيد", "حذف الملاحظة المحددة؟"): return
+
+        pw = simpledialog.askstring("تأكيد الهوية", "أدخل كلمة مرور حسابك لتأكيد الحذف:", show="*")
+        if not pw: return
+        if authenticate(CURRENT_USER.get("username"), pw) is None:
+            messagebox.showerror("خطأ", "كلمة المرور غير صحيحة.")
+            return
+
         delete_student_note(int(sel[0]))
         self._ana_notes_tree.delete(sel[0])
 
