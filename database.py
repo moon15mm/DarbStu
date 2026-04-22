@@ -1,10 +1,25 @@
-# -*- coding: utf-8 -*-
-"""
-database.py — طبقة قاعدة البيانات: init + كل عمليات CRUD
-"""
-import os, sqlite3, datetime, hashlib, json, zipfile, csv, re
+import os, sqlite3, datetime, hashlib, json, zipfile, csv, re, socket, sys
 import tkinter as tk
 from tkinter import messagebox, filedialog
+
+# ─── منع ازدواجية التطبيق ───
+def _ensure_single_instance():
+    lock_port = 59124
+    try:
+        # نستخدم متغير عالمي لمنع جمع القمامة (GC) من إغلاق السوكيت
+        global _darb_lock_socket
+        _darb_lock_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        _darb_lock_socket.bind(('127.0.0.1', lock_port))
+    except socket.error:
+        # إذا كان المنفذ محجوزاً، نغلق البرنامج فوراً
+        _root = tk.Tk(); _root.withdraw()
+        messagebox.showwarning("تنبيه", "البرنامج يعمل بالفعل في الخلفية.\nيرجى إغلاق النسخة المفتوحة أولاً.")
+        _root.destroy()
+        sys.exit(0)
+
+# تشغيل القفل فور استدعاء ملف قاعدة البيانات
+_ensure_single_instance()
+# ─────────────────────────────────────────────────────────────
 try:
     import pandas as pd
 except ImportError:
