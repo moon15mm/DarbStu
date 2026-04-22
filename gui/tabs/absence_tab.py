@@ -51,7 +51,7 @@ class AbsenceTabMixin:
         msgs = query_today_messages()
         if not msgs:
             messagebox.showinfo("تنبيه", "لا توجد رسائل مرسلة اليوم حتى الآن."); return
-        summary = build_daily_summary_message(msgs)
+        summary = build_daily_summary_message()
         win = tk.Toplevel(self.root); win.title("تقرير رسائل اليوم"); win.geometry("600x500")
         txt = tk.Text(win, font=("Tahoma", 10)); txt.pack(fill="both", expand=True, padx=10, pady=10)
         txt.insert("1.0", summary); txt.config(state="disabled")

@@ -1,9 +1,26 @@
-# -*- coding: utf-8 -*-
-"""
-main.py — نقطة دخول DarbStu
-يبدأ FastAPI + Tkinter GUI
-"""
-import os, sys, threading, time, datetime, sqlite3
+import os, sys, threading, time, datetime, sqlite3, ctypes
+import tkinter as tk
+from tkinter import messagebox
+
+# ─── منع ازدواجية التطبيق (Single Instance Lock) ───
+def ensure_single_instance():
+    mutex_name = "DarbStu_SingleInstance_Mutex_Global"
+    # استخدام ctypes لإنشاء Mutex على نظام ويندوز
+    kernel32 = ctypes.windll.kernel32
+    mutex = kernel32.CreateMutexW(None, False, mutex_name)
+    last_error = kernel32.GetLastError()
+    
+    if last_error == 183: # ERROR_ALREADY_EXISTS
+        # النسخة تعمل بالفعل، أظهر رسالة ثم أغلق
+        root_tmp = tk.Tk()
+        root_tmp.withdraw()
+        messagebox.showwarning("تنبيه", "البرنامج يعمل بالفعل.\nيرجى إغلاق النسخة المفتوحة أولاً أو مراجعة شريط المهام.")
+        root_tmp.destroy()
+        sys.exit(0)
+    return mutex
+
+_app_mutex = ensure_single_instance()
+# ────────────────────────────────────────────────
 
 # ─── تجاوز الملفات المدمجة في EXE (تفعيل التحديثات الخارجية) ────────
 if getattr(sys, 'frozen', False):

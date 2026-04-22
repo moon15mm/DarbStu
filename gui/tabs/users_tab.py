@@ -41,12 +41,12 @@ class UsersTabMixin:
         ttk.Button(ctrl, text="⚙️ توليد حسابات المعلمين",
                    command=self._user_generate_teachers).pack(side="right", padx=3)
 
-        cols = ("id","username","full_name","role","active","tabs_info")
+        cols = ("id","username","full_name","role","active","last_login","tabs_info")
         self.tree_users = ttk.Treeview(left_lf, columns=cols,
                                         show="headings", height=16)
         for col, hdr_t, w in zip(cols,
-            ["ID","اسم المستخدم","الاسم الكامل","الدور","الحالة","التبويبات"],
-            [35, 130, 180, 100, 70, 110]):
+            ["ID","اسم المستخدم","الاسم الكامل","الدور","الحالة","آخر ظهور","التبويبات"],
+            [35, 120, 150, 80, 50, 130, 90]):
             self.tree_users.heading(col, text=hdr_t)
             self.tree_users.column(col, width=w, anchor="center")
         self.tree_users.tag_configure("inactive",  foreground="#9E9E9E")
@@ -166,13 +166,26 @@ class UsersTabMixin:
 
     def _users_load(self):
         if not hasattr(self,"tree_users"): return
+        
+        def _fetch_task():
+            try:
+                users = get_all_users()
+                self.root.after(0, lambda: self._users_fill_ui(users))
+            except Exception as e:
+                print(f"[USERS-LOAD-ERROR] {e}")
+
+        threading.Thread(target=_fetch_task, daemon=True).start()
+
+    def _users_fill_ui(self, users):
+        if not hasattr(self,"tree_users") or not self.tree_users.winfo_exists(): return
         for i in self.tree_users.get_children(): self.tree_users.delete(i)
         import json as _j
-        for u in get_all_users():
+        for u in users:
             tag = "admin_row" if u["role"]=="admin" else (
                   "inactive"  if not u["active"] else "")
             role_label  = ROLES.get(u["role"],{}).get("label", u["role"])
             active_lbl  = "✅" if u["active"] else "❌"
+            
             # معلومة التبويبات
             if u["role"] == "admin":
                 tabs_info = "كل التبويبات"
@@ -186,10 +199,16 @@ class UsersTabMixin:
                     tabs_info = "افتراضي"
             else:
                 tabs_info = "افتراضي"
+            
+            # وقت آخر دخول
+            login_time = u.get("last_login")
+            if not login_time:
+                login_time = "⚠️ لم يفعّل بعد"
+            
             self.tree_users.insert("","end", tags=(tag,),
                 values=(u["id"], u["username"],
                         u.get("full_name",""),
-                        role_label, active_lbl, tabs_info))
+                        role_label, active_lbl, login_time, tabs_info))
 
     def _on_user_select(self, event=None):
         """عند اختيار مستخدم — حمّل صلاحياته في checkboxes."""
@@ -489,7 +508,7 @@ class UsersTabMixin:
                 update_user_password(username, password)
                 msg = (f"مرحباً أستاذ {name}\n\n"
                        f"بيانات دخولك للنظام:\n\n"
-                       f"الرابط: {public_url}\n"
+                       f"الرابط: {public_url}/web/login\n"
                        f"اسم المستخدم: {username}\n"
                        f"كلمة المرور: {password}\n\n"
                        f"مع تحيات إدارة المدرسة")

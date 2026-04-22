@@ -180,17 +180,20 @@ class DashboardTabMixin:
         self.canvas_dow = FigureCanvasTkAgg(self.fig_dow, dow_lf)
         self.canvas_dow.get_tk_widget().pack(fill="both", expand=True)
 
+        # ابدأ دورة التحديث التلقائي وفحص التاريخ
+        self.root.after(100, self._dashboard_tick)
+
 
     # ── بيانات مُخزَّنة مؤقتاً للمخططات الثقيلة ──────────────────
     _dash_cache_wk       = None
     _dash_cache_top      = None
     _dash_cache_dow      = None
-    _dash_slow_tick      = 0   # عداد دورات لتحديث المخططات كل 10 دورات (5 دقائق)
+    _dash_slow_tick      = 0   # عداد دورات لتحديث المخططات كل 15 دورة (30 دقيقة)
 
     _last_day_check_time = 0
 
     def _dashboard_tick(self):
-        """دورة سريعة كل 30ث للتحديثات، مع فحص التاريخ كل 6 ساعات لتقليل الجهد."""
+        """دورة تحديث كل دقيقتين، مع تحديث الرسوم الثقيلة كل 30 دقيقة."""
         from constants import now_riyadh_date
         import time
         
@@ -208,11 +211,14 @@ class DashboardTabMixin:
 
         if hasattr(self, "_current_tab") and self._current_tab.get() == "لوحة المراقبة":
             DashboardTabMixin._dash_slow_tick += 1
-            refresh_heavy = DashboardTabMixin._dash_slow_tick >= 10
+            # تحديث الرسوم كل 15 دورة (15 * 2 دقيقة = 30 دقيقة)
+            refresh_heavy = DashboardTabMixin._dash_slow_tick >= 15
             if refresh_heavy:
                 DashboardTabMixin._dash_slow_tick = 0
             self.update_dashboard_metrics(refresh_heavy=refresh_heavy)
-        self.root.after(30000, self._dashboard_tick)
+        
+        # تكرار الدورة كل دقيقتين (120000 مللي ثانية)
+        self.root.after(120000, self._dashboard_tick)
 
     def update_dashboard_metrics(self, refresh_heavy=True):
         """جلب البيانات في خيط خلفي — الاستعلامات الثقيلة فقط عند refresh_heavy=True."""

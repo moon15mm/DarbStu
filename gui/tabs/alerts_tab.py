@@ -70,7 +70,7 @@ class AlertsTabMixin:
                     width=4).pack(side="left", padx=2)
         ttk.Label(r3, text=":").pack(side="left")
         ttk.Spinbox(r3, from_=0, to=59, textvariable=self.dr_minute_var,
-                    width=4, format="%02.0f").pack(side="left", padx=2)
+                    width=4).pack(side="left", padx=2)
         self.dr_status_lbl = ttk.Label(r3, text="", foreground="#5A6A7E",
                                         font=("Tahoma", 8))
         self.dr_status_lbl.pack(side="left", padx=6)

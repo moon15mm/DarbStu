@@ -97,7 +97,9 @@ def log_message_status(date_str: str, student_id: str, student_name: str, class_
     ))
     con.commit(); con.close()
 
-def query_today_messages(date_str: str) -> List[Dict[str, Any]]:
+def query_today_messages(date_str: str = None) -> List[Dict[str, Any]]:
+    if not date_str:
+        date_str = now_riyadh_date()
     client = get_cloud_client()
     if client.is_active():
         res = client.get("/web/api/messages-log", params={"date": date_str})

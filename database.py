@@ -270,6 +270,8 @@ def init_db():
         cur.execute("ALTER TABLE users ADD COLUMN allowed_tabs TEXT")
     if "phone" not in _u_cols:
         cur.execute("ALTER TABLE users ADD COLUMN phone TEXT DEFAULT ''")
+    if "last_login" not in _u_cols:
+        cur.execute("ALTER TABLE users ADD COLUMN last_login TEXT")
     # مستخدم مدير افتراضي إذا لم يوجد
     cur.execute("SELECT COUNT(*) FROM users")
     if cur.fetchone()[0] == 0:
@@ -1082,10 +1084,24 @@ def authenticate(username: str, password: str):
 
     con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
     cur.execute("SELECT * FROM users WHERE username=? AND active=1", (username,))
-    row = cur.fetchone(); con.close()
-    if not row: return None
-    if row["password"] != hash_password(password): return None
-    return dict(row)
+    row = cur.fetchone()
+    if not row:
+        con.close()
+        return None
+    if row["password"] != hash_password(password):
+        con.close()
+        return None
+    
+    # تحديث وقت آخر دخول
+    try:
+        cur.execute("UPDATE users SET last_login=? WHERE username=?",
+                    (datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), username))
+        con.commit()
+    except: pass
+    
+    user_dict = dict(row)
+    con.close()
+    return user_dict
 
 def get_user_info(username: str):
     """يُرجع معلومات المستخدم من لقاعدة البيانات."""
@@ -1151,7 +1167,7 @@ def get_all_users():
             return res.get("users", [])
 
     con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
-    cur.execute("SELECT id,username,role,full_name,active,COALESCE(phone,'') as phone FROM users ORDER BY role,username")
+    cur.execute("SELECT id,username,role,full_name,active,COALESCE(phone,'') as phone, last_login FROM users ORDER BY role,username")
     rows = [dict(r) for r in cur.fetchall()]; con.close(); return rows
 
 
