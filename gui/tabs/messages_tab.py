@@ -66,9 +66,10 @@ class MessagesTabMixin:
         self._msg_load_groups()
 
     def _msg_load_groups(self):
+        if not hasattr(self, "msg_inner"): return
         date_str = self.msg_date_var.get().strip()
         if not date_str:
-            if hasattr(self, 'msg_inner') and self.msg_inner.winfo_children():
+            if self.msg_inner.winfo_children():
                  messagebox.showerror("خطأ", "الرجاء إدخال تاريخ.")
             return
 

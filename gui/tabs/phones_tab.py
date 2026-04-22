@@ -24,6 +24,7 @@ class PhonesTabMixin:
         self.load_students_to_treeview()
 
     def load_students_to_treeview(self):
+        if not hasattr(self, "tree_phones"): return
         for item in self.tree_phones.get_children(): self.tree_phones.delete(item)
         self.all_students_data = [{"student_id": s.get("id", ""), "student_name": s.get("name", ""), "phone": s.get("phone", ""), "class_name": c["name"]} for c in self.store["list"] for s in c["students"]]
         self.display_students(self.all_students_data)

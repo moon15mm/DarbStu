@@ -366,6 +366,7 @@ class StudentAnalysisTabMixin:
 
     # ─────────────────────────────────────────────────────────────
     def refresh_analysis_students(self):
+        if not hasattr(self, "analysis_class_cb"): return
         import constants
         store = constants.STUDENTS_STORE
         if not store or "list" not in store:

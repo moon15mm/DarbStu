@@ -31,6 +31,7 @@ class StudentsTabMixin:
         self.load_students_to_management_treeview()
 
     def load_students_to_management_treeview(self):
+        if not hasattr(self, "tree_student_management"): return
         for item in self.tree_student_management.get_children():
             self.tree_student_management.delete(item)
         self.all_students_class_data = []
