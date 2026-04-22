@@ -2,6 +2,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, simpledialog
 import os, json, datetime, threading, re, io, csv, base64, time
+import constants
 from constants import ROLES, ROLE_TABS
 from database import (create_user, delete_user, get_all_users,
                        save_user_allowed_tabs, toggle_user_active,
