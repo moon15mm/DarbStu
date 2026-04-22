@@ -276,6 +276,7 @@ class SettingsTabMixin:
 
         # ─── قسم الترخيص (للمدير فقط، في وضع السيرفر) ────────────
         from config_manager import load_config as _lcfg
+        role = CURRENT_USER.get("role")
         if role == "admin" and not _lcfg().get("cloud_mode", False):
             self._build_license_section(scroll)
 
