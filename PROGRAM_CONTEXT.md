@@ -1,10 +1,10 @@
 # DarbStu — وصف شامل للبرنامج
 > **نظام إدارة الغياب والتأخر المدرسي**  
-> الإصدار: **3.1.0** | المطوّر: moon15mm | المنصة: Windows  
+> الإصدار: **3.1.6** | المطوّر: moon15mm | المنصة: Windows  
 > المستودع: `https://github.com/moon15mm/DarbStu`
 
 > [!IMPORTANT]
-> آخر تحديث لهذا الملف: 22 أبريل 2026 — يشمل نظام مزامنة بيانات الطلاب السحابي الجديد، ونظام التحديثات التلقائية المجدولة.
+> آخر تحديث لهذا الملف: 22 أبريل 2026 (المساء) — يشمل نظام منع ازدواجية التطبيق المتطور، تحسينات الأداء في تبويب المستخدمين، وتتبع تفعيل حسابات المعلمين.
 
 ---
 
@@ -17,6 +17,7 @@
 **المكونات الرئيسية:**
 - **Tkinter GUI** — واجهة الإدارة على سطح المكتب (تضم أكثر من 28 تبويباً).
 - **FastAPI Server** — خادم ويب لاستقبال طلبات المعلمين والأولياء (المنفذ 8000).
+- **Single Instance Lock** — نظام حماية يمنع تشغيل أكثر من نسخة للبرنامج (منفذ 59124).
 - **CloudDBClient** — محرك مزامنة سحابي ذكي مدمج في `database.py`.
 - **Node.js WhatsApp Server** — خادم محلي لإدارة إرسال الرسائل عبر مكتبة `whatsapp-web.js`.
 
@@ -26,9 +27,9 @@
 
 ```
 DarbStu/
-├── main.py                      ← نقطة الدخول (تشمل فحوصات الترقية والمزامنة)
+├── main.py                      ← نقطة الدخول (تفعيل التحديثات الخارجية)
 ├── constants.py                 ← الثوابت، إصدار البرنامج، وأدوار المستخدمين
-├── database.py                  ← محرك البيانات (يدعم Local SQLite + Cloud API)
+├── database.py                  ← محرك البيانات (قفل الازدواجية + Local SQLite + Cloud API)
 ├── config_manager.py            ← إدارة الإعدادات مع دعم الـ Caching
 ├── whatsapp_service.py          ← منطق إرسال الرسائل والمرفقات
 ├── pdf_generator.py             ← توليد نماذج PDF (إرشاد، تحضير، عقود)
@@ -43,21 +44,9 @@ DarbStu/
 │   ├── app_gui.py               ← الكلاس الرئيسي (تجميع كل الـ Mixins والتبويبات)
 │   ├── login_window.py          ← نافذة الدخول مع إعدادات الربط السحابي
 │   └── tabs/
-│       ├── alerts_tab.py        ← الإشعارات الذكية (تدعم Cloud API)
-│       ├── circulars_tab.py     ← إدارة التعاميم الرسمية
-│       ├── cloud_tab.py         ← إدارة المزامنة والربط مع السيرفر
-│       ├── dashboard_tab.py     ← لوحة المراقبة والإحصاءات الحية
-│       ├── counselor_tab.py     ← الموجّه الطلابي (إرشاد + استفسارات)
-│       ├── links_tab.py         ← روابط الفصول (تستخدم URL السيرفر في Cloud)
-│       ├── student_analysis_tab.py ← تحليل الطالب (يجلب GPA من السيرفر في Cloud)
-│       ├── tardiness_msg_tab.py ← رسائل التأخر (تحميل في thread خلفي)
-│       ├── teacher_forms_tab.py ← نماذج التحضير وتقارير البرامج
+│       ├── users_tab.py         ← إدارة المستخدمين (تحميل خلفي سريع + تتبع الدخول)
+│       ├── dashboard_tab.py     ← لوحة المراقبة (تحديث ذكي 2 د/30 د)
 │       └── ... (بقية التبويبات الـ 25+)
-│
-└── data/
-    ├── attachments/
-    │   └── circulars/           ← تخزين مرفقات التعاميم (PDF/Images)
-    └── backups/                 ← نسخ احتياطية دورية
 ```
 
 ---
@@ -79,21 +68,10 @@ DarbStu/
 
 | الجدول | الوصف |
 |--------|-------|
+| `users` | المستخدمون والصلاحيات (id, username, password, role, full_name, active, phone, **last_login**, allowed_tabs) |
 | `absences` | سجلات الغياب اليومي |
-| `tardiness` | سجلات التأخر (date, class_id, class_name, student_id, student_name, teacher_name, period, minutes_late) |
-| `excuses` | الأعذار المقدمة |
-| `permissions` | الاستئذان |
-| `messages_log` | سجل الرسائل المرسلة (WhatsApp) |
-| `student_results` | نتائج الطلاب (gpa, class_rank, section_rank, subjects_json) |
-| `student_notes` | ملاحظات إدارية مرتبطة بطلاب |
-| `counselor_sessions` | جلسات الإرشاد |
-| `counselor_referrals` | تحويلات الموجه |
-| `student_referrals` | تحويلات المعلمين |
-| `counselor_alerts` | إنذارات الموجه |
-| `circulars` | التعاميم الرسمية |
-| `circular_reads` | تتبع قراءة التعاميم |
-| `academic_inquiries` | الاستفسارات الأكاديمية |
-| `users` | المستخدمون والصلاحيات |
+| `tardiness` | سجلات التأخر (minutes_late, period, teacher_name) |
+| `circulars` | التعاميم الرسمية المحدثة بـ FontAwesome 6 |
 
 ---
 
@@ -121,118 +99,6 @@ threading.Thread(target=_worker, daemon=True).start()
 - **الهدف:** توفير مرونة في الوصول مع ضمان أمان البيانات من خلال التحقق من الشخص وليس الجهاز.
 ```
 
-**التبويبات التي تدعم Cloud حالياً:**
-- `student_analysis_tab.py` ← `/web/api/student-analytics/{student_id}`
-- `alerts_tab.py` ← `/web/api/alerts-students` و `/web/api/alerts-tardiness`
-- `links_tab.py` ← يستخدم `client.url` كـ base URL للروابط
-
----
-
-## 6. Endpoints السيرفر المهمة (web_routes.py)
-
-| الـ Endpoint | الوصف |
-|-------------|-------|
-| `GET /web/api/sync-info` | معلومات المزامنة (عدد السجلات، آخر تحديث) |
-| `GET /web/api/config` | إعدادات المدرسة (قوالب الرسائل، الحدود، إلخ) |
-| `GET /web/api/alerts-students` | الطلاب المتجاوزين لحد الغياب |
-| `GET /web/api/alerts-tardiness` | الطلاب المتجاوزين لحد التأخر |
-| `GET /web/api/analytics/dashboard` | بيانات لوحة المراقبة |
-| `GET /web/api/analytics/weekly-comparison` | مقارنة أسبوعية للغياب |
-| `GET /web/api/analytics/absence-by-dow` | توزيع الغياب على أيام الأسبوع |
-| `GET /web/api/student-analytics/{id}` | تحليل طالب محدد (GPA + الغياب) |
-| `POST /web/api/add-tardiness` | إضافة تأخر (date, class_id, class_name, student_id, student_name, period, minutes_late) |
-| `POST /web/api/circulars/create` | إنشاء تعميم جديد |
-
----
-
-## 7. مزامنة الإعدادات في Cloud Mode
-
-عند تسجيل الدخول في وضع العميل، تُستدعى `force_sync_cloud_data()` في `database.py` التي تقوم بـ:
-1. مزامنة الطلاب (`load_students(force_reload=True)`)
-2. مزامنة المعلمين (`load_teachers()`)
-3. مزامنة الإعدادات من السيرفر (`_sync_config_from_server()`)
-
-**المفاتيح التي تُزامَن من السيرفر:**
-- `school_name`, `school_gender`
-- `tardiness_message_template`, `message_template`
-- `alert_absence_threshold`, `alert_tardiness_threshold`
-- `period_times`, `school_start_time`
-
----
-
-## 8. نظام الترخيص
-
-| الحالة | السلوك |
-|--------|--------|
-| **جهاز عميل** (cloud_mode=True) | يتجاوز فحص الترخيص مباشرة |
-| **مُفعَّل** (license activated) | يعمل بلا قيود |
-| **فترة تجربة** (≤7 أيام) | يعمل مع إشعار بالأيام المتبقية |
-| **انتهت التجربة** | يفتح نافذة التفعيل قبل الدخول |
-
-- ملف التجربة: `.darb_trial` في `BASE_DIR`
-- ملف الترخيص: `.darb_license` في `BASE_DIR`
-- زر التفعيل يظهر في الإعدادات للمدير فقط في وضع السيرفر وأثناء فترة التجربة.
-
----
-
-## 9. نظام التحديث (updater.py)
-
-- يُنزّل ZIP من `https://github.com/moon15mm/DarbStu/archive/refs/heads/main.zip`
-- يُحدّث ملفات `.py, .txt, .json, .iss, .bat, .spec, .ico`
-- يحمي مجلد `data/` وملفات الإعدادات من الكتابة فوقها
-- **مهم:** في وضع EXE المجمّد، تحديث `.py` لا يؤثر — يجب بناء EXE جديد
-- يقرأ الإصدار المثبّت من `version.json` (لا من `APP_VERSION` المجمّد) لتجنب حلقة التحديث
-
----
-
-## 10. WhatsApp
-
-- يعمل محلياً بالكامل على كل جهاز عبر Node.js (`whatsapp-web.js`)
-- كل جهاز مستقل بواتسابه — لا مشاركة بين السيرفر والعميل
-- يدعم Round-Robin بين عدة خوادم واتساب عبر `wa_servers` في الإعدادات
-- المنفذ الافتراضي: `3000`، نقطة الإرسال: `http://127.0.0.1:{port}/send-message`
-
----
-
-## 11. النمط الصحيح لـ Canvas القابل للتمرير (مرجع دائم)
-
-```python
-# 1. الـ scrollbar يُعبأ أولاً دائماً
-sb.pack(side="right", fill="y")
-canvas.pack(side="left", fill="both", expand=True)
-
-# 2. inner frame → scrollregion فقط
-inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-
-# 3. canvas → itemconfig(width) فقط مع guard لتجنب حلقة لا نهائية
-_last_w = [0]
-def _on_canvas_conf(e):
-    w = canvas.winfo_width()
-    if w == _last_w[0]: return
-    _last_w[0] = w
-    canvas.itemconfig(win_id, width=w)
-canvas.bind("<Configure>", _on_canvas_conf)
-```
-
----
-
-## 12. إصلاحات جلسة 18 أبريل 2026
-
-### أ. خطأ threading في إرسال التعاميم (`api/web_routes.py`)
-- `threading` كان مستخدماً لإرسال تنبيهات واتساب عند نشر تعميم لكنه غير مستورد
-- **الإصلاح:** إضافة `threading` لسطر الـ imports
-
-### ب. الإشعارات الذكية لا تتحدث في العميل (`gui/tabs/alerts_tab.py`)
-- `_load_alert_students()` و `_load_tardiness_alert_students()` كانتا تستعلمان من قاعدة البيانات المحلية
-- **الإصلاح:** تشغيل في thread خلفي، في Cloud Mode تجلبان من `/web/api/alerts-students` و `/web/api/alerts-tardiness`
-
-### ج. رسائل التأخر مختصرة في العميل (`database.py`)
-- `force_sync_cloud_data()` لم تكن تزامن `config.json` (قوالب الرسائل)
-- **الإصلاح:** إضافة `_sync_config_from_server()` تجلب الإعدادات المهمة من السيرفر عند الدخول
-
-### د. خطأ `get_week_comparison` و `get_absence_by_day_of_week` (`api/web_routes.py`)
-- الدالتان موجودتان في `alerts_service.py` لكنهما غير مستوردتان في `web_routes.py`
-- **الإصلاح:** إضافتهما لسطر الـ import
 
 ### هـ. endpoint `/web/api/sync-info` مفقود (`api/web_routes.py`)
 - لوحة المراقبة في العميل تستعلم عنه كل دقيقتين → 404 متكرر

@@ -56,7 +56,7 @@ MY_STATIC_DOMAIN  = 'darbte.uk'
 ngrok = None
 
 APP_TITLE           = 'تسجيل غياب الطلاب'
-APP_VERSION         = '3.1.8'
+APP_VERSION         = '3.1.9'
 UPDATE_URL          = 'https://raw.githubusercontent.com/moon15mm/DarbStu/main/version.json'
 UPDATE_DOWNLOAD_URL = 'https://github.com/moon15mm/DarbStu/archive/refs/heads/main.zip'
 DB_PATH             = os.path.join(BASE_DIR, 'absences.db')
@@ -73,10 +73,12 @@ STUDENTS_STORE      = None
 WHATS_PATH          = os.path.join(BASE_DIR, 'my-whatsapp-server')
 
 ROLES = {
-    'admin':   {'label': 'مدير',   'tabs': 'all',    'color': '#7c3aed'},
-    'deputy':  {'label': 'وكيل',   'tabs': 'most',   'color': '#1d4ed8'},
-    'teacher': {'label': 'معلم',   'tabs': 'limited','color': '#065f46'},
-    'guard':   {'label': 'حارس',   'tabs': 'view',   'color': '#92400e'},
+    'admin':   {'label': 'مدير',       'tabs': 'all',    'color': '#7c3aed'},
+    'deputy':  {'label': 'وكيل',       'tabs': 'most',   'color': '#1d4ed8'},
+    'staff':   {'label': 'إداري',      'tabs': 'most',   'color': '#2563eb'},
+    'teacher': {'label': 'معلم',       'tabs': 'limited','color': '#065f46'},
+    'lab':     {'label': 'محضر',       'tabs': 'limited','color': '#0891b2'},
+    'guard':   {'label': 'حارس',       'tabs': 'view',   'color': '#92400e'},
 }
 
 ROLE_TABS = {
@@ -85,7 +87,10 @@ ROLE_TABS = {
                 'سجل التأخر','الأعذار','التقارير / الطباعة','إرسال رسائل الغياب',
                 'جدولة الروابط','المراقبة الحية','إدارة الطلاب','إضافة طالب',
                 'إدارة الواتساب','استلام تحويلات', 'التعاميم والنشرات'],
+    'staff':   ['لوحة المراقبة','السجلات','إدارة الغياب','الأعذار','التقارير / الطباعة',
+                'المراقبة الحية','إدارة الطلاب','إضافة طالب','التعاميم والنشرات'],
     'teacher': ['لوحة المراقبة','تحليل النتائج','تحويل طالب','نماذج المعلم','خطابات الاستفسار', 'التعاميم والنشرات'],
+    'lab':     ['لوحة المراقبة','نماذج المعلم','التعاميم والنشرات'],
     'guard':   ['لوحة القيادة','التأخر','المراقبة الحية'],
 }
 

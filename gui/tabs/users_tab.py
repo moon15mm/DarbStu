@@ -167,9 +167,15 @@ class UsersTabMixin:
     def _users_load(self):
         if not hasattr(self,"tree_users"): return
         
+        # 1. عرض البيانات المخزنة مؤقتاً فوراً (إن وجدت) لتجنب البطء
+        if hasattr(constants, "_USERS_CACHE") and constants._USERS_CACHE:
+            self._users_fill_ui(constants._USERS_CACHE)
+
         def _fetch_task():
             try:
                 users = get_all_users()
+                # 2. تحديث التخزين المؤقت بالبيانات الجديدة من السيرفر
+                constants._USERS_CACHE = users
                 self.root.after(0, lambda: self._users_fill_ui(users))
             except Exception as e:
                 print(f"[USERS-LOAD-ERROR] {e}")
@@ -349,10 +355,17 @@ class UsersTabMixin:
 
         f = ttk.Frame(form); f.pack(fill="x", pady=4)
         ttk.Label(f, text="الدور *", width=18, anchor="e").pack(side="right")
-        role_var = tk.StringVar(value="teacher")
-        ttk.Combobox(f, textvariable=role_var,
-                     values=["admin","deputy","teacher","guard"],
-                     state="readonly").pack(side="right", fill="x", expand=True)
+        
+        # جلب المسميات العربية من القاموس
+        role_labels = [r['label'] for r in ROLES.values()]
+        # قاموس عكسي للتحويل من المسمى العربي إلى المفتاح البرمجي
+        label_to_key = {r['label']: k for k, r in ROLES.items()}
+        
+        role_label_var = tk.StringVar(value=ROLES['teacher']['label'])
+        combo = ttk.Combobox(f, textvariable=role_label_var,
+                     values=role_labels,
+                     state="readonly", justify="right")
+        combo.pack(side="right", fill="x", expand=True)
 
         status_lbl = ttk.Label(win, text=""); status_lbl.pack()
 
@@ -361,6 +374,10 @@ class UsersTabMixin:
             fn = fields["full_name"].get().strip()
             pw = fields["password"].get()
             cp = fields["confirm"].get()
+            
+            # تحويل المسمى العربي المختار إلى المفتاح البرمجي (مثلاً 'معلم' -> 'teacher')
+            role_key = label_to_key.get(role_label_var.get(), "teacher")
+            
             if not un or not pw:
                 status_lbl.config(text="⚠️ اسم المستخدم وكلمة المرور مطلوبان",
                                    foreground="orange"); return
@@ -370,7 +387,7 @@ class UsersTabMixin:
             if len(pw) < 6:
                 status_lbl.config(text="⚠️ كلمة المرور يجب أن تكون 6 أحرف على الأقل",
                                    foreground="orange"); return
-            ok, msg = create_user(un, pw, role_var.get(), fn)
+            ok, msg = create_user(un, pw, role_key, fn)
             if ok:
                 status_lbl.config(text="✅ "+msg, foreground="green")
                 self.users_frame.after(100, self._users_load)
