@@ -581,11 +581,12 @@ def get_class_page(class_id: str):
             )
         try:
             if os.path.exists(TEACHERS_JSON):
-                with open(TEACHERS_JSON, "r", encoding="utf-8") as f:
+                with open(TEACHERS_JSON, "r", encoding="utf-8-sig") as f:
                     teachers_data = json.load(f)
             else:
                 teachers_data = {"teachers": []}
-        except Exception:
+        except Exception as e:
+            print(f"[ERROR Loading Teachers in get_class_page] {e}")
             teachers_data = {"teachers": []}
         teachers_list = teachers_data.get("teachers", []) if isinstance(teachers_data, dict) else []
         return HTMLResponse(content=class_html(class_id, cls["name"], cls["students"], teachers_list))

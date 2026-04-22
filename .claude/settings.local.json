@@ -26,7 +26,10 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" --max-time 8 -k https://darbte.uk/web/dashboard)",
       "Bash(cmd.exe /c \"tasklist | findstr DarbStu\")",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:8000/)",
-      "Bash(cmd.exe /c \"cloudflared tunnel route dns darb-tunnel darbte.uk 2>&1\")"
+      "Bash(cmd.exe /c \"cloudflared tunnel route dns darb-tunnel darbte.uk 2>&1\")",
+      "Bash(wait)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d['teachers'][:3] if isinstance\\(d,dict\\) else d[:3], ensure_ascii=False, indent=2\\)\\)\")",
+      "Bash(python3 -c ' *)"
     ]
   }
 }

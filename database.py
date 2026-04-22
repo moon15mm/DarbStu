@@ -1532,7 +1532,7 @@ def load_teachers() -> Dict[str, Any]:
             return data
 
     if os.path.exists(TEACHERS_JSON):
-        with open(TEACHERS_JSON, "r", encoding="utf-8") as f: return json.load(f)
+        with open(TEACHERS_JSON, "r", encoding="utf-8-sig") as f: return json.load(f)
     else:
         if client.is_active():
             return {"teachers": []}

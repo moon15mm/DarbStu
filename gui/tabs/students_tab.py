@@ -119,3 +119,86 @@ class StudentsTabMixin:
         else:
             messagebox.showinfo("لا توجد تغييرات", "لم يتم إجراء أي تغييرات على فصول الطلاب.")
 
+    def delete_selected_student(self):
+        from constants import CURRENT_USER, STUDENTS_JSON
+        import json
+
+        if CURRENT_USER.get("role") not in ["admin", "deputy"]:
+            messagebox.showerror("صلاحيات غير كافية", "هذا الإجراء متاح للمدير والوكيل فقط.")
+            return
+
+        sel = self.tree_student_management.selection()
+        if not sel:
+            messagebox.showwarning("تنبيه", "حدد الطالب الذي تريد حذفه.")
+            return
+
+        values = self.tree_student_management.item(sel[0], "values")
+        student_id = values[0]
+        student_name = values[1]
+
+        if not messagebox.askyesno("تأكيد الحذف", f"هل أنت متأكد من حذف الطالب:\n{student_name}؟", icon="warning"):
+            return
+
+        student_removed = False
+        for c in self.store["list"]:
+            for j, s in enumerate(c["students"]):
+                if s.get("id") == student_id:
+                    del c["students"][j]
+                    student_removed = True
+                    break
+            if student_removed:
+                break
+        
+        if student_removed:
+            try:
+                with open(STUDENTS_JSON, "w", encoding="utf-8") as f:
+                    json.dump({"classes": self.store["list"]}, f, ensure_ascii=False, indent=2)
+                messagebox.showinfo("تم الحذف", f"تم حذف الطالب {student_name} بنجاح.")
+                self.update_all_tabs_after_data_change()
+            except Exception as e:
+                messagebox.showerror("خطأ", f"حدث خطأ أثناء الحفظ:\n{e}")
+
+    def delete_selected_class(self):
+        from constants import CURRENT_USER, STUDENTS_JSON
+        from database import authenticate
+        import json
+
+        if CURRENT_USER.get("role") != "admin":
+            messagebox.showerror("صلاحيات غير كافية", "هذا الإجراء متاح لمدير النظام فقط.")
+            return
+
+        sel = self.tree_student_management.selection()
+        if not sel:
+            messagebox.showwarning("تنبيه", "الرجاء تحديد طالب من الفصل الذي تريد حذفه أولاً.")
+            return
+
+        values = self.tree_student_management.item(sel[0], "values")
+        class_name = values[2]  # current_class
+
+        if not messagebox.askyesno("تأكيد حذف الفصل", f"هل أنت متأكد من حذف الفصل بالكامل ({class_name}) وجميع طلابه؟\nهذا الإجراء لا يمكن التراجع عنه.", icon="warning"):
+            return
+
+        pw = simpledialog.askstring("تأكيد الهوية", "أدخل كلمة مرور المدير للمتابعة:", show="*")
+        if not pw:
+            return
+            
+        if authenticate(CURRENT_USER.get("username", "admin"), pw) is None:
+            messagebox.showerror("خطأ", "كلمة المرور غير صحيحة.")
+            return
+
+        class_index = -1
+        for i, c in enumerate(self.store["list"]):
+            if c["name"] == class_name:
+                class_index = i
+                break
+        
+        if class_index != -1:
+            del self.store["list"][class_index]
+            try:
+                with open(STUDENTS_JSON, "w", encoding="utf-8") as f:
+                    json.dump({"classes": self.store["list"]}, f, ensure_ascii=False, indent=2)
+                messagebox.showinfo("تم الحذف", f"تم حذف الفصل '{class_name}' بنجاح.")
+                self.update_all_tabs_after_data_change()
+            except Exception as e:
+                messagebox.showerror("خطأ", f"حدث خطأ أثناء حفظ التعديلات:\n{e}")
+

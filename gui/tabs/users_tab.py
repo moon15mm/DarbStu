@@ -455,10 +455,10 @@ class UsersTabMixin:
             messagebox.showwarning("تنبيه", "لا يوجد معلمين في الملف."); return
 
         cfg = load_config()
-        public_url = cfg.get("public_url", "")
+        public_url = cfg.get("cloud_url_internal", "") or cfg.get("cloud_url", "")
         if not public_url:
             messagebox.showwarning("تنبيه",
-                "يرجى تعيين 'الرابط العالمي' من إعدادات المدرسة أولاً."); return
+                "لم يتم العثور على الرابط العام للبرنامج. تأكد من عمل السيرفر أو من شاشة الربط السحابي."); return
 
         existing_users = {u["username"]: u for u in get_all_users()}
         sent_count = 0

@@ -47,6 +47,7 @@ class ClassNamingTabMixin:
         
         ttk.Button(btn_frame, text="💾 حفظ التعديلات", command=self._save_class_renames).pack(side="left", padx=5)
         ttk.Button(btn_frame, text="🔄 تحديث القائمة", command=self._refresh_class_list).pack(side="left", padx=5)
+        ttk.Button(btn_frame, text="🗑️ حذف الفصل المحدد", command=self._delete_selected_class_direct).pack(side="left", padx=5)
         
         # Binding
         self.tree_classes.bind("<Double-1>", self._on_class_name_double_click)
@@ -126,3 +127,52 @@ class ClassNamingTabMixin:
                 messagebox.showerror("خطأ", f"تعذر حفظ التعديلات:\n{e}")
         else:
             messagebox.showinfo("تنبيه", "لم يتم اكتشاف أي تغييرات في الأسماء.")
+
+    def _delete_selected_class_direct(self):
+        from constants import CURRENT_USER, STUDENTS_JSON
+        from database import authenticate
+        from tkinter import simpledialog
+        import json
+
+        if CURRENT_USER.get("role") != "admin":
+            messagebox.showerror("صلاحيات غير كافية", "هذا الإجراء متاح لمدير النظام فقط.")
+            return
+
+        sel = self.tree_classes.selection()
+        if not sel:
+            messagebox.showwarning("تنبيه", "الرجاء تحديد الفصل الذي تريد حذفه من القائمة أولاً.")
+            return
+
+        values = self.tree_classes.item(sel[0], "values")
+        class_id = values[0]
+        class_name = values[1]
+
+        if not messagebox.askyesno("تأكيد حذف الفصل", f"هل أنت متأكد من حذف الفصل بالكامل ({class_name}) وجميع طلابه؟\nهذا الإجراء لا يمكن التراجع عنه.", icon="warning"):
+            return
+
+        pw = simpledialog.askstring("تأكيد الهوية", "أدخل كلمة مرور المدير للمتابعة:", show="*")
+        if not pw:
+            return
+            
+        if authenticate(CURRENT_USER.get("username", "admin"), pw) is None:
+            messagebox.showerror("خطأ", "كلمة المرور غير صحيحة.")
+            return
+
+        class_index = -1
+        for i, c in enumerate(self.store["list"]):
+            if str(c["id"]) == str(class_id):
+                class_index = i
+                break
+        
+        if class_index != -1:
+            del self.store["list"][class_index]
+            try:
+                with open(STUDENTS_JSON, "w", encoding="utf-8") as f:
+                    json.dump({"classes": self.store["list"]}, f, ensure_ascii=False, indent=2)
+                messagebox.showinfo("تم الحذف", f"تم حذف الفصل '{class_name}' بنجاح.")
+                self.store = load_students(force_reload=True)
+                self._refresh_class_list()
+                if hasattr(self, "update_all_tabs_after_data_change"):
+                    self.update_all_tabs_after_data_change()
+            except Exception as e:
+                messagebox.showerror("خطأ", f"حدث خطأ أثناء الحفظ:\n{e}")
