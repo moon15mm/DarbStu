@@ -81,6 +81,9 @@ DEFAULT_CONFIG = {
     "cloud_mode":             False,  # تفعيل الربط بسيرفر خارجي
     "cloud_url":              "",     # رابط السيرفر (مثلاً https://darbte.uk)
     "cloud_token":            "",     # رمز الأمان (Access Token)
+    # ─── إعدادات التحديث التلقائي ──────────────────────────────
+    "auto_update_enabled":    False,
+    "auto_update_hour":       3,
 }
 
 _CONFIG_CACHE: Dict[str, Any] = {}

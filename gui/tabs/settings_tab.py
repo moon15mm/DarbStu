@@ -34,6 +34,9 @@ class SettingsTabMixin:
         scroll = ttk.Frame(_canvas)
         _canvas_win = _canvas.create_window((0, 0), window=scroll, anchor="nw")
 
+        # [تعديل مؤقت] أظهر قسم التحديثات في القمة للتأكد من ظهوره
+        self._build_update_settings_section(scroll)
+
         def _on_frame_configure(e):
             _canvas.configure(scrollregion=_canvas.bbox("all"))
         _ss_last_w = [0]
@@ -273,13 +276,12 @@ class SettingsTabMixin:
 
         # ─── قسم الترخيص (للمدير فقط، في وضع السيرفر) ────────────
         from config_manager import load_config as _lcfg
-        if CURRENT_USER.get("role") == "admin" and not _lcfg().get("cloud_mode", False):
+        if role == "admin" and not _lcfg().get("cloud_mode", False):
             self._build_license_section(scroll)
 
         # ─── قسم إدارة الفصل الدراسي (للمدير فقط) ───────────────
-        if CURRENT_USER.get("role") == "admin":
+        if role == "admin":
             self._build_term_management_section(scroll)
-            self._build_update_settings_section(scroll)
 
     def _build_term_management_section(self, parent_frame):
         """قسم إنهاء الفصل الدراسي ونهاية السنة — للمدير فقط."""
