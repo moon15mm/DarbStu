@@ -1,26 +1,28 @@
-import os, sys, threading, time, datetime, sqlite3, ctypes
+import os, sys, threading, time, datetime, sqlite3, socket
 import tkinter as tk
 from tkinter import messagebox
 
-# ─── منع ازدواجية التطبيق (Single Instance Lock) ───
+# ─── منع ازدواجية التطبيق (Socket-based Single Instance Lock) ───
 def ensure_single_instance():
-    mutex_name = "DarbStu_SingleInstance_Mutex_Global"
-    # استخدام ctypes لإنشاء Mutex على نظام ويندوز
-    kernel32 = ctypes.windll.kernel32
-    mutex = kernel32.CreateMutexW(None, False, mutex_name)
-    last_error = kernel32.GetLastError()
-    
-    if last_error == 183: # ERROR_ALREADY_EXISTS
-        # النسخة تعمل بالفعل، أظهر رسالة ثم أغلق
+    # نختار رقم منفذ عشوائي وغير مستخدم عادةً
+    lock_port = 59124 
+    try:
+        # نحاول إنشاء Socket والارتباط بالمنفذ
+        _lock_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        _lock_socket.bind(('127.0.0.1', lock_port))
+        # نترك السوكيت مفتوحاً طوال فترة حياة البرنامج لمنع الآخرين من استخدامه
+        return _lock_socket
+    except socket.error:
+        # إذا فشل الارتباط، فهذا يعني أن هناك نسخة أخرى تعمل وتحجز هذا المنفذ
         root_tmp = tk.Tk()
         root_tmp.withdraw()
-        messagebox.showwarning("تنبيه", "البرنامج يعمل بالفعل.\nيرجى إغلاق النسخة المفتوحة أولاً أو مراجعة شريط المهام.")
+        messagebox.showwarning("تنبيه", "البرنامج يعمل بالفعل.\nيرجى إغلاق النسخة المفتوحة أولاً من شريط المهام أو إدارة المهام.")
         root_tmp.destroy()
         sys.exit(0)
-    return mutex
 
-_app_mutex = ensure_single_instance()
-# ────────────────────────────────────────────────
+# نقوم بحجز المنفذ فوراً عند بدء التشغيل
+_app_lock_socket = ensure_single_instance()
+# ─────────────────────────────────────────────────────────────
 
 # ─── تجاوز الملفات المدمجة في EXE (تفعيل التحديثات الخارجية) ────────
 if getattr(sys, 'frozen', False):
