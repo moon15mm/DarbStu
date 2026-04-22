@@ -2428,7 +2428,7 @@ var today=new Date().toISOString().split('T')[0];
 var _gender='boys', _me=null, _notes=[];
 try{_notes=JSON.parse(localStorage.getItem('darb_notes')||'[]');}catch(e){}
 
-window.onload=function(){setDates();loadMe();showTab('dashboard');};
+window.onload=function(){setDates();loadMe();showTab('dashboard');checkUnreadCirculars();};
 
 function setDates(){
   ['dash-date','abs-date','tard-date','exc-date','perm-date','sa-date','st-date','ar-date',
@@ -4421,6 +4421,23 @@ function viewInqDetails(id, isCounselor){
       }
     }
   });
+}
+
+async function checkUnreadCirculars(){
+  try {
+    // جلب عدد التعاميم غير المقروءة
+    var d = await api('/web/api/circulars/unread-count');
+    if(d && d.ok && d.count > 0){
+      var html = '<div style="text-align:center;padding:10px">' +
+                 '<div style="font-size:50px;margin-bottom:15px">🔔</div>' +
+                 '<h3 style="color:#f97316;margin-bottom:10px">لديك تعاميم جديدة غير مقروءة!</h3>' +
+                 '<p style="color:#64748b;margin-bottom:20px;font-size:15px">يوجد عدد <b>('+d.count+')</b> تعميم جديد بانتظار مراجعتك في تبويب التعاميم والنشرات.</p>' +
+                 '<button class="btn bp1" style="width:100%;justify-content:center;padding:12px;font-size:16px" onclick="showTab(\'circulars\');document.getElementById(\'co-modal\').remove();">' +
+                 '<i class="fas fa-scroll" style="margin-left:8px"></i> الانتقال للتعاميم الآن</button>' +
+                 '</div>';
+      showCoModal('تنبيه هام', html, '#f97316', '#ea580c');
+    }
+  } catch(e) { console.error('checkUnreadCirculars Error:', e); }
 }
 
 """
