@@ -11,6 +11,9 @@ __pycache__/
 *.pyo
 build/
 dist/
+build32/
+dist32/
+*.spec
 Output/
 *.egg-info/
 
@@ -19,3 +22,5 @@ Output/
 *.new
 *.log
 .env
+venv/
+venv32/
