@@ -5,17 +5,26 @@ from tkinter import messagebox, filedialog
 # ─── منع ازدواجية التطبيق ───
 def _ensure_single_instance():
     lock_port = 59124
-    try:
-        # نستخدم متغير عالمي لمنع جمع القمامة (GC) من إغلاق السوكيت
-        global _darb_lock_socket
-        _darb_lock_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        _darb_lock_socket.bind(('127.0.0.1', lock_port))
-    except socket.error:
-        # إذا كان المنفذ محجوزاً، نغلق البرنامج فوراً
-        _root = tk.Tk(); _root.withdraw()
-        messagebox.showwarning("تنبيه", "البرنامج يعمل بالفعل في الخلفية.\nيرجى إغلاق النسخة المفتوحة أولاً.")
-        _root.destroy()
-        sys.exit(0)
+    max_retries = 5  # محاولة الربط لمدة 2.5 ثانية تقريباً
+    
+    for i in range(max_retries):
+        try:
+            # نستخدم متغير عالمي لمنع جمع القمامة (GC) من إغلاق السوكيت
+            global _darb_lock_socket
+            _darb_lock_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            _darb_lock_socket.bind(('127.0.0.1', lock_port))
+            return # نجح الربط، نخرج من الدالة
+        except socket.error:
+            # إذا فشل الربط، ننتظر قليلاً (خاصة عند إعادة التشغيل بعد التحديث)
+            if i < max_retries - 1:
+                import time as _t
+                _t.sleep(0.5)
+            else:
+                # إذا استمر الفشل بعد كل المحاولات، نغلق البرنامج
+                _root = tk.Tk(); _root.withdraw()
+                messagebox.showwarning("تنبيه", "البرنامج يعمل بالفعل في الخلفية.\nيرجى إغلاق النسخة المفتوحة أولاً.")
+                _root.destroy()
+                sys.exit(0)
 
 # تشغيل القفل فور استدعاء ملف قاعدة البيانات
 _ensure_single_instance()
