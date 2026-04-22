@@ -105,10 +105,83 @@ def _cleanup_environment():
         pass
 
 
+def _is_already_running():
+    """التحقق من وجود نسخة تعمل مسبقاً عبر قفل منفذ محدد."""
+    import socket
+    try:
+        # استخدام منفذ ثابت للقفل (PORT + 50) لضمان عدم تكرار التشغيل
+        _lock_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        _lock_socket.bind(('127.0.0.1', PORT + 50))
+        # نبقي السوكيت مفتوحاً طوال فترة تشغيل البرنامج
+        return False, _lock_socket
+    except socket.error:
+        return True, None
+
+def _register_global_hotkey(root):
+    """تسجيل اختصار لوحة مفاتيح عالمي (Alt+Shift+S) لإظهار/إخفاء البرنامج."""
+    if sys.platform != 'win32': return
+    import ctypes
+    import ctypes.wintypes
+    
+    MOD_ALT = 0x0001
+    MOD_CONTROL = 0x0002
+    VK_S = 0x53 # حرف S
+    HOTKEY_ID = 1234
+    
+    user32 = ctypes.windll.user32
+
+    def _toggle_visibility():
+        try:
+            # إذا كانت النافذة مخفية أو مصغرة، أظهرها
+            if root.state() == 'withdrawn' or root.state() == 'iconic' or not root.winfo_viewable():
+                print("[HOTKEY] >> إظهار النافذة")
+                root.deiconify()
+                root.state('zoomed')
+                root.lift()
+                root.attributes("-topmost", True)
+                root.after(100, lambda: root.attributes("-topmost", False))
+                root.focus_force()
+            else:
+                print("[HOTKEY] >> إخفاء النافذة")
+                root.withdraw()
+        except Exception as e:
+            print(f"[HOTKEY-UI-ERROR] {e}")
+
+    def _listen():
+        # التسجيل يجب أن يكون داخل نفس الخيط الذي يستقبل الرسائل
+        # نستخدم Ctrl + Alt + S بدلاً من Alt + Shift لتجنب تعارض تغيير اللغة
+        if not user32.RegisterHotKey(None, HOTKEY_ID, MOD_ALT | MOD_CONTROL, VK_S):
+            print("[HOTKEY] ❌ تعذر تسجيل الاختصار (ربما هو مستخدم في برنامج آخر)")
+            return
+        
+        print("[HOTKEY] ✅ الاختصار مفعل: (Ctrl + Alt + S)")
+        
+        try:
+            msg = ctypes.wintypes.MSG()
+            while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) != 0:
+                if msg.message == 0x0312: # WM_HOTKEY
+                    if msg.wParam == HOTKEY_ID:
+                        root.after(0, _toggle_visibility)
+                user32.TranslateMessage(ctypes.byref(msg))
+                user32.DispatchMessageW(ctypes.byref(msg))
+        finally:
+            user32.UnregisterHotKey(None, HOTKEY_ID)
+
+    threading.Thread(target=_listen, daemon=True).start()
+
 def main():
     # --- START: CLOUDFLARE TUNNEL CONFIGURATION ---
     MY_STATIC_DOMAIN = CLOUDFLARE_DOMAIN  # النطاق الثابت: darbte.uk
     # --- END: CLOUDFLARE TUNNEL CONFIGURATION ---
+
+    # منع تعدد النسخ
+    already_running, _lock = _is_already_running()
+    if already_running:
+        # محاولة تنبيه المستخدم (قد يكون البرنامج مخفياً)
+        temp_root = tk.Tk(); temp_root.withdraw()
+        messagebox.showwarning("تنبيه", "البرنامج يعمل بالفعل في الخلفية.\nاستخدم (Ctrl + Alt + S) لإظهاره.")
+        temp_root.destroy()
+        sys.exit(0)
 
     _cleanup_environment()
 
@@ -317,6 +390,8 @@ def main():
             root.update()
             root.state("zoomed")   # تكبير كامل عند البدء
             gui = AppGUI(root, public_url)
+            # تسجيل اختصار الإظهار/الإخفاء العالمي
+            _register_global_hotkey(root)
             root.update()
         except Exception as _e:
             tb_str = traceback.format_exc()
@@ -337,6 +412,9 @@ def main():
         schedule_daily_report(root)
         # جدول الإشعارات الذكية اليومية
         schedule_daily_alerts(root, run_hour=load_config().get("alert_run_hour", 14))
+        # جدولة التحديث التلقائي
+        from updater import schedule_auto_update
+        schedule_auto_update(root)
         # جدول تصدير نور التلقائي
         def _noor_auto_check():
             now = datetime.datetime.now()

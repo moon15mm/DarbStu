@@ -93,7 +93,7 @@ def check_for_updates(root_widget=None, silent=True):
     threading.Thread(target=_check, daemon=True).start()
 
 
-def _auto_update(latest, dl_url, win, status_lbl, btn):
+def _auto_update(latest, dl_url, win=None, status_lbl=None, btn=None):
     """
     يحمّل حزمة ZIP للمشروع، يستخرج ملفات الكود فقط،
     ثم يعيد تشغيل التطبيق تلقائياً.
@@ -101,18 +101,18 @@ def _auto_update(latest, dl_url, win, status_lbl, btn):
     import json as _j, time
 
     def _ui(text, color="#1565C0"):
-        try:
-            status_lbl.config(text=text, foreground=color)
-            win.update_idletasks()
-        except Exception:
-            pass
+        print(f"[UPDATE] {text}")
+        if status_lbl:
+            try:
+                status_lbl.config(text=text, foreground=color)
+                if win: win.update_idletasks()
+            except Exception:
+                pass
 
     try:
-        btn.config(state="disabled")
+        if btn: btn.config(state="disabled")
 
         # ١. تحديد رابط التحميل
-        # إذا كان الرابط في version.json يشير إلى صفحة GitHub Releases
-        # نستخدم رابط ZIP الفرع الثابت بدلاً منه
         url = dl_url
         if "releases/latest" in url or not url.endswith(".zip"):
             url = _ZIP_FALLBACK
@@ -132,8 +132,6 @@ def _auto_update(latest, dl_url, win, status_lbl, btn):
         # ٣. استخراج الملفات من ZIP
         with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
             names = zf.namelist()
-
-            # GitHub يُغلف المحتوى داخل مجلد مثل "DarbStu-main/"
             prefix = ""
             if names:
                 top = names[0].split("/")[0]
@@ -142,31 +140,17 @@ def _auto_update(latest, dl_url, win, status_lbl, btn):
 
             updated = 0
             skipped = 0
-
             for item in names:
-                # احذف البادئة
                 rel = item[len(prefix):] if prefix and item.startswith(prefix) else item
-
-                # تجاهل المجلدات الفارغة
-                if not rel or rel.endswith("/"):
-                    continue
-
-                # تجاهل المسارات المحمية
+                if not rel or rel.endswith("/"): continue
                 top_dir = rel.split("/")[0]
                 if top_dir in _PROTECTED:
-                    skipped += 1
-                    continue
-
-                # تجاهل ملفات البيانات المحددة
+                    skipped += 1; continue
                 if rel in _SKIP_FILES:
-                    skipped += 1
-                    continue
-
-                # تحديث ملفات الكود فقط
+                    skipped += 1; continue
                 ext = os.path.splitext(rel)[1].lower()
                 if ext not in _UPDATE_EXTS:
-                    skipped += 1
-                    continue
+                    skipped += 1; continue
 
                 dest = os.path.join(BASE_DIR, rel.replace("/", os.sep))
                 os.makedirs(os.path.dirname(dest), exist_ok=True)
@@ -180,8 +164,6 @@ def _auto_update(latest, dl_url, win, status_lbl, btn):
         time.sleep(2)
 
         # ٤. إعادة التشغيل
-        # إذا كان برنامج مجمع (EXE)، نعيد تشغيل الملف التنفيذي نفسه
-        # بفضل sys.path.insert في main.py سيقرأ الملفات الجديدة تلقائياً
         if getattr(sys, 'frozen', False):
             cmd = [sys.executable] + sys.argv[1:]
         else:
@@ -189,36 +171,76 @@ def _auto_update(latest, dl_url, win, status_lbl, btn):
             cmd = [sys.executable, main_file] + sys.argv[1:]
 
         if sys.platform == "win32":
-            subprocess.Popen(
-                cmd,
-                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
-                cwd=BASE_DIR
-            )
+            subprocess.Popen(cmd, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP, cwd=BASE_DIR)
         else:
             subprocess.Popen(cmd, cwd=BASE_DIR)
 
         time.sleep(1)
-
-        # أغلق النافذة الحالية
-        try:
-            win.destroy()
-        except Exception:
-            pass
+        if win:
+            try: win.destroy()
+            except: pass
+        
+        # محاولة إغلاق كل شيء والخروج
         try:
             import tkinter as _tk
-            for w in _tk._default_root.winfo_children():
-                try: w.destroy()
-                except: pass
-            _tk._default_root.quit()
-            _tk._default_root.destroy()
-        except Exception:
+            if _tk._default_root:
+                _tk._default_root.quit()
+        except:
             pass
-
         os._exit(0)
 
     except Exception as e:
         _ui(f"❌  فشل التحديث: {e}", "red")
-        btn.config(state="normal")
+        if btn: btn.config(state="normal")
+
+
+def perform_silent_update(latest, notes, dl_url):
+    """ينفذ التحديث فوراً وبصمت (للتحديثات المجدولة)."""
+    _auto_update(latest, dl_url)
+
+
+def schedule_auto_update(root_widget):
+    """جدولة فحص التحديثات التلقائي يومياً في ساعة محددة."""
+    def _check():
+        from config_manager import load_config
+        import datetime
+        
+        cfg = load_config()
+        if not cfg.get("auto_update_enabled", False):
+            # أعد الفحص بعد ساعة إذا تم إيقافه
+            root_widget.after(3600000, _check)
+            return
+
+        now = datetime.datetime.now()
+        target_hour = cfg.get("auto_update_hour", 3) # الافتراضي 3 فجراً
+        
+        # إذا كنا في الساعة المحددة (ولم يتم التحديث مؤخراً في نفس الساعة)
+        if now.hour == target_hour and now.minute < 10:
+            try:
+                import json as _j
+                try:
+                    with urllib.request.urlopen(UPDATE_URL, timeout=5, context=_SSL_CTX) as r:
+                        data = _j.loads(r.read().decode())
+                except:
+                    with urllib.request.urlopen(UPDATE_URL, timeout=5) as r:
+                        data = _j.loads(r.read().decode())
+                
+                latest = data.get("version", "0.0.0")
+                dl_url = data.get("download_url", "") or _ZIP_FALLBACK
+                
+                def _v(v): return tuple(int(x) for x in str(v).split("."))
+                if _v(latest) > _v(_get_installed_version()):
+                    print(f"[AUTO-UPDATE] Found new version {latest}. Updating now...")
+                    root_widget.after(0, lambda: perform_silent_update(latest, "", dl_url))
+                    return # سيخرج البرنامج لإعادة التشغيل
+            except Exception as e:
+                print(f"[AUTO-UPDATE-ERROR] {e}")
+
+        # فحص كل 10 دقائق
+        root_widget.after(600000, _check)
+
+    # ابدأ الفحص الأول بعد دقيقة من التشغيل
+    root_widget.after(60000, _check)
 
 
 def _show_update_dialog(latest, notes, dl_url):
@@ -239,7 +261,7 @@ def _show_update_dialog(latest, notes, dl_url):
 
     body = ttk.Frame(win, padding=20); body.pack(fill="both", expand=True)
 
-    ttk.Label(body, text=f"الإصدار الحالي:  {APP_VERSION}",
+    ttk.Label(body, text=f"الإصدار الحالي:  {_get_installed_version()}",
               font=("Tahoma", 10), foreground="#666").pack(anchor="e")
     ttk.Label(body, text=f"الإصدار الجديد:  {latest}",
               font=("Tahoma", 11, "bold"), foreground="#1565C0").pack(anchor="e", pady=(2, 8))
@@ -269,7 +291,7 @@ def _show_update_dialog(latest, notes, dl_url):
 
 def _show_no_update_dialog():
     from tkinter import messagebox
-    messagebox.showinfo("التحديث", f"✅  أنت تستخدم أحدث إصدار ({APP_VERSION})")
+    messagebox.showinfo("التحديث", f"✅  أنت تستخدم أحدث إصدار ({_get_installed_version()})")
 
 
 def _show_error_dialog(err):

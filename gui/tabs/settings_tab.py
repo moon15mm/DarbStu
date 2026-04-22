@@ -279,6 +279,7 @@ class SettingsTabMixin:
         # ─── قسم إدارة الفصل الدراسي (للمدير فقط) ───────────────
         if CURRENT_USER.get("role") == "admin":
             self._build_term_management_section(scroll)
+            self._build_update_settings_section(scroll)
 
     def _build_term_management_section(self, parent_frame):
         """قسم إنهاء الفصل الدراسي ونهاية السنة — للمدير فقط."""
@@ -355,6 +356,56 @@ class SettingsTabMixin:
         self._term_backup_list.pack(side="left", fill="x", expand=True)
 
         parent_frame.after(200, self._load_term_backups)
+
+    def _build_update_settings_section(self, parent_frame):
+        """قسم التحديثات التلقائية — للمدير فقط."""
+        sep = ttk.Separator(parent_frame, orient="horizontal")
+        sep.pack(fill="x", padx=20, pady=(0, 8))
+
+        lf = ttk.LabelFrame(parent_frame, text=" ⚡ التحديثات التلقائية المجدولة ", padding=16)
+        lf.pack(fill="x", padx=20, pady=(0, 16))
+
+        cfg = load_config()
+        
+        # خيار تفعيل/تعطيل التحديث التلقائي
+        row1 = ttk.Frame(lf); row1.pack(fill="x", pady=4)
+        self._auto_update_var = tk.BooleanVar(value=cfg.get("auto_update_enabled", False))
+        cb = ttk.Checkbutton(row1, text="تفعيل التحديث التلقائي للملفات البرمجية", 
+                             variable=self._auto_update_var)
+        cb.pack(side="right")
+        
+        # اختيار الساعة
+        row2 = ttk.Frame(lf); row2.pack(fill="x", pady=4)
+        ttk.Label(row2, text="وقت التحديث (الساعة):", font=("Tahoma", 10)).pack(side="right", padx=(0, 8))
+        self._auto_update_hour_var = tk.IntVar(value=cfg.get("auto_update_hour", 3))
+        spin = ttk.Spinbox(row2, from_=0, to=23, textvariable=self._auto_update_hour_var, width=5)
+        spin.pack(side="right", padx=4)
+        ttk.Label(row2, text="فجراً/صباحاً (نظام 24 ساعة)", font=("Tahoma", 8), foreground="#666").pack(side="right")
+        
+        # ملاحظة
+        tk.Label(lf, text="💡 سيقوم البرنامج بالتحقق من وجود تحديثات في الساعة المحددة وتثبيتها تلقائياً ثم إعادة تشغيل البرنامج.\nتأكد من ترك البرنامج مفتوحاً على السيرفر لتنفيذ التحديث.",
+                 font=("Tahoma", 8), fg="#1e40af", bg="#eff6ff", justify="right", padx=10, pady=6).pack(fill="x", pady=10)
+        
+        # زر الحفظ الخاص بالقسم (أو نعتمد على زر الحفظ الرئيسي؟ يفضل زر هنا لسهولة التجربة)
+        def _save_update_cfg():
+            c = load_config()
+            c["auto_update_enabled"] = self._auto_update_var.get()
+            c["auto_update_hour"] = self._auto_update_hour_var.get()
+            from constants import CONFIG_JSON
+            try:
+                with open(CONFIG_JSON, "w", encoding="utf-8") as f:
+                    json.dump(c, f, ensure_ascii=False, indent=2)
+                invalidate_config_cache()
+                messagebox.showinfo("نجاح", "تم حفظ إعدادات التحديث التلقائي.")
+            except Exception as e:
+                messagebox.showerror("خطأ", f"فشل الحفظ: {e}")
+
+        ttk.Button(lf, text="💾 حفظ إعدادات التحديث", command=_save_update_cfg).pack(side="right", pady=5)
+        
+        # زر التحقق اليدوي
+        from updater import check_for_updates
+        ttk.Button(lf, text="🔍 التحقق من وجود تحديث الآن", 
+                   command=lambda: check_for_updates(self.root, silent=False)).pack(side="left", pady=5)
 
     def _load_term_backups(self):
         """يحمّل قائمة نسخ الفصول الاحتياطية."""

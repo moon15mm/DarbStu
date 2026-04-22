@@ -1437,6 +1437,28 @@ def load_students(force_reload: bool = False) -> Dict[str, Any]:
     constants.STUDENTS_STORE = {"list": classes, "by_id": {c["id"]: c for c in classes}}
     return constants.STUDENTS_STORE
 
+def save_students(classes_list: List[Dict[str, Any]]) -> bool:
+    """يحفظ قائمة الطلاب في الملف المحلي أو يرسلها للسيرفر السحابي إذا كان مفعلًا."""
+    client = get_cloud_client()
+    if client.is_active():
+        res = client.post("/web/api/update-students", {"classes": classes_list})
+        if not res.get("ok"):
+            print(f"[CLOUD-SYNC-ERROR] {res.get('msg')}")
+            return False
+            
+    # دائماً احفظ محلياً أيضاً كنسخة احتياطية أو كمرجع أساسي في وضع السيرفر
+    try:
+        from constants import STUDENTS_JSON, ensure_dirs
+        ensure_dirs()
+        with open(STUDENTS_JSON, "w", encoding="utf-8") as f:
+            json.dump({"classes": classes_list}, f, ensure_ascii=False, indent=2)
+        # تحديث المخزن في الذاكرة
+        constants.STUDENTS_STORE = {"list": classes_list, "by_id": {c["id"]: c for c in classes_list}}
+        return True
+    except Exception as e:
+        print(f"[SAVE-STUDENTS-ERROR] {e}")
+        return False
+
 def _clean_phone_noor(raw) -> str:
     """يحوّل رقم الجوال من صيغة نور (966XXXXXXXXX) إلى (05XXXXXXXXX)."""
     import re as _re

@@ -3,7 +3,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import json
 from constants import STUDENTS_JSON
-from database import load_students
+from database import load_students, save_students
 
 class ClassNamingTabMixin:
     """Mixin: ClassNamingTabMixin for managing school class names."""
@@ -115,16 +115,11 @@ class ClassNamingTabMixin:
                 updated = True
                 
         if updated:
-            try:
-                with open(STUDENTS_JSON, "w", encoding="utf-8") as f:
-                    json.dump({"classes": self.store["list"]}, f, ensure_ascii=False, indent=2)
+            if save_students(self.store["list"]):
                 messagebox.showinfo("نجاح", "تم حفظ أسماء الفصول الجديدة بنجاح.")
-                # Force reload store and sync all tabs
-                self.store = load_students(force_reload=True)
-                if hasattr(self, "update_all_tabs_after_data_change"):
-                    self.update_all_tabs_after_data_change()
-            except Exception as e:
-                messagebox.showerror("خطأ", f"تعذر حفظ التعديلات:\n{e}")
+                self.update_all_tabs_after_data_change()
+            else:
+                messagebox.showerror("خطأ", "فشل في حفظ التعديلات أو مزامنتها مع السيرفر.")
         else:
             messagebox.showinfo("تنبيه", "لم يتم اكتشاف أي تغييرات في الأسماء.")
 
@@ -166,13 +161,10 @@ class ClassNamingTabMixin:
         
         if class_index != -1:
             del self.store["list"][class_index]
-            try:
-                with open(STUDENTS_JSON, "w", encoding="utf-8") as f:
-                    json.dump({"classes": self.store["list"]}, f, ensure_ascii=False, indent=2)
+            if save_students(self.store["list"]):
                 messagebox.showinfo("تم الحذف", f"تم حذف الفصل '{class_name}' بنجاح.")
-                self.store = load_students(force_reload=True)
                 self._refresh_class_list()
                 if hasattr(self, "update_all_tabs_after_data_change"):
                     self.update_all_tabs_after_data_change()
-            except Exception as e:
-                messagebox.showerror("خطأ", f"حدث خطأ أثناء الحفظ:\n{e}")
+            else:
+                messagebox.showerror("خطأ", "فشل في حفظ التعديلات أو مزامنتها مع السيرفر.")

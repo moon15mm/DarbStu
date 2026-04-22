@@ -78,8 +78,13 @@ class PhonesTabMixin:
         for c in self.store["list"]:
             for s in c["students"]:
                 if (sid := s.get("id")) in updated_phones: s["phone"] = updated_phones[sid]
-        with open(STUDENTS_JSON, "w", encoding="utf-8") as f: json.dump({"classes": self.store["list"]}, f, ensure_ascii=False, indent=2)
-        messagebox.showinfo("تم الحفظ", "تم حفظ أرقام الجوالات بنجاح."); self.load_students_to_treeview()
+        
+        from database import save_students
+        if save_students(self.store["list"]):
+            messagebox.showinfo("تم الحفظ", "تم حفظ أرقام الجوالات بنجاح.")
+            self.load_students_to_treeview()
+        else:
+            messagebox.showerror("خطأ", "فشل في حفظ التعديلات أو مزامنتها مع السيرفر.")
 
     def search_students(self):
         query = self.search_var.get().strip().lower()

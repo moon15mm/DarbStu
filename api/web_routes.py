@@ -482,6 +482,31 @@ async def web_students(request: Request):
     store = load_students()
     return JSONResponse({"ok": True, "classes": store["list"]})
 
+@router.post("/web/api/update-students", response_class=JSONResponse)
+async def web_update_students(req: Request):
+    user = _get_current_user(req)
+    if not user or user["role"] not in ("admin", "deputy"):
+        return JSONResponse({"error": "غير مصرح"}, status_code=401)
+    try:
+        data = await req.json()
+        classes = data.get("classes")
+        if classes is None:
+            return JSONResponse({"ok": False, "msg": "بيانات مفقودة"})
+        
+        from constants import STUDENTS_JSON, ensure_dirs
+        import json
+        ensure_dirs()
+        with open(STUDENTS_JSON, "w", encoding="utf-8") as f:
+            json.dump({"classes": classes}, f, ensure_ascii=False, indent=2)
+            
+        # تحديث المتجر في الذاكرة أيضاً للسيرفر
+        import constants
+        constants.STUDENTS_STORE = {"list": classes, "by_id": {c["id"]: c for c in classes}}
+        
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
 @router.get("/web/api/classes", response_class=JSONResponse)
 async def web_classes(request: Request):
     user = _get_current_user(request)

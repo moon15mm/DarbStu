@@ -3,7 +3,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, simpledialog
 import os, json, datetime, threading, re, io, csv, base64, time
 from constants import DATA_DIR, STUDENTS_JSON
-from database import load_students, import_students_from_excel_sheet2_format
+from database import load_students, import_students_from_excel_sheet2_format, save_students
 from config_manager import load_config
 
 class StudentsTabMixin:
@@ -159,13 +159,11 @@ class StudentsTabMixin:
                 break
         
         if student_removed:
-            try:
-                with open(STUDENTS_JSON, "w", encoding="utf-8") as f:
-                    json.dump({"classes": self.store["list"]}, f, ensure_ascii=False, indent=2)
+            if save_students(self.store["list"]):
                 messagebox.showinfo("تم الحذف", f"تم حذف الطالب {student_name} بنجاح.")
                 self.update_all_tabs_after_data_change()
-            except Exception as e:
-                messagebox.showerror("خطأ", f"حدث خطأ أثناء الحفظ:\n{e}")
+            else:
+                messagebox.showerror("خطأ", "فشل في حفظ التعديلات أو مزامنتها مع السيرفر.")
 
     def delete_selected_class(self):
         from constants import CURRENT_USER, STUDENTS_JSON
@@ -204,11 +202,9 @@ class StudentsTabMixin:
         
         if class_index != -1:
             del self.store["list"][class_index]
-            try:
-                with open(STUDENTS_JSON, "w", encoding="utf-8") as f:
-                    json.dump({"classes": self.store["list"]}, f, ensure_ascii=False, indent=2)
+            if save_students(self.store["list"]):
                 messagebox.showinfo("تم الحذف", f"تم حذف الفصل '{class_name}' بنجاح.")
                 self.update_all_tabs_after_data_change()
-            except Exception as e:
-                messagebox.showerror("خطأ", f"حدث خطأ أثناء حفظ التعديلات:\n{e}")
+            else:
+                messagebox.showerror("خطأ", "فشل في حفظ التعديلات أو مزامنتها مع السيرفر.")
 

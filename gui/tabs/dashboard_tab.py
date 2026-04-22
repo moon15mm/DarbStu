@@ -33,6 +33,16 @@ class DashboardTabMixin:
                   width=12).pack(side="right", padx=4)
         ttk.Button(top_bar, text="🔄 تحديث الآن",
                    command=self.update_dashboard_metrics).pack(side="right", padx=4)
+        
+        # زر الإخفاء في الخلفية (للسيرفر فقط)
+        from config_manager import load_config
+        if not load_config().get("cloud_mode", False):
+            def _hide_app():
+                if messagebox.askyesno("إخفاء البرنامج", "سيتم إخفاء نافذة البرنامج وستستمر في العمل في الخلفية.\n\nلإظهارها مرة أخرى، اضغط على:\n(Ctrl + Alt + S) من لوحة المفاتيح.\n\nهل تريد الإخفاء الآن؟"):
+                    self.root.withdraw()
+            
+            ttk.Button(top_bar, text="👁️ إخفاء في الخلفية",
+                       command=_hide_app).pack(side="right", padx=4)
         self.dash_week_lbl = ttk.Label(top_bar, text="",
                                         foreground="#5A6A7E", font=("Tahoma",9))
         self.dash_week_lbl.pack(side="left", padx=8)
@@ -177,8 +187,25 @@ class DashboardTabMixin:
     _dash_cache_dow      = None
     _dash_slow_tick      = 0   # عداد دورات لتحديث المخططات كل 10 دورات (5 دقائق)
 
+    _last_day_check_time = 0
+
     def _dashboard_tick(self):
-        """دورة سريعة كل 30ث — المخططات الثقيلة تُحدَّث كل 5 دقائق فقط."""
+        """دورة سريعة كل 30ث للتحديثات، مع فحص التاريخ كل 6 ساعات لتقليل الجهد."""
+        from constants import now_riyadh_date
+        import time
+        
+        now_ts = time.time()
+        # فحص تغير اليوم كل 6 ساعات (21600 ثانية)
+        if now_ts - DashboardTabMixin._last_day_check_time >= 21600:
+            DashboardTabMixin._last_day_check_time = now_ts
+            current_today = now_riyadh_date()
+            if hasattr(self, "dash_date_var"):
+                if self.dash_date_var.get() != current_today:
+                    now_hour = datetime.datetime.now().hour
+                    if 0 <= now_hour <= 4: # التحول التلقائي فجراً فقط
+                        self.dash_date_var.set(current_today)
+                        print(f"[DASHBOARD] Daily refresh check (6h): Switched to {current_today}")
+
         if hasattr(self, "_current_tab") and self._current_tab.get() == "لوحة المراقبة":
             DashboardTabMixin._dash_slow_tick += 1
             refresh_heavy = DashboardTabMixin._dash_slow_tick >= 10

@@ -3,7 +3,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, simpledialog
 import os, json, datetime, threading, re, io, csv, base64, time
 from constants import DATA_DIR, STUDENTS_JSON
-from database import load_students, import_students_from_excel_sheet2_format
+from database import load_students, save_students, import_students_from_excel_sheet2_format
 from config_manager import load_config
 
 class AddStudentTabMixin:
@@ -69,9 +69,7 @@ class AddStudentTabMixin:
         target_class["students"].append(new_student)
 
     # حفظ
-        try:
-            with open(STUDENTS_JSON, "w", encoding="utf-8") as f:
-                json.dump({"classes": self.store["list"]}, f, ensure_ascii=False, indent=2)
+        if save_students(self.store["list"]):
             messagebox.showinfo("تم", "تمت إضافة الطالب بنجاح!")
             self.add_status_label.config(text="✅ تم الحفظ", foreground="green")
             # مسح الحقول
@@ -79,14 +77,10 @@ class AddStudentTabMixin:
             self.add_id_var.set("")
             self.add_phone_var.set("")
             self.add_class_var.set("")
-            # تحديث المتجر عالميًا
-            global STUDENTS_STORE
-            STUDENTS_STORE = None
-            self.store = load_students(force_reload=True)
             # تحديث باقي التبويبات
             self.update_all_tabs_after_data_change()
-        except Exception as e:
-            messagebox.showerror("خطأ", f"فشل الحفظ:\n{e}")
+        else:
+            messagebox.showerror("خطأ", "فشل في حفظ التعديلات أو مزامنتها مع السيرفر.")
             
     def delete_selected_student(self):
         from database import authenticate
@@ -123,13 +117,11 @@ class AddStudentTabMixin:
             messagebox.showerror("خطأ", "الطالب غير موجود في البيانات!")
             return
 
-        try:
-            with open(STUDENTS_JSON, "w", encoding="utf-8") as f:
-                json.dump({"classes": classes}, f, ensure_ascii=False, indent=2)
+        if save_students(classes):
             messagebox.showinfo("تم", "تم حذف الطالب بنجاح.")
             self.update_all_tabs_after_data_change()
-        except Exception as e:
-            messagebox.showerror("خطأ", f"فشل الحذف:\n{e}")
+        else:
+            messagebox.showerror("خطأ", "فشل في حفظ التعديلات أو مزامنتها مع السيرفر.")
 
     def delete_selected_class(self):
         from database import authenticate
@@ -155,11 +147,9 @@ class AddStudentTabMixin:
             return
 
         new_classes = [c for c in self.store["list"] if c["id"] != class_id]
-        try:
-            with open(STUDENTS_JSON, "w", encoding="utf-8") as f:
-                json.dump({"classes": new_classes}, f, ensure_ascii=False, indent=2)
+        if save_students(new_classes):
             messagebox.showinfo("تم", f"تم حذف الفصل '{class_name}' بنجاح.")
             self.update_all_tabs_after_data_change()
-        except Exception as e:
-            messagebox.showerror("خطأ", f"فشل الحذف:\n{e}")
+        else:
+            messagebox.showerror("خطأ", "فشل في حفظ التعديلات أو مزامنتها مع السيرفر.")
 
