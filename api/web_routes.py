@@ -1758,6 +1758,9 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
     )
 
     # ── محتوى التبويبات ────────────────────────────────────────
+    _circ_add_btn = '<button class="btn bp1 bsm" onclick="si(\'circulars\',\'circ-add\')">+ إصدار تعميم</button>' if role == 'admin' else ''
+    _alert_referral_html = ('<div class="ab ai" style="background:#FFF7ED; border:1px solid #FFEDD5; color:#C2410C; padding:15px; border-radius:12px; display:flex; align-items:center; gap:12px; cursor:pointer" onclick="showTab(\'referral_deputy\')"><i class="fas fa-exclamation-circle" style="font-size:20px"></i> <div><b>تنبيه:</b> يوجد عدد <b>' + str(unread_referrals) + '</b> تحويلات جديدة بانتظار مراجعتك.</div></div>') if unread_referrals > 0 else ''
+    _alert_circs_html = ('<div class="ab ai" style="background:#F0F9FF; border:1px solid #E0F2FE; color:#0369A1; padding:15px; border-radius:12px; display:flex; align-items:center; gap:12px; cursor:pointer" onclick="showTab(\'circulars\')"><i class="fas fa-scroll" style="font-size:20px"></i> <div><b>تعميم جديد:</b> لديك <b>' + str(unread_circs) + '</b> تعاميم غير مقروءة.</div></div>') if unread_circs > 0 else ''
     content_html = f'''
 <div id="tab-dashboard">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
@@ -1766,8 +1769,8 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
   </div>
   <div id="smart-alert-banner" style="margin-bottom:20px; display: {'block' if (unread_referrals > 0 or unread_circs > 0) else 'none'}">
     <div style="display:flex; flex-direction:column; gap:10px">
-      {'<div class="ab ai" style="background:#FFF7ED; border:1px solid #FFEDD5; color:#C2410C; padding:15px; border-radius:12px; display:flex; align-items:center; gap:12px; cursor:pointer" onclick="showTab(\'referral_deputy\')"><i class="fas fa-exclamation-circle" style="font-size:20px"></i> <div><b>تنبيه:</b> يوجد عدد <b>' + str(unread_referrals) + '</b> تحويلات جديدة بانتظار مراجعتك.</div></div>' if unread_referrals > 0 else ''}
-      {'<div class="ab ai" style="background:#F0F9FF; border:1px solid #E0F2FE; color:#0369A1; padding:15px; border-radius:12px; display:flex; align-items:center; gap:12px; cursor:pointer" onclick="showTab(\'circulars\')"><i class="fas fa-scroll" style="font-size:20px"></i> <div><b>تعميم جديد:</b> لديك <b>' + str(unread_circs) + '</b> تعاميم غير مقروءة.</div></div>' if unread_circs > 0 else ''}
+      {_alert_referral_html}
+      {_alert_circs_html}
     </div>
   </div>
   <div class="stat-cards" id="dash-cards"><div class="loading">⏳ جارٍ التحميل...</div></div>
@@ -2218,7 +2221,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 <div id="tab-circulars">
   <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
     <h2 class="pt" style="margin:0"><i class="fas fa-scroll"></i> التعاميم والنشرات</h2>
-    ''' + ('<button class="btn bp1 bsm" onclick="si(\'circulars\',\'circ-add\')">+ إصدار تعميم</button>' if role == 'admin' else '') + '''
+    ''' + _circ_add_btn + '''
     <button class="btn bp2 bsm" onclick="loadCirculars()"><i class="fas fa-sync-alt"></i> تحديث</button>
   </div>
   
