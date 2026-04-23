@@ -47,7 +47,7 @@ from api.app import app, register_routers
 from gui.login_window import LoginWindow
 from gui.app_gui import AppGUI
 from alerts_service import (schedule_daily_alerts, schedule_daily_report,
-                             send_daily_report_to_admin)
+                             send_daily_report_to_admin, schedule_weekly_rewards)
 from database import schedule_auto_backup
 from api.mobile_routes import _schedule_tardiness_sender
 from report_builder import export_to_noor_excel
@@ -431,6 +431,8 @@ def main():
         schedule_daily_report(root)
         # جدول الإشعارات الذكية اليومية
         schedule_daily_alerts(root, run_hour=load_config().get("alert_run_hour", 14))
+        # جدول تعزيز الحضور الأسبوعي
+        schedule_weekly_rewards(root)
         # جدولة التحديث التلقائي
         from updater import schedule_auto_update
         schedule_auto_update(root)

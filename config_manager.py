@@ -84,6 +84,18 @@ DEFAULT_CONFIG = {
     # ─── إعدادات التحديث التلقائي ──────────────────────────────
     "auto_update_enabled":    False,
     "auto_update_hour":       3,
+    # ─── إعدادات تعزيز الحضور الأسبوعي ───────────────────────
+    "weekly_reward_enabled":  False,
+    "weekly_reward_day":      4,      # 4 = الخميس
+    "weekly_reward_hour":     14,
+    "weekly_reward_minute":   0,
+    "weekly_reward_template": (
+        "🌟 تهنئة من {school_name}\n"
+        "{guardian}/ {student_name}\n"
+        "نحيي {his} على التزامه وحضوره المكتمل طوال هذا الأسبوع.\n"
+        "الاستمرار في هذا الانضباط هو سر النجاح والتفوق. فخورون بك!\n"
+        "مع التقدير،\nإدارة {school_name}"
+    ),
 }
 
 _CONFIG_CACHE: Dict[str, Any] = {}
@@ -201,9 +213,19 @@ def render_message(student_name: str, class_name: str, date_str: str) -> str:
             guardian=terms["guardian"], son=terms["son"],
             his=terms["his"], absent_v=terms["absent_v"],
         )
+def render_reward_message(student_name: str) -> str:
+    cfg   = load_config()
+    terms = get_terms()
+    school = cfg.get("school_name", "المدرسة")
+    tpl    = cfg.get("weekly_reward_template") or DEFAULT_CONFIG["weekly_reward_template"]
+    try:
+        return tpl.format(
+            school_name=school, student_name=student_name,
+            guardian=terms["guardian"], son=terms["son"],
+            his=terms["his"]
+        )
     except KeyError:
-        return tpl.format(school_name=school, student_name=student_name,
-                          class_name=class_name, date=date_str)
+        return tpl.format(school_name=school, student_name=student_name)
 
 def logo_img_tag_from_config(cfg: Dict[str, Any]) -> str:
     path = (cfg.get("logo_path") or "").strip()

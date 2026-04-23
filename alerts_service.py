@@ -799,3 +799,112 @@ def save_tardiness_recipients(recipients):
     with open(CONFIG_JSON, "w", encoding="utf-8") as f:
         json.dump(cfg, f, ensure_ascii=False, indent=2)
 
+# ═══════════════════════════════════════════════════════════════
+# نظام تعزيز الحضور الأسبوعي (Perfect Attendance Rewards)
+# ═══════════════════════════════════════════════════════════════
+
+def get_perfect_attendance_students(start_date: str, end_date: str) -> List[Dict]:
+    """يُرجع قائمة الطلاب الذين لم يسجلوا أي غياب في الفترة المحددة."""
+    # 1. جلب كل الطلاب
+    store = load_students()
+    all_students = []
+    for cls in store.get("list", []):
+        for s in cls.get("students", []):
+            all_students.append({
+                "id": s["id"],
+                "name": s["name"],
+                "class_name": cls["name"],
+                "phone": s.get("phone", "")
+            })
+
+    # 2. جلب الغائبين في هذه الفترة
+    con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
+    cur.execute("SELECT DISTINCT student_id FROM absences WHERE date BETWEEN ? AND ?", (start_date, end_date))
+    absent_ids = {row["student_id"] for row in cur.fetchall()}
+    con.close()
+
+    # 3. تصفية الطلاب الملتزمين (الموجودين في الكل وغير الموجودين في الغائبين)
+    perfect_students = [s for s in all_students if s["id"] not in absent_ids]
+    return perfect_students
+
+def run_weekly_rewards(log_cb=None) -> Dict:
+    """يقوم بحصر الطلاب الملتزمين وإرسال رسائل تهنئة لهم."""
+    from config_manager import render_reward_message
+    cfg = load_config()
+    if not cfg.get("weekly_reward_enabled", False):
+        return {"skipped": True, "reason": "ميزة التعزيز الأسبوعي معطّلة"}
+
+    if not check_whatsapp_server_status():
+        return {"skipped": True, "reason": "خادم الواتساب غير متصل"}
+
+    # تحديد نطاق الأسبوع (الأحد إلى الخميس)
+    today = datetime.date.today()
+    days_since_sun = (today.weekday() + 1) % 7
+    sun = today - datetime.timedelta(days=days_since_sun)
+    thu = sun + datetime.timedelta(days=4)
+    
+    start_date = sun.isoformat()
+    end_date   = thu.isoformat()
+
+    if log_cb: log_cb("🔎 جاري حصر طلاب الحضور المكتمل ({} إلى {})...".format(start_date, end_date))
+    
+    students = get_perfect_attendance_students(start_date, end_date)
+    
+    if log_cb: log_cb("✅ تم العثور على {} طالب ملتزم.".format(len(students)))
+
+    sent_count = 0
+    failed_count = 0
+    _delay = max(1, cfg.get("tard_msg_delay_sec", 8))
+
+    for s in students:
+        if not s["phone"]:
+            failed_count += 1
+            continue
+        
+        msg = render_reward_message(s["name"])
+        ok, status = send_whatsapp_message(s["phone"], msg)
+        
+        if ok:
+            sent_count += 1
+            log_message_status(now_riyadh_date(), s["id"], s["name"], "", s["class_name"], s["phone"], "Success", "weekly_reward", "reward")
+        else:
+            failed_count += 1
+            if log_cb: log_cb("❌ فشل الإرسال لـ {}: {}".format(s["name"], status))
+            
+        time.sleep(_delay)
+
+    return {
+        "start_date": start_date,
+        "end_date": end_date,
+        "total_perfect": len(students),
+        "sent": sent_count,
+        "failed": failed_count
+    }
+
+def schedule_weekly_rewards(root_widget):
+    """يجدول تشغيل تعزيز الحضور أسبوعياً كل يوم خميس."""
+    def check_and_run():
+        now = datetime.datetime.now()
+        cfg = load_config()
+        
+        target_day  = cfg.get("weekly_reward_day", 4) # 4 = الخميس
+        target_hour = cfg.get("weekly_reward_hour", 14)
+        target_min  = cfg.get("weekly_reward_minute", 0)
+
+        # فحص اليوم والوقت
+        if now.weekday() == target_day:
+            # إذا كنا في الساعة المحددة والدقائق الأولى (لم نرسل بعد)
+            if now.hour == target_hour and abs(now.minute - target_min) < 5:
+                print("[WEEKLY-REWARD] بدء تشغيل تعزيز الحضور الأسبوعي المجدول...")
+                threading.Thread(
+                    target=lambda: run_weekly_rewards(log_cb=lambda m: print("[WEEKLY-REWARD]", m)),
+                    daemon=True).start()
+                # انتظر ساعة قبل الفحص التالي لتجنب التكرار في نفس اليوم
+                root_widget.after(3_600_000, check_and_run)
+                return
+
+        # فحص كل 5 دقائق
+        root_widget.after(300_000, check_and_run)
+
+    root_widget.after(60_000, check_and_run)
+

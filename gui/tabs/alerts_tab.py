@@ -9,9 +9,11 @@ from database import get_db, load_students
 from alerts_service import (get_students_exceeding_threshold, run_smart_alerts,
                              schedule_daily_report, send_alert_for_student,
                              send_daily_report_to_admin, get_student_absence_count,
-                             get_student_full_analysis)
+                             get_student_full_analysis, get_perfect_attendance_students,
+                             run_weekly_rewards)
 from report_builder import detect_suspicious_patterns, export_to_noor_excel
 from whatsapp_service import send_whatsapp_message
+from config_manager import render_reward_message
 
 class AlertsTabMixin:
     """Mixin: AlertsTabMixin"""
@@ -207,6 +209,58 @@ class AlertsTabMixin:
         self.tree_patterns.configure(yscrollcommand=pat_sb.set)
         pat_sb.pack(side="right", fill="y", pady=6, padx=(0,6))
         self.tree_patterns.pack(side="left", fill="both", expand=True, padx=(6,0))
+
+        # ─────────────────────────────────────────────────────────
+        # تبويب تعزيز الحضور (Weekly Rewards)
+        # ─────────────────────────────────────────────────────────
+        tab_reward = ttk.Frame(nb); nb.add(tab_reward, text=" 🏆 تعزيز الحضور ")
+        
+        rew_ctrl = ttk.Frame(tab_reward); rew_ctrl.pack(fill="x", padx=6, pady=6)
+        self.weekly_reward_enabled_var = tk.BooleanVar(value=cfg.get("weekly_reward_enabled", False))
+        ttk.Checkbutton(rew_ctrl, text="تفعيل التعزيز الأسبوعي التلقائي",
+                        variable=self.weekly_reward_enabled_var,
+                        command=self._save_weekly_reward_settings).pack(side="right", padx=10)
+        
+        ttk.Button(rew_ctrl, text="🔎 حصر الملتزمين الآن",
+                   command=self._load_perfect_students).pack(side="right", padx=4)
+        
+        ttk.Button(rew_ctrl, text="🚀 إرسال رسائل التعزيز الآن",
+                   command=self._run_weekly_rewards_now).pack(side="left", padx=4)
+
+        # إعدادات الوقت والقالب
+        rew_cfg_f = ttk.LabelFrame(tab_reward, text=" 📝 إعدادات الرسالة والوقت ", padding=8)
+        rew_cfg_f.pack(fill="x", padx=8, pady=4)
+        
+        rf1 = ttk.Frame(rew_cfg_f); rf1.pack(fill="x", pady=2)
+        ttk.Label(rf1, text="وقت الإرسال (كل خميس):", width=20, anchor="e").pack(side="right")
+        self.rew_hour_var = tk.IntVar(value=cfg.get("weekly_reward_hour", 14))
+        self.rew_min_var  = tk.IntVar(value=cfg.get("weekly_reward_minute", 0))
+        ttk.Spinbox(rf1, from_=8, to=20, textvariable=self.rew_hour_var, width=4).pack(side="right", padx=2)
+        ttk.Label(rf1, text=":").pack(side="right")
+        ttk.Spinbox(rf1, from_=0, to=59, textvariable=self.rew_min_var, width=4).pack(side="right", padx=2)
+        
+        ttk.Button(rf1, text="💾 حفظ الوقت والقالب", command=self._save_weekly_reward_settings).pack(side="left")
+
+        rf2 = ttk.Frame(rew_cfg_f); rf2.pack(fill="x", pady=4)
+        ttk.Label(rf2, text="نص الرسالة:", width=20, anchor="e").pack(side="right", anchor="n")
+        self.rew_template_txt = tk.Text(rf2, height=4, width=50, font=("Tahoma", 9))
+        self.rew_template_txt.pack(side="right", padx=4, fill="x", expand=True)
+        self.rew_template_txt.insert("1.0", cfg.get("weekly_reward_template", ""))
+
+        # جدول الطلاب الملتزمين
+        rew_list_f = ttk.Frame(tab_reward)
+        rew_list_f.pack(fill="both", expand=True, padx=6, pady=4)
+        
+        cols_r = ("name", "class", "phone", "status")
+        self.tree_rewards = ttk.Treeview(rew_list_f, columns=cols_r, show="headings", height=8)
+        for c, h, w in zip(cols_r, ["اسم الطالب", "الفصل", "الجوال", "الحالة"], [200, 150, 120, 120]):
+            self.tree_rewards.heading(c, text=h)
+            self.tree_rewards.column(c, width=w, anchor="center")
+        
+        rew_sb = ttk.Scrollbar(rew_list_f, orient="vertical", command=self.tree_rewards.yview)
+        self.tree_rewards.configure(yscrollcommand=rew_sb.set)
+        rew_sb.pack(side="right", fill="y")
+        self.tree_rewards.pack(side="left", fill="both", expand=True)
 
         # ══ تهيئة ══════════════════════════════════════════════════
         self._alert_checked      = set()
@@ -754,5 +808,68 @@ class AlertsTabMixin:
             size = "{} KB".format(os.path.getsize(full)//1024) if os.path.exists(full) else "—"
             date = f.replace("noor_","").replace(".xlsx","")
             self.tree_noor.insert("","end", values=(f, date, size, full))
+
+    # ══════════════════════════════════════════════════════════
+    # ميزات تعزيز الحضور الأسبوعي
+    # ══════════════════════════════════════════════════════════
+    
+    def _save_weekly_reward_settings(self):
+        cfg = load_config()
+        cfg["weekly_reward_enabled"] = self.weekly_reward_enabled_var.get()
+        cfg["weekly_reward_hour"]    = self.rew_hour_var.get()
+        cfg["weekly_reward_minute"]  = self.rew_min_var.get()
+        cfg["weekly_reward_template"] = self.rew_template_txt.get("1.0", "end-1c").strip()
+        
+        with open(CONFIG_JSON, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, ensure_ascii=False, indent=2)
+        invalidate_config_cache()
+        
+        from alerts_service import schedule_weekly_rewards
+        schedule_weekly_rewards(self.root)
+        
+        messagebox.showinfo("تم", "تم حفظ إعدادات تعزيز الحضور بنجاح")
+
+    def _load_perfect_students(self):
+        """تحميل قائمة الطلاب الملتزمين لهذا الأسبوع وعرضهم في الجدول."""
+        for i in self.tree_rewards.get_children():
+            self.tree_rewards.delete(i)
+            
+        def _worker():
+            # حساب الأسبوع الحالي
+            today = datetime.date.today()
+            days_since_sun = (today.weekday() + 1) % 7
+            sun = today - datetime.timedelta(days=days_since_sun)
+            thu = sun + datetime.timedelta(days=4)
+            
+            students = get_perfect_attendance_students(sun.isoformat(), thu.isoformat())
+            
+            def _show():
+                for s in students:
+                    self.tree_rewards.insert("", "end", values=(s["name"], s["class_name"], s["phone"], ""))
+                if not students:
+                    self.tree_rewards.insert("", "end", values=("—", "لا يوجد طلاب ملتزمون", "—", "—"))
+            
+            self.root.after(0, _show)
+            
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _run_weekly_rewards_now(self):
+        """تشغيل عملية الإرسال يدوياً."""
+        if not messagebox.askyesno("تأكيد", "سيتم إرسال رسائل تهنئة لجميع الطلاب الملتزمين بالحضور هذا الأسبوع.\nهل تريد المتابعة؟"):
+            return
+            
+        def _do():
+            result = run_weekly_rewards(log_cb=lambda m: print("[GUI-REWARD]", m))
+            
+            msg = "✅ اكتملت العملية\n"
+            if result.get("skipped"):
+                msg = "⚠️ " + result.get("reason", "تم التخطي")
+            else:
+                msg += "تم الإرسال لـ {} طالب\nفشل الإرسال لـ {} طالب".format(result.get("sent", 0), result.get("failed", 0))
+            
+            self.root.after(0, lambda: messagebox.showinfo("النتيجة", msg))
+            self.root.after(0, self._load_perfect_students)
+            
+        threading.Thread(target=_do, daemon=True).start()
 
 
