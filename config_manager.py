@@ -213,6 +213,10 @@ def render_message(student_name: str, class_name: str, date_str: str) -> str:
             guardian=terms["guardian"], son=terms["son"],
             his=terms["his"], absent_v=terms["absent_v"],
         )
+    except KeyError:
+        return tpl.format(school_name=school, student_name=student_name,
+                          class_name=class_name, date=date_str)
+
 def render_reward_message(student_name: str) -> str:
     cfg   = load_config()
     terms = get_terms()
