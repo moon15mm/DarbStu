@@ -137,28 +137,33 @@ def _is_already_running():
         return True, None
 
 def _register_global_hotkey(root):
-    """تسجيل اختصار لوحة مفاتيح عالمي (Alt+Shift+S) لإظهار/إخفاء البرنامج."""
+    """تسجيل اختصار لوحة مفاتيح عالمي (Ctrl+Alt+S و Ctrl+Shift+S) لإظهار/إخفاء البرنامج."""
     if sys.platform != 'win32': return
     import ctypes
     import ctypes.wintypes
     
     MOD_ALT = 0x0001
     MOD_CONTROL = 0x0002
-    VK_S = 0x53 # حرف S
-    HOTKEY_ID = 1234
+    MOD_SHIFT = 0x0004
+    VK_S = 0x53 
+    HOTKEY_ID_1 = 1234
+    HOTKEY_ID_2 = 1235
     
     user32 = ctypes.windll.user32
 
     def _toggle_visibility():
         try:
-            # إذا كانت النافذة مخفية أو مصغرة، أظهرها
-            if root.state() == 'withdrawn' or root.state() == 'iconic' or not root.winfo_viewable():
+            # التحقق من الحالة الحالية
+            is_hidden = root.state() == 'withdrawn' or root.state() == 'iconic' or not root.winfo_viewable()
+            
+            if is_hidden:
                 print("[HOTKEY] >> إظهار النافذة")
                 root.deiconify()
                 root.state('zoomed')
-                root.lift()
                 root.attributes("-topmost", True)
-                root.after(100, lambda: root.attributes("-topmost", False))
+                root.lift()
+                # إزالة topmost بعد فترة قصيرة للسماح بالتفاعل الطبيعي
+                root.after(200, lambda: root.attributes("-topmost", False))
                 root.focus_force()
             else:
                 print("[HOTKEY] >> إخفاء النافذة")
@@ -167,24 +172,31 @@ def _register_global_hotkey(root):
             print(f"[HOTKEY-UI-ERROR] {e}")
 
     def _listen():
-        # التسجيل يجب أن يكون داخل نفس الخيط الذي يستقبل الرسائل
-        # نستخدم Ctrl + Alt + S بدلاً من Alt + Shift لتجنب تعارض تغيير اللغة
-        if not user32.RegisterHotKey(None, HOTKEY_ID, MOD_ALT | MOD_CONTROL, VK_S):
-            print("[HOTKEY] ❌ تعذر تسجيل الاختصار (ربما هو مستخدم في برنامج آخر)")
+        # تسجيل اختصارين لضمان العمل في بيئات مختلفة
+        # 1. Ctrl + Alt + S
+        res1 = user32.RegisterHotKey(None, HOTKEY_ID_1, MOD_ALT | MOD_CONTROL, VK_S)
+        # 2. Ctrl + Shift + S
+        res2 = user32.RegisterHotKey(None, HOTKEY_ID_2, MOD_CONTROL | MOD_SHIFT, VK_S)
+        
+        if not res1 and not res2:
+            print("[HOTKEY] ❌ تعذر تسجيل أي اختصار (ربما هي مستخدمة في برامج أخرى)")
             return
         
-        print("[HOTKEY] ✅ الاختصار مفعل: (Ctrl + Alt + S)")
+        print("[HOTKEY] ✅ الاختصارات مفعلة:")
+        print("   - Ctrl + Alt + S")
+        print("   - Ctrl + Shift + S")
         
         try:
             msg = ctypes.wintypes.MSG()
             while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) != 0:
                 if msg.message == 0x0312: # WM_HOTKEY
-                    if msg.wParam == HOTKEY_ID:
+                    if msg.wParam in (HOTKEY_ID_1, HOTKEY_ID_2):
                         root.after(0, _toggle_visibility)
                 user32.TranslateMessage(ctypes.byref(msg))
                 user32.DispatchMessageW(ctypes.byref(msg))
         finally:
-            user32.UnregisterHotKey(None, HOTKEY_ID)
+            user32.UnregisterHotKey(None, HOTKEY_ID_1)
+            user32.UnregisterHotKey(None, HOTKEY_ID_2)
 
     threading.Thread(target=_listen, daemon=True).start()
 

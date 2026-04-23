@@ -38,7 +38,7 @@ class DashboardTabMixin:
         from config_manager import load_config
         if not load_config().get("cloud_mode", False):
             def _hide_app():
-                if messagebox.askyesno("إخفاء البرنامج", "سيتم إخفاء نافذة البرنامج وستستمر في العمل في الخلفية.\n\nلإظهارها مرة أخرى، اضغط على:\n(Ctrl + Alt + S) من لوحة المفاتيح.\n\nهل تريد الإخفاء الآن؟"):
+                if messagebox.askyesno("إخفاء البرنامج", "سيتم إخفاء نافذة البرنامج وستستمر في العمل في الخلفية.\n\nلإظهارها مرة أخرى، اضغط على أحد الاختصارات التالية:\n1. (Ctrl + Alt + S)\n2. (Ctrl + Shift + S)\n\nهل تريد الإخفاء الآن؟"):
                     self.root.withdraw()
             
             ttk.Button(top_bar, text="👁️ إخفاء في الخلفية",

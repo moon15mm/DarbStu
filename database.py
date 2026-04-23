@@ -564,7 +564,47 @@ def init_db():
     cur.execute("CREATE INDEX IF NOT EXISTS idx_snotes_student ON student_notes(student_id)")
 
     migrate_circulars_permission(cur)
+
+    # ─── جدول الطلاب المستثنين (الذين لديهم ظروف خاصة) ───────
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS exempted_students (
+        student_id   TEXT PRIMARY KEY,
+        student_name TEXT NOT NULL,
+        class_name   TEXT,
+        reason       TEXT,
+        created_at   TEXT NOT NULL
+    )""")
+
     con.commit(); con.close()
+
+# --- Helper functions for Exempted Students ---
+def add_exempted_student(student_id, student_name, class_name, reason=""):
+    con = get_db(); cur = con.cursor()
+    created_at = datetime.datetime.now().isoformat()
+    cur.execute("""INSERT OR REPLACE INTO exempted_students 
+                   (student_id, student_name, class_name, reason, created_at)
+                   VALUES (?, ?, ?, ?, ?)""", 
+                (student_id, student_name, class_name, reason, created_at))
+    con.commit(); con.close()
+
+def remove_exempted_student(student_id):
+    con = get_db(); cur = con.cursor()
+    cur.execute("DELETE FROM exempted_students WHERE student_id = ?", (student_id,))
+    con.commit(); con.close()
+
+def get_exempted_students() -> List[Dict]:
+    con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
+    cur.execute("SELECT * FROM exempted_students ORDER BY student_name")
+    rows = [dict(r) for r in cur.fetchall()]
+    con.close()
+    return rows
+
+def is_student_exempted(student_id) -> bool:
+    con = get_db(); cur = con.cursor()
+    cur.execute("SELECT 1 FROM exempted_students WHERE student_id = ?", (student_id,))
+    exists = cur.fetchone() is not None
+    con.close()
+    return exists
 
 def migrate_circulars_permission(cur):
     """تتأكد من تفعيل تبويب التعاميم لجميع المعلمين والوكلاء الذين لديهم صلاحيات مخصصة."""
@@ -627,9 +667,17 @@ def insert_absences(date_str, class_id, class_name, students, teacher_id, teache
         return res if res.get("ok") else {"created": 0, "skipped": 0}
 
     con = get_db(); cur = con.cursor()
+    
+    # جلب الطلاب المستثنين لتجاهلهم
+    cur.execute("SELECT student_id FROM exempted_students")
+    exempted_ids = {r[0] for r in cur.fetchall()}
+    
     created, skipped = 0, 0
     created_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
     for s in students:
+        if s["id"] in exempted_ids:
+            skipped += 1
+            continue
         try:
             cur.execute("""INSERT OR IGNORE INTO absences
                            (date,class_id,class_name,student_id,student_name,teacher_id,teacher_name,period,created_at)
@@ -680,7 +728,15 @@ def query_absences(date_filter=None, class_id_filter=None, student_id=None, **kw
     c_id = class_id_filter or kwargs.get("class_id_filter")
     if c_id: q += " AND class_id=?"; p.append(c_id)
     cur.execute(q + " ORDER BY date DESC, class_id, student_name", p)
-    rows = [dict(r) for r in cur.fetchall()]; con.close(); return rows
+    rows = [dict(r) for r in cur.fetchall()]
+    
+    # تصفية المستثنين من النتائج (احتياطياً)
+    cur.execute("SELECT student_id FROM exempted_students")
+    exempted_ids = {r[0] for r in cur.fetchall()}
+    con.close()
+    
+    rows = [r for r in rows if r["student_id"] not in exempted_ids]
+    return rows
 
 def norm_token(s: str) -> str:
     if s is None: return ""
@@ -1269,6 +1325,9 @@ def insert_tardiness(date_str, class_id, class_name, student_id,
         })
         return res.get("ok", False)
 
+    if is_student_exempted(student_id):
+        return False
+
     created_at = datetime.datetime.utcnow().isoformat()
     try:
         con = get_db(); cur = con.cursor()
@@ -1280,7 +1339,7 @@ def insert_tardiness(date_str, class_id, class_name, student_id,
              teacher_name,period,minutes_late,created_at))
         con.commit(); con.close(); return True
     except sqlite3.IntegrityError:
-        return False
+        con.close(); return False
 
 def delete_tardiness(rec_id):
     client = get_cloud_client()
@@ -1304,7 +1363,15 @@ def query_tardiness(date_filter=None, student_id=None, class_id=None):
     if student_id:  q += " AND student_id=?"; p.append(student_id)
     if class_id:    q += " AND class_id=?";   p.append(class_id)
     cur.execute(q + " ORDER BY date DESC, created_at DESC", p)
-    rows = [dict(r) for r in cur.fetchall()]; con.close(); return rows
+    rows = [dict(r) for r in cur.fetchall()]
+    
+    # تصفية المستثنين
+    cur.execute("SELECT student_id FROM exempted_students")
+    exempted_ids = {r[0] for r in cur.fetchall()}
+    con.close()
+    
+    rows = [r for r in rows if r["student_id"] not in exempted_ids]
+    return rows
 
 def compute_tardiness_metrics(date_str):
     rows = query_tardiness(date_filter=date_str)

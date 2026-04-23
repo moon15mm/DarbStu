@@ -50,6 +50,7 @@ from gui.tabs.teacher_forms_tab    import TeacherFormsTabMixin
 from gui.tabs.teacher_inquiries_tab import TeacherInquiriesTabMixin
 from gui.tabs.student_analysis_tab import StudentAnalysisTabMixin
 from gui.tabs.circulars_tab        import CircularsTabMixin
+from gui.tabs.exempted_tab         import ExemptedTabMixin
 
 # ─── استيراد كل الوحدات اللازمة ───────────────────────
 from constants import (APP_TITLE, APP_VERSION, DB_PATH, DATA_DIR, HOST, PORT,
@@ -154,6 +155,7 @@ class AppGUI(
     StudentAnalysisTabMixin,
     ClassNamingTabMixin,
     CircularsTabMixin,
+    ExemptedTabMixin,
 ):
     """الواجهة الرئيسية للتطبيق — تجمع كل Mixins في class واحد."""
     def __init__(self, root, public_url=None):
@@ -225,6 +227,7 @@ class AppGUI(
             "نماذج المعلم":         "_build_teacher_forms_tab",
             "خطابات الاستفسار":    "_build_teacher_inquiries_tab",
             "التعاميم والنشرات":    "_build_circulars_tab",
+            "الطلاب المستثنون":     "_build_exempted_tab",
         }
 
         # مجموعات القائمة الجانبية
@@ -246,7 +249,7 @@ class AppGUI(
                 "مستلمو التأخر","جدولة الروابط","إدارة الواتساب"] if _vis(t)]),
             ("⬤  البيانات", [t for t in [
                 "إدارة الطلاب","إضافة طالب",
-                "إدارة الفصول","إدارة أرقام الجوالات"] if _vis(t)]),
+                "إدارة الفصول","إدارة أرقام الجوالات","الطلاب المستثنون"] if _vis(t)]),
             ("⬤  الإعدادات", [t for t in [
                 "إعدادات المدرسة","الربط السحابي","المستخدمون","النسخ الاحتياطية","معلومات الترخيص"] if _vis(t)]),
             ("⬤  التحويلات", [t for t in [

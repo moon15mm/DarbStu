@@ -228,7 +228,9 @@ def get_top_absent_students(month: str = None, limit: int = 10) -> List[Dict]:
                MAX(class_name) as class_name,
                COUNT(DISTINCT date) as days,
                MAX(date) as last_date
-        FROM absences WHERE date LIKE ?
+        FROM absences 
+        WHERE date LIKE ? 
+        AND student_id NOT IN (SELECT student_id FROM exempted_students)
         GROUP BY student_id
         ORDER BY days DESC LIMIT ?
     """, (month + "%", limit))
@@ -247,7 +249,9 @@ def get_absence_by_day_of_week(months_back: int = 2) -> Dict:
     con   = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
     cur.execute("""
         SELECT date, COUNT(DISTINCT student_id) as cnt
-        FROM absences WHERE date >= ?
+        FROM absences 
+        WHERE date >= ? 
+        AND student_id NOT IN (SELECT student_id FROM exempted_students)
         GROUP BY date
     """, (since,))
     rows = cur.fetchall(); con.close()
@@ -321,7 +325,14 @@ def get_students_exceeding_threshold(threshold: int = None,
         HAVING absence_count >= ?
         ORDER BY absence_count DESC
     """, (month + "%", threshold))
-    rows = [dict(r) for r in cur.fetchall()]; con.close()
+    rows = [dict(r) for r in cur.fetchall()]
+    
+    # استبعاد الطلاب المستثنين
+    cur.execute("SELECT student_id FROM exempted_students")
+    exempted_ids = {r[0] for r in cur.fetchall()}
+    con.close()
+    
+    rows = [r for r in rows if r["student_id"] not in exempted_ids]
 
     # أضف رقم جوال ولي الأمر من students.json
     store = load_students()
@@ -821,10 +832,13 @@ def get_perfect_attendance_students(start_date: str, end_date: str) -> List[Dict
     con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
     cur.execute("SELECT DISTINCT student_id FROM absences WHERE date BETWEEN ? AND ?", (start_date, end_date))
     absent_ids = {row["student_id"] for row in cur.fetchall()}
+    # 3. جلب الطلاب المستثنين لاستبعادهم
+    cur.execute("SELECT student_id FROM exempted_students")
+    exempted_ids = {r[0] for r in cur.fetchall()}
     con.close()
 
-    # 3. تصفية الطلاب الملتزمين (الموجودين في الكل وغير الموجودين في الغائبين)
-    perfect_students = [s for s in all_students if s["id"] not in absent_ids]
+    # 4. تصفية الطلاب الملتزمين (الموجودين في الكل وغير الموجودين في الغائبين وغير المستثنين)
+    perfect_students = [s for s in all_students if s["id"] not in absent_ids and s["id"] not in exempted_ids]
     return perfect_students
 
 def run_weekly_rewards(log_cb=None) -> Dict:

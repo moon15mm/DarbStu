@@ -155,6 +155,10 @@ def query_absences_in_range(start_date: str, end_date: str, class_id: Optional[s
     con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
     q, params = "SELECT * FROM absences WHERE date BETWEEN ? AND ?", [start_date, end_date]
     if class_id: q += " AND class_id = ?"; params.append(class_id)
+    
+    # استبعاد المستثنين
+    q += " AND student_id NOT IN (SELECT student_id FROM exempted_students)"
+    
     cur.execute(q + " ORDER BY date, class_id, student_name", params)
     rows = [dict(r) for r in cur.fetchall()]; con.close()
     return _apply_class_name_fix(rows)
@@ -474,7 +478,8 @@ def generate_term_report_html(month_from: str = None, month_to: str = None) -> s
     cur.execute("""SELECT COUNT(DISTINCT date) as days,
                           COUNT(*) as total
                    FROM absences
-                   WHERE substr(date,1,7)>=? AND substr(date,1,7)<=?""",
+                   WHERE substr(date,1,7)>=? AND substr(date,1,7)<=?
+                   AND student_id NOT IN (SELECT student_id FROM exempted_students)""",
                 (month_from, month_to))
     totals = dict(cur.fetchone() or {})
 
@@ -484,6 +489,7 @@ def generate_term_report_html(month_from: str = None, month_to: str = None) -> s
                           MAX(date) as last_date
                    FROM absences
                    WHERE substr(date,1,7)>=? AND substr(date,1,7)<=?
+                   AND student_id NOT IN (SELECT student_id FROM exempted_students)
                    GROUP BY student_id
                    ORDER BY days DESC LIMIT 30""", (month_from,month_to))
     top_abs = [dict(r) for r in cur.fetchall()]
@@ -494,10 +500,13 @@ def generate_term_report_html(month_from: str = None, month_to: str = None) -> s
                           COUNT(DISTINCT date||student_id) as abs
                    FROM absences
                    WHERE substr(date,1,7)>=? AND substr(date,1,7)<=?
+                   AND student_id NOT IN (SELECT student_id FROM exempted_students)
                    GROUP BY class_id ORDER BY abs DESC""", (month_from,month_to))
     cls_stats = [dict(r) for r in cur.fetchall()]
 
-    cur.execute("SELECT COUNT(*) as c FROM tardiness WHERE substr(date,1,7)>=? AND substr(date,1,7)<=?",
+    cur.execute("""SELECT COUNT(*) as c FROM tardiness 
+                   WHERE substr(date,1,7)>=? AND substr(date,1,7)<=?
+                   AND student_id NOT IN (SELECT student_id FROM exempted_students)""",
                 (month_from,month_to))
     tard_cnt = (cur.fetchone() or {"c":0})["c"]
 
@@ -579,7 +588,9 @@ def detect_suspicious_patterns(months_back: int = 2) -> List[Dict]:
     cur.execute("""SELECT student_id, MAX(student_name) as name,
                           MAX(class_name) as class_name,
                           date
-                   FROM absences WHERE date >= ?
+                   FROM absences 
+                   WHERE date >= ?
+                   AND student_id NOT IN (SELECT student_id FROM exempted_students)
                    GROUP BY student_id, date""", (since,))
     all_abs = cur.fetchall()
 
@@ -615,7 +626,9 @@ def detect_suspicious_patterns(months_back: int = 2) -> List[Dict]:
     # ─ نمط ٣: غياب جماعي — أكثر من 30% من فصل في نفس اليوم
     cur.execute("""SELECT date, class_id, MAX(class_name) as cn,
                           COUNT(DISTINCT student_id) as absent_count
-                   FROM absences WHERE date >= ?
+                   FROM absences 
+                   WHERE date >= ?
+                   AND student_id NOT IN (SELECT student_id FROM exempted_students)
                    GROUP BY date, class_id
                    HAVING absent_count >= 5""", (since,))
     mass_abs = cur.fetchall()
