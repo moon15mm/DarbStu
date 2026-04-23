@@ -37,7 +37,7 @@ def safe_send_absence_alert(student_id: str, student_name: str, class_name: str,
         "class_id":     class_name,   # fallback
         "date":         date_str,
     }
-    return send_whatsapp_message(phone, message_body, student_data=_student_data)
+    return send_whatsapp_message(phone, message_body, student_data=_student_data, humanize=True)
 
 def send_absence_alert(student_id: str, student_name: str, class_name: str, date_str: str) -> (bool, str):
     """يرسل تنبيه الغياب باستخدام القالب المخزن."""
@@ -182,13 +182,15 @@ def get_week_comparison() -> Dict:
 
     def count_week(start, end):
         cur.execute("""SELECT COUNT(DISTINCT date||student_id) as cnt
-                       FROM absences WHERE date BETWEEN ? AND ?""",
+                       FROM absences WHERE date BETWEEN ? AND ?
+                       AND student_id NOT IN (SELECT student_id FROM exempted_students)""",
                     (start.isoformat(), end.isoformat()))
         return (cur.fetchone() or {"cnt": 0})["cnt"]
 
     def daily_counts(start, end):
         cur.execute("""SELECT date, COUNT(DISTINCT student_id) as cnt
                        FROM absences WHERE date BETWEEN ? AND ?
+                       AND student_id NOT IN (SELECT student_id FROM exempted_students)
                        GROUP BY date ORDER BY date""",
                     (start.isoformat(), end.isoformat()))
         return {r["date"]: r["cnt"] for r in cur.fetchall()}
@@ -286,12 +288,16 @@ def get_student_absence_count(student_id: str, month: str = None) -> Dict[str, A
     if month:
         cur.execute("""SELECT COUNT(DISTINCT date) as cnt, MAX(date) as last_date,
                               MAX(student_name) as name, MAX(class_name) as class_name
-                       FROM absences WHERE student_id=? AND date LIKE ?""",
+                       FROM absences 
+                       WHERE student_id=? AND date LIKE ?
+                       AND student_id NOT IN (SELECT student_id FROM exempted_students)""",
                     (student_id, month + "%"))
     else:
         cur.execute("""SELECT COUNT(DISTINCT date) as cnt, MAX(date) as last_date,
                               MAX(student_name) as name, MAX(class_name) as class_name
-                       FROM absences WHERE student_id=?""",
+                       FROM absences 
+                       WHERE student_id=?
+                       AND student_id NOT IN (SELECT student_id FROM exempted_students)""",
                     (student_id,))
     row = cur.fetchone(); con.close()
     if not row or not row["cnt"]:
@@ -480,6 +486,10 @@ def schedule_daily_alerts(root_widget, run_hour: int = 14):
 
 def get_student_full_analysis(student_id: str) -> Dict:
     """يجمع كل بيانات الطالب: غياب + تأخر + أعذار + إحصائيات."""
+    from database import is_student_exempted
+    if is_student_exempted(student_id):
+        return {"exempted": True, "student_id": student_id}
+
     client = get_cloud_client()
     if client.is_active():
         res = client.get(f"/web/api/student-analysis/{student_id}")
@@ -487,33 +497,60 @@ def get_student_full_analysis(student_id: str) -> Dict:
 
     con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
 
-    # اسم الطالب وفصله
-    cur.execute("""SELECT student_name, class_name, class_id
-                   FROM absences WHERE student_id=?
-                   ORDER BY date DESC LIMIT 1""", (student_id,))
-    row = cur.fetchone()
-    name       = row["student_name"] if row else student_id
-    class_name = row["class_name"]   if row else ""
-    class_id   = row["class_id"]     if row else ""
-
-    # رقم الجوال
+    # جلب بيانات الطالب الأساسية (الاسم، الفصل، الجوال) من القائمة
     store = load_students()
-    phone = next((s.get("phone","")
-                  for cls in store["list"]
-                  for s in cls["students"]
-                  if s["id"] == student_id), "")
+    name = student_id
+    class_name = ""
+    class_id = ""
+    phone = ""
+    found = False
+    
+    # تحويل المعرف لنص لضمان المطابقة
+    sid_str = str(student_id)
+    
+    for cls in store.get("list", []):
+        for s in cls.get("students", []):
+            if str(s.get("id")) == sid_str:
+                name = s.get("name", sid_str)
+                class_name = cls.get("name", "")
+                class_id = cls.get("id", "")
+                phone = s.get("phone", "")
+                found = True
+                break
+        if found: break
+
+    # إذا لم يوجد في القائمة الحالية (ربما تم حذفه)، نحاول جلبه من سجلات الغياب
+    if not found:
+        cur.execute("""SELECT student_name, class_name, class_id
+                       FROM absences WHERE student_id=?
+                       ORDER BY date DESC LIMIT 1""", (student_id,))
+        row = cur.fetchone()
+        if row:
+            name = row["student_name"]
+            class_name = row["class_name"]
+            class_id = row["class_id"]
 
     # غياب
     cur.execute("""SELECT date, period, teacher_name
                    FROM absences WHERE student_id=?
+                   AND student_id NOT IN (SELECT student_id FROM exempted_students)
                    ORDER BY date DESC""", (student_id,))
     absence_rows = [dict(r) for r in cur.fetchall()]
 
     # غياب شهري
     cur.execute("""SELECT substr(date,1,7) as month, COUNT(DISTINCT date) as days
                    FROM absences WHERE student_id=?
+                   AND student_id NOT IN (SELECT student_id FROM exempted_students)
                    GROUP BY month ORDER BY month DESC""", (student_id,))
     monthly = [dict(r) for r in cur.fetchall()]
+
+    # حساب نسبة الحضور (تقريبية بناءً على الغياب)
+    # نفترض أن هناك ١٠٠ يوم دراسي تقريباً حتى الآن (للبساطة في العرض)
+    # أو يمكننا حسابها من تاريخ أول غياب مسجل
+    total_absent_days = len({r["date"] for r in absence_rows})
+    est_total_days = 100 # قيمة افتراضية، يمكن تحسينها لاحقاً
+    rate = max(0, 100 - (total_absent_days * 1.5)) # صيغة تقديرية
+    attendance_rate = round(min(100, rate), 1)
 
     # توزيع أيام الأسبوع
     dow = {"الأحد":0,"الاثنين":0,"الثلاثاء":0,"الأربعاء":0,"الخميس":0}
@@ -526,8 +563,15 @@ def get_student_full_analysis(student_id: str) -> Dict:
 
     # تأخر
     cur.execute("""SELECT date, minutes_late FROM tardiness
-                   WHERE student_id=? ORDER BY date DESC""", (student_id,))
+                   WHERE student_id=? 
+                   AND student_id NOT IN (SELECT student_id FROM exempted_students)
+                   ORDER BY date DESC""", (student_id,))
     tard_rows = [dict(r) for r in cur.fetchall()]
+
+    # نقاط التميز
+    from database import get_student_points_history, get_student_total_points
+    points_history = get_student_points_history(student_id)
+    total_points = get_student_total_points(student_id)
 
     # أعذار
     cur.execute("""SELECT date, reason, source, approved_by
@@ -564,10 +608,67 @@ def get_student_full_analysis(student_id: str) -> Dict:
         "total_tardiness": len(tard_rows),
         "total_permissions": len(perm_rows),
         "class_avg": class_avg,
+        "total_points": total_points,
+        "points_history": points_history,
+        "attendance_rate": attendance_rate,
         "absence_rows": absence_rows, "monthly": monthly,
         "dow_count": dow, "tardiness_rows": tard_rows,
         "excuse_rows": excuse_rows, "perm_rows": perm_rows,
     }
+
+
+# ═══════════════════════════════════════════════════════════════
+# نظام شهادات التميز الآلية
+# ═══════════════════════════════════════════════════════════════
+
+def build_certificate_message(student_name, school_name, points, level):
+    """بناء نص رسالة الشهادة الذكية."""
+    crowns = "⭐" * (level // 100)
+    lines = [
+        f"🏆 تهنئة بالتميز — {school_name} 🏆",
+        "--------------------------------",
+        f"يسر إدارة المدرسة أن تبارك للطالب البطل:",
+        f"✨ *{student_name}* ✨",
+        "",
+        f"لحصوله على وسام التميز من الدرجة ({level})",
+        f"بعد وصول رصيده إلى {points} نقطة تميز {crowns}",
+        "",
+        f"نحن فخورون بك وبانضباطك واجتهادك. استمر في التألق! 🚀",
+        "--------------------------------",
+        f"إدارة {school_name}",
+    ]
+    return "\n".join(lines)
+
+def check_and_award_certificate(student_id, student_name):
+    """التحقق من وصول الطالب لعتبة النقاط ومنحه الشهادة آلياً."""
+    from database import (get_student_total_points, is_certificate_sent,
+                          log_certificate_sent)
+    
+    total_points = get_student_total_points(student_id)
+    cfg = load_config()
+    school = cfg.get("school_name", "المدرسة")
+    
+    # عتبات الشهادات: 100, 200, 500
+    milestones = [500, 200, 100]
+    
+    for level in milestones:
+        if total_points >= level:
+            if not is_certificate_sent(student_id, level):
+                # منح الشهادة
+                analysis = get_student_full_analysis(student_id)
+                phone = analysis.get("phone")
+                
+                if phone:
+                    msg = build_certificate_message(student_name, school, total_points, level)
+                    ok, _ = send_whatsapp_message(phone, msg)
+                    if ok:
+                        log_certificate_sent(student_id, student_name, level)
+                        return True, level
+                else:
+                    # حتى لو لم يوجد جوال، نسجلها لمنع المحاولة المتكررة أو للتسجيل اليدوي لاحقاً
+                    log_certificate_sent(student_id, student_name, level)
+                    return True, level
+    return False, 0
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -577,9 +678,11 @@ def get_student_full_analysis(student_id: str) -> Dict:
 def build_daily_summary_message(date_str: str = None) -> str:
     if not date_str:
         date_str = now_riyadh_date()
+    from database import (get_points_awarded_on_date, get_certificates_sent_on_date,
+                          get_unread_referrals_count, get_unread_circulars_count)
+    
     cfg       = load_config()
     school    = cfg.get("school_name", "المدرسة")
-    threshold = cfg.get("alert_absence_threshold", 5)
     metrics   = _get_compute_today_metrics()(date_str)
     t         = metrics["totals"]
 
@@ -591,21 +694,62 @@ def build_daily_summary_message(date_str: str = None) -> str:
             top_txt += "  - {} : {} غائب\n".format(c["class_name"], c["absent"])
 
     tard_cnt = len(query_tardiness(date_filter=date_str))
+    
+    # بيانات إضافية للتطوير الجديد
+    points_today = get_points_awarded_on_date(date_str)
+    certs_today  = get_certificates_sent_on_date(date_str)
+    pending_ref  = get_unread_referrals_count()
+    # unread_inq  = get_unread_inquiries_count() # لو أردت إضافة استفسارات المعلمين أيضاً
+    
+    absent_pct = round(t["absent"] / max(t["students"], 1) * 100, 1)
+    
+    # توصية ذكية
+    rec = "استمرار العمل بالخطة المعتادة."
+    if absent_pct > 15:
+        rec = "يُنصح بالتواصل المكثف مع الفصول الأكثر غياباً وبحث الأسباب."
+    elif absent_pct < 5 and certs_today > 0:
+        rec = "يوم متميز جداً! يُقترح نشر رسالة شكر جماعية لأولياء الأمور."
+    elif pending_ref > 5:
+        rec = "يوجد تراكم في التحويلات، يُقترح التنسيق مع الوكيل لسرعة الإنجاز."
+
+    # أكثر الطلاب غياباً هذا الشهر (رؤية استباقية)
+    month_str = date_str[:7]
+    top_students = get_top_absent_students(month=month_str, limit=3)
+    top_stu_txt = ""
+    for s in top_students:
+        top_stu_txt += f"  - {s['name']} ({s['days']} أيام)\n"
+
+    # إحصائيات التواصل
+    unread_circs = get_unread_circulars_count("", "admin") # dummy call to show awareness
+    from database import get_active_stories
+    stories_count = len(get_active_stories())
 
     lines = [
-        "ملخص يوم {} - {}".format(date_str, school),
-        "-" * 30,
-        "اجمالي الطلاب: {}".format(t["students"]),
-        "الحضور: {}".format(t["present"]),
-        "الغياب: {} ({}%)".format(
-            t["absent"],
-            round(t["absent"] / max(t["students"], 1) * 100, 1)),
-        "التاخر: {}".format(tard_cnt),
-        "-" * 30,
-        "اكثر الفصول غياباً:",
-        top_txt.strip() or "لا يوجد غياب",
-        "-" * 30,
-        "ادارة {}".format(school),
+        "📊 ملخص اليوم التنفيذي — {} — {}".format(date_str, school),
+        "━━━━━━━━━━━━━━━━━━━━━",
+        "📌 الحضور والانضباط:",
+        "  ✅ الحاضرون: {} طالب".format(t["present"]),
+        "  ❌ الغائبون: {} طالب ({}%)".format(t["absent"], absent_pct),
+        "  ⏰ المتأخرون: {} حالة".format(tard_cnt),
+        "",
+        "📊 أكثر الفصول غياباً اليوم:",
+        top_txt.strip() or "  لا يوجد غياب ملحوظ",
+        "",
+        "🚩 حالات حرجة (الشهر الحالي):",
+        top_stu_txt.strip() or "  لا يوجد تجاوزات ملحوظة",
+        "",
+        "🌟 إنجازات اليوم والنشاط:",
+        "  🏆 شهادات مُرسلة: {} شهادة".format(certs_today),
+        "  ⭐ نقاط تميز مُنحت: {} نقطة".format(points_today),
+        "  📸 قصص منشورة: {} قصة نشطة".format(stories_count),
+        "",
+        "📋 متابعات معلقة:",
+        "  ⚠️ تحويلات الوكيل: {} حالة".format(pending_ref),
+        "",
+        "💡 توصية اليوم:",
+        "  {} ".format(rec),
+        "━━━━━━━━━━━━━━━━━━━━━",
+        "نظام درب الذكي — إدارة {}".format(school),
     ]
     return "\n".join(lines)
 
@@ -876,16 +1020,21 @@ def run_weekly_rewards(log_cb=None) -> Dict:
             continue
         
         msg = render_reward_message(s["name"])
-        ok, status = send_whatsapp_message(s["phone"], msg)
+        ok, status = send_whatsapp_message(s["phone"], msg, humanize=True)
         
         if ok:
             sent_count += 1
             log_message_status(now_riyadh_date(), s["id"], s["name"], "", s["class_name"], s["phone"], "Success", "weekly_reward", "reward")
+            
+            # منح نقاط تميز (١٠ نقاط)
+            from database import add_student_points
+            add_student_points(s["id"], 10, "حضور مكتمل للأسبوع")
         else:
             failed_count += 1
             if log_cb: log_cb("❌ فشل الإرسال لـ {}: {}".format(s["name"], status))
             
-        time.sleep(_delay)
+        from whatsapp_service import random_delay
+        random_delay(5, 15)
 
     return {
         "start_date": start_date,

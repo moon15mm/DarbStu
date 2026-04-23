@@ -1,33 +1,10 @@
-import os, sqlite3, datetime, hashlib, json, zipfile, csv, re, socket, sys
+import os, sqlite3, datetime, hashlib, json, zipfile, csv, re, socket, sys # TEST
 import tkinter as tk
 from tkinter import messagebox, filedialog
 
 # ─── منع ازدواجية التطبيق ───
-def _ensure_single_instance():
-    lock_port = 59124
-    max_retries = 5  # محاولة الربط لمدة 2.5 ثانية تقريباً
-    
-    for i in range(max_retries):
-        try:
-            # نستخدم متغير عالمي لمنع جمع القمامة (GC) من إغلاق السوكيت
-            global _darb_lock_socket
-            _darb_lock_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            _darb_lock_socket.bind(('127.0.0.1', lock_port))
-            return # نجح الربط، نخرج من الدالة
-        except socket.error:
-            # إذا فشل الربط، ننتظر قليلاً (خاصة عند إعادة التشغيل بعد التحديث)
-            if i < max_retries - 1:
-                import time as _t
-                _t.sleep(0.5)
-            else:
-                # إذا استمر الفشل بعد كل المحاولات، نغلق البرنامج
-                _root = tk.Tk(); _root.withdraw()
-                messagebox.showwarning("تنبيه", "البرنامج يعمل بالفعل في الخلفية.\nيرجى إغلاق النسخة المفتوحة أولاً.")
-                _root.destroy()
-                sys.exit(0)
-
-# تشغيل القفل فور استدعاء ملف قاعدة البيانات
-_ensure_single_instance()
+# تم نقل القفل إلى main.py لمنع التداخل عند استدعاء قاعدة البيانات
+# ─────────────────────────────────────────────────────────────
 # ─────────────────────────────────────────────────────────────
 try:
     import pandas as pd
@@ -170,6 +147,25 @@ def init_db():
         created_at  TEXT NOT NULL
     )""")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_message_log_date ON message_log(date)")
+
+    # --- جدول شهادات التميز ---
+    cur.execute("""CREATE TABLE IF NOT EXISTS certificates_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id TEXT NOT NULL,
+        student_name TEXT NOT NULL,
+        level INTEGER NOT NULL,
+        sent_at TEXT NOT NULL
+    )""")
+    cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS uniq_cert ON certificates_log(student_id, level)")
+
+    # --- جدول قصص المدرسة ---
+    cur.execute("""CREATE TABLE IF NOT EXISTS school_stories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT,
+        image_path TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        is_active INTEGER DEFAULT 1
+    )""")
 
     # ─── جدول التأخر ────────────────────────────────────────────
     # الـ UNIQUE الصحيح: تاريخ + طالب فقط (تأخر الدوام مرة واحدة في اليوم)
@@ -565,7 +561,6 @@ def init_db():
 
     migrate_circulars_permission(cur)
 
-    # ─── جدول الطلاب المستثنين (الذين لديهم ظروف خاصة) ───────
     cur.execute("""
     CREATE TABLE IF NOT EXISTS exempted_students (
         student_id   TEXT PRIMARY KEY,
@@ -574,6 +569,78 @@ def init_db():
         reason       TEXT,
         created_at   TEXT NOT NULL
     )""")
+
+    # ─── جدول نقاط التميز (جديد) ──────────────────────────────────
+    cur.execute("""CREATE TABLE IF NOT EXISTS student_points (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id TEXT NOT NULL,
+        points INTEGER NOT NULL,
+        reason TEXT,
+        author_id TEXT,
+        author_name TEXT,
+        date TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    )""")
+    # Migration: إضافة أعمدة المؤلف إذا لم تكن موجودة
+    try: cur.execute("ALTER TABLE student_points ADD COLUMN author_id TEXT")
+    except: pass
+    try: cur.execute("ALTER TABLE student_points ADD COLUMN author_name TEXT")
+    except: pass
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_points_student ON student_points(student_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_points_date ON student_points(date)")
+
+    # ─── جدول توكنات بوابة ولي الأمر (جديد) ──────────────────────
+    # ─── جدول زيادات رصيد المعلمين (جديد) ──────────────────────────
+    cur.execute("""CREATE TABLE IF NOT EXISTS teacher_points_adjustments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL,
+        month TEXT NOT NULL,
+        extra_points INTEGER NOT NULL,
+        reason TEXT,
+        created_at TEXT NOT NULL
+    )""")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_tpa_user_month ON teacher_points_adjustments(username, month)")
+
+    # ─── جدول التحويلات السلوكية (جديد) ───────────────────────────
+    cur.execute("""CREATE TABLE IF NOT EXISTS behavioral_referrals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id TEXT NOT NULL,
+        student_name TEXT NOT NULL,
+        class_name TEXT NOT NULL,
+        violation TEXT NOT NULL,
+        date TEXT NOT NULL,
+        teacher_id TEXT,
+        teacher_name TEXT,
+        status TEXT DEFAULT 'pending',
+        created_at TEXT NOT NULL
+    )""")
+
+    # ─── جداول التعاميم ───────────────────────────────────────────
+    cur.execute("""CREATE TABLE IF NOT EXISTS circulars (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL,
+        attachment_path TEXT,
+        date TEXT NOT NULL,
+        target_roles TEXT DEFAULT 'all',
+        read_count INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL
+    )""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS circular_reads (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        circular_id INTEGER NOT NULL,
+        username TEXT NOT NULL,
+        read_at TEXT NOT NULL,
+        UNIQUE(circular_id, username)
+    )""")
+    # Migration: إضافة أعمدة ناقصة في جداول التعاميم
+    try: cur.execute("ALTER TABLE circulars ADD COLUMN target_roles TEXT DEFAULT 'all'")
+    except: pass
+    try: cur.execute("ALTER TABLE circulars ADD COLUMN read_count INTEGER DEFAULT 0")
+    except: pass
+    try: cur.execute("ALTER TABLE circulars ADD COLUMN created_by TEXT DEFAULT 'الإدارة'")
+    except: pass
 
     con.commit(); con.close()
 
@@ -598,6 +665,392 @@ def get_exempted_students() -> List[Dict]:
     rows = [dict(r) for r in cur.fetchall()]
     con.close()
     return rows
+
+# --- Student Points & Rewards ---
+def add_student_points(student_id, points, reason="", date=None, author_id=None, author_name=None):
+    if not date: date = datetime.date.today().isoformat()
+    
+    client = get_cloud_client()
+    if client.is_active():
+        client.post("/web/api/points/add", {
+            "student_id": student_id, "points": points, "reason": reason,
+            "author_id": author_id, "author_name": author_name
+        })
+        return
+
+    # جلب اسم المانح تلقائياً إذا لم يرسل وكان المعرّف موجوداً
+    if author_id and not author_name:
+        try:
+            con_u = get_db(); cur_u = con_u.cursor()
+            cur_u.execute("SELECT full_name FROM users WHERE username = ?", (author_id,))
+            row_u = cur_u.fetchone()
+            if row_u and row_u[0]:
+                author_name = row_u[0]
+            else:
+                author_name = author_id # كبديل أخير
+            con_u.close()
+        except: pass
+
+    # التحقق من الرصيد (إذا كان المعلم هو من يمنح)
+    if author_id and author_id != "admin":
+        cfg = load_config()
+        limit = cfg.get("monthly_points_limit", 100)
+        balance = get_teacher_points_balance(author_id, date[:7])
+        if balance + points > limit:
+            raise ValueError(f"لقد تجاوزت الرصيد المسموح به لهذا الشهر (المتبقي: {limit - balance} نقطة)")
+
+    con = get_db(); cur = con.cursor()
+    created_at = datetime.datetime.now().isoformat()
+    cur.execute("""INSERT INTO student_points (student_id, points, reason, author_id, author_name, date, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""", 
+                (student_id, points, reason, author_id, author_name, date, created_at))
+    con.commit(); con.close()
+
+def get_teacher_points_balance(author_id: str, month_str: str, local_only: bool = False) -> int:
+    """يُرجع إجمالي النقاط التي منحها المعلم في شهر معين (YYYY-MM)."""
+    if not local_only:
+        client = get_cloud_client()
+        if client.is_active():
+            res = client.get("/web/api/teacher-balance", {"username": author_id, "month": month_str})
+            return res.get("balance", 0)
+
+    con = get_db(); cur = con.cursor()
+    cur.execute("SELECT SUM(points) FROM student_points WHERE author_id = ? AND date LIKE ?", (author_id, f"{month_str}%"))
+    res = cur.fetchone()
+    con.close()
+    return res[0] if res and res[0] else 0
+
+def get_student_total_points(student_id) -> int:
+    client = get_cloud_client()
+    if client.is_active():
+        res = client.get(f"/web/api/student-analysis/{student_id}")
+        return res.get("data", {}).get("total_points", 0)
+
+    con = get_db(); cur = con.cursor()
+    cur.execute("SELECT SUM(points) FROM student_points WHERE student_id = ?", (student_id,))
+    res = cur.fetchone()
+    con.close()
+    return res[0] if res and res[0] else 0
+
+def _get_teacher_names_map() -> Dict[str, str]:
+    """مساعد لجلب خارطة بأسماء المعلمين من teachers.json."""
+    try:
+        from constants import DATA_DIR
+        import json
+        tf = os.path.join(DATA_DIR, "teachers.json")
+        if os.path.exists(tf):
+            with open(tf, encoding="utf-8") as f:
+                data = json.load(f)
+                return {t.get("رقم الهوية"): t.get("اسم المعلم") for t in data.get("teachers", []) if t.get("رقم الهوية")}
+    except: pass
+    return {}
+
+def get_student_points_history(student_id) -> List[Dict]:
+    client = get_cloud_client()
+    if client.is_active():
+        res = client.get(f"/web/api/student-analysis/{student_id}")
+        return res.get("data", {}).get("points_history", [])
+
+    con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
+    # جلب النقاط مع محاولة جلب الاسم من جدول المستخدمين إذا كان مفقوداً في سجل النقطة
+    cur.execute("""
+        SELECT p.*, 
+               CASE 
+                 WHEN p.author_name IS NOT NULL AND p.author_name != '' THEN p.author_name
+                 WHEN u.full_name IS NOT NULL AND u.full_name != '' THEN u.full_name
+                 WHEN p.author_id IS NOT NULL AND p.author_id != '' THEN p.author_id
+                 ELSE 'مدير'
+               END as resolved_author_name
+        FROM student_points p
+        LEFT JOIN users u ON p.author_id = u.username
+        WHERE p.student_id = ?
+        ORDER BY p.date DESC
+    """, (student_id,))
+    
+    rows = []
+    teacher_map = None
+    
+    for r in cur.fetchall():
+        d = dict(r)
+        auth_name = d.get("resolved_author_name")
+        
+        # إذا كان الاسم لا يزال عبارة عن رقم (ID)، نحاول البحث عنه في ملف المعلمين
+        if auth_name and auth_name.isdigit() and len(auth_name) >= 9:
+            if teacher_map is None:
+                teacher_map = _get_teacher_names_map()
+            if auth_name in teacher_map:
+                auth_name = teacher_map[auth_name]
+        
+        d["author_name"] = auth_name or "مدير"
+        rows.append(d)
+        
+    con.close()
+    return rows
+
+def get_admin_points_logs(limit=500) -> List[Dict]:
+    """يُرجع كافة سجلات النقاط مرتبة بالأحدث مع معلومات الطالب والمعلم."""
+    con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
+    cur.execute("""
+        SELECT p.*, u.full_name as teacher_full_name
+        FROM student_points p
+        LEFT JOIN users u ON p.author_id = u.username
+        ORDER BY p.created_at DESC LIMIT ?
+    """, (limit,))
+    rows = [dict(r) for r in cur.fetchall()]
+    con.close()
+    
+    stus = get_student_map()
+    for r in rows:
+        sid = r["student_id"]
+        if sid in stus:
+            r["student_name"] = stus[sid]["name"]
+            r["class_name"] = stus[sid]["class_name"]
+        else:
+            r["student_name"] = "طالب غير موجود"
+            r["class_name"] = "-"
+        
+        if not r.get("teacher_full_name"):
+            r["teacher_full_name"] = r.get("author_name") or r.get("author_id") or "مدير"
+            
+    return rows
+
+def delete_points_record(record_id: int):
+    """يحذف سجل نقاط معين."""
+    con = get_db(); cur = con.cursor()
+    cur.execute("DELETE FROM student_points WHERE id = ?", (record_id,))
+    con.commit(); con.close()
+
+def get_teachers_points_usage(month_str: str) -> List[Dict]:
+    """يُرجع قائمة بالمعلمين الذين منحوا نقاطاً في شهر معين مع إجمالي نقاطهم والزيادات الممنوحة لهم."""
+    con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
+    # جلب قائمة المعلمين من جدول المستخدمين
+    cur.execute("SELECT username, full_name, role FROM users WHERE role != 'admin' AND active = 1")
+    users = [dict(r) for r in cur.fetchall()]
+    
+    # جلب الاستهلاك والزيادات لكل مستخدم
+    results = []
+    cfg = load_config()
+    base_limit = cfg.get("monthly_points_limit", 100)
+    
+    for u in users:
+        # النقاط المستخدمة
+        cur.execute("SELECT SUM(points) FROM student_points WHERE author_id = ? AND date LIKE ?", (u["username"], f"{month_str}%"))
+        res_used = cur.fetchone()
+        used = res_used[0] if res_used and res_used[0] else 0
+        
+        # الزيادات الممنوحة
+        cur.execute("SELECT SUM(extra_points) FROM teacher_points_adjustments WHERE username = ? AND month = ?", (u["username"], month_str))
+        res_adj = cur.fetchone()
+        extra = res_adj[0] if res_adj and res_adj[0] else 0
+        
+        total_limit = base_limit + extra
+        
+        results.append({
+            "username": u["username"],
+            "name": u["full_name"] or u["username"],
+            "role": u["role"],
+            "used": used,
+            "extra": extra,
+            "limit": total_limit,
+            "remaining": max(0, total_limit - used)
+        })
+    
+    con.close()
+    return sorted(results, key=lambda x: x["used"], reverse=True)
+
+def get_teacher_points_balance(username: str, month_str: str) -> int:
+    """يُرجع إجمالي النقاط التي استهلكها المعلم في شهر معين."""
+    con = get_db(); cur = con.cursor()
+    cur.execute("SELECT SUM(points) FROM student_points WHERE author_id = ? AND date LIKE ?", (username, f"{month_str}%"))
+    row = cur.fetchone()
+    con.close()
+    return row[0] if row and row[0] else 0
+
+def add_teacher_points_adjustment(username: str, points: int, reason: str, month_str: str = None):
+    """يُضيف زيادة رصيد لمعلم محدد لشهر معين."""
+    if not month_str:
+        month_str = datetime.date.today().isoformat()[:7] # YYYY-MM
+    
+    con = get_db(); cur = con.cursor()
+    created_at = datetime.datetime.now().isoformat()
+    cur.execute("""INSERT INTO teacher_points_adjustments (username, month, extra_points, reason, created_at)
+                   VALUES (?, ?, ?, ?, ?)""", (username, month_str, points, reason, created_at))
+    con.commit(); con.close()
+
+
+_student_map_cache = {"data": {}, "version": None}
+
+def get_student_map():
+    """يُرجع قاموساً للبحث السريع عن اسم الطالب وفصله عبر معرّفه."""
+    global _student_map_cache
+    store = load_students()
+    
+    # استخدام معرف الكائن (Object ID) للتحقق السريع جداً من التغيير في الذاكرة
+    version = id(store)
+    
+    if _student_map_cache["version"] == version:
+        return _student_map_cache["data"]
+        
+    m = {}
+    for c in store.get("list", []):
+        for s in c.get("students", []):
+            m[s["id"]] = {"name": s["name"], "class_name": c["name"]}
+    
+    _student_map_cache = {"data": m, "version": version}
+    return m
+
+def get_points_leaderboard(limit=20) -> List[Dict]:
+    """يُرجع قائمة الطلاب الحاصلين على أعلى نقاط، مع دمج بياناتهم من students.json."""
+    client = get_cloud_client()
+    if client.is_active():
+        res = client.get("/web/api/leaderboard", {"limit": limit})
+        return res.get("rows", []) if res.get("ok") else []
+
+    con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
+    cur.execute("""SELECT student_id, SUM(points) as total 
+                   FROM student_points 
+                   GROUP BY student_id 
+                   ORDER BY total DESC LIMIT ?""", (limit,))
+    point_rows = cur.fetchall()
+    con.close()
+    
+    all_stus = get_student_map()
+    
+    results = []
+    for r in point_rows:
+        sid = r["student_id"]
+        if sid in all_stus:
+            results.append({
+                "student_id": sid,
+                "points": r["total"],
+                "name": all_stus[sid]["name"],
+                "class_name": all_stus[sid]["class_name"]
+            })
+    return results
+
+def get_points_awarded_on_date(date_str) -> int:
+    client = get_cloud_client()
+    if client.is_active():
+        res = client.get("/web/api/points-summary", {"date": date_str})
+        return res.get("total", 0)
+
+    con = get_db(); cur = con.cursor()
+    cur.execute("SELECT SUM(points) FROM student_points WHERE date = ?", (date_str,))
+    res = cur.fetchone()
+    con.close()
+    return res[0] if res and res[0] else 0
+
+# --- Counselor Referrals ---
+def get_unread_referrals_count() -> int:
+    try:
+        con = get_db(); cur = con.cursor()
+        cur.execute("SELECT COUNT(*) FROM student_referrals WHERE status='pending'")
+        count = cur.fetchone()[0]
+        con.close()
+        return count
+    except Exception:
+        return 0
+
+def get_unread_circulars_count(username: str, role: str) -> int:
+    try:
+        con = get_db(); cur = con.cursor()
+        # التعاميم الموجهة لهذا الدور أو للكل والتي لم يقرأها المستخدم بعد
+        query = """
+            SELECT COUNT(*) FROM circulars 
+            WHERE (target_role = 'all' OR target_role = ?) 
+            AND id NOT IN (SELECT circular_id FROM circular_reads WHERE username = ?)
+        """
+        cur.execute(query, (role, username))
+        count = cur.fetchone()[0]
+        con.close()
+        return count
+    except Exception:
+        return 0
+
+# --- Student Portal Tokens ---
+def get_or_create_portal_token(student_id) -> str:
+    con = get_db(); cur = con.cursor()
+    cur.execute("SELECT token FROM student_portal_tokens WHERE student_id = ?", (student_id,))
+    row = cur.fetchone()
+    if row:
+        con.close()
+        return row[0]
+    
+    # إنشاء توكن فريد جديد
+    import secrets
+    new_token = secrets.token_urlsafe(12)
+    created_at = datetime.datetime.now().isoformat()
+    try:
+        cur.execute("INSERT INTO student_portal_tokens (student_id, token, created_at) VALUES (?, ?, ?)",
+                    (student_id, new_token, created_at))
+        con.commit()
+    except sqlite3.IntegrityError:
+        # في حال تكرار التوكن النادر جداً
+        new_token = secrets.token_urlsafe(14)
+        cur.execute("INSERT INTO student_portal_tokens (student_id, token, created_at) VALUES (?, ?, ?)",
+                    (student_id, new_token, created_at))
+        con.commit()
+    con.close()
+    return new_token
+
+def get_student_id_by_portal_token(token) -> Optional[str]:
+    con = get_db(); cur = con.cursor()
+    cur.execute("SELECT student_id FROM student_portal_tokens WHERE token = ?", (token,))
+    row = cur.fetchone()
+    con.close()
+    return row[0] if row else None
+
+# --- School Stories ---
+def add_school_story(title, image_path):
+    con = get_db(); cur = con.cursor()
+    created_at = datetime.datetime.now().isoformat()
+    cur.execute("INSERT INTO school_stories (title, image_path, created_at) VALUES (?, ?, ?)",
+                (title, image_path, created_at))
+    con.commit(); con.close()
+
+def get_active_stories():
+    con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
+    cur.execute("SELECT * FROM school_stories WHERE is_active = 1 ORDER BY created_at DESC")
+    rows = [dict(r) for r in cur.fetchall()]
+    con.close()
+    return rows
+
+def delete_school_story(story_id):
+    con = get_db(); cur = con.cursor()
+    cur.execute("DELETE FROM school_stories WHERE id = ?", (story_id,))
+    con.commit(); con.close()
+
+# --- Certificates ---
+def log_certificate_sent(student_id, student_name, level):
+    con = get_db(); cur = con.cursor()
+    sent_at = datetime.datetime.now().isoformat()
+    cur.execute("INSERT INTO certificates_log (student_id, student_name, level, sent_at) VALUES (?, ?, ?, ?)",
+                (student_id, student_name, level, sent_at))
+    con.commit(); con.close()
+
+def is_certificate_sent(student_id, level):
+    con = get_db(); cur = con.cursor()
+    cur.execute("SELECT id FROM certificates_log WHERE student_id = ? AND level = ?", (student_id, level))
+    row = cur.fetchone()
+    con.close()
+    return True if row else False
+
+def get_certificates_sent_on_date(date_str) -> int:
+    con = get_db(); cur = con.cursor()
+    cur.execute("SELECT COUNT(*) FROM certificates_log WHERE substr(sent_at,1,10) = ?", (date_str,))
+    res = cur.fetchone()
+    con.close()
+    return res[0] if res and res[0] else 0
+
+def get_student_total_points(student_id: str) -> int:
+    try:
+        con = get_db(); cur = con.cursor()
+        cur.execute("SELECT SUM(points) FROM student_points WHERE student_id = ?", (student_id,))
+        row = cur.fetchone()
+        con.close()
+        return row[0] if row and row[0] else 0
+    except Exception:
+        return 0
 
 def is_student_exempted(student_id) -> bool:
     con = get_db(); cur = con.cursor()
@@ -1142,8 +1595,10 @@ def authenticate(username: str, password: str):
         # في وضع السحاب، نستخدم الـ API للتحقق
         res = client.post("/web/api/login", {"username": username, "password": password})
         if res.get("ok"):
-            role      = res.get("role", "teacher")
-            full_name = res.get("name", username)
+            user      = res.get("user", {})
+            author_id = user.get("username") or user.get("sub") or "admin"
+            author_name = user.get("full_name") or author_id
+            role      = user.get("role", "teacher")
             # احفظ المستخدم محلياً حتى تعمل get_user_allowed_tabs بشكل صحيح
             try:
                 _con = get_db(); _cur = _con.cursor()
@@ -1153,13 +1608,13 @@ def authenticate(username: str, password: str):
                     ON CONFLICT(username) DO UPDATE
                     SET role=excluded.role, full_name=excluded.full_name,
                         allowed_tabs=COALESCE(excluded.allowed_tabs, allowed_tabs)
-                """, (username, "", role, full_name,
+                """, (username, "", role, author_name,
                       datetime.datetime.utcnow().isoformat(),
                       json.dumps(res.get("allowed_tabs")) if res.get("allowed_tabs") else None))
                 _con.commit(); _con.close()
             except Exception as _e:
                 print(f"[AUTH-CACHE] {_e}")
-            return {"username": username, "role": role, "full_name": full_name}
+            return {"username": username, "role": role, "full_name": author_name}
         return None
 
     con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
@@ -1262,19 +1717,20 @@ def save_user_phone(username: str, phone: str):
     cur.execute("UPDATE users SET phone=? WHERE username=?", (phone.strip(), username))
     con.commit(); con.close()
 
-def create_user(username, password, role, full_name=""):
+def create_user(username, password, role, full_name="", phone=""):
     client = get_cloud_client()
     if client.is_active():
         res = client.post("/web/api/users/create", {
-            "username": username, "password": password, "role": role, "full_name": full_name
+            "username": username, "password": password, "role": role, 
+            "full_name": full_name, "phone": phone
         })
         return res.get("ok", False), res.get("msg", "Error")
 
     try:
         con = get_db(); cur = con.cursor()
         cur.execute(
-            "INSERT INTO users (username,password,role,full_name,active,created_at) VALUES (?,?,?,?,?,?)",
-            (username, hash_password(password), role, full_name, 1,
+            "INSERT INTO users (username,password,role,full_name,phone,active,created_at) VALUES (?,?,?,?,?,?,?)",
+            (username, hash_password(password), role, full_name, phone, 1,
              datetime.datetime.utcnow().isoformat()))
         con.commit(); con.close(); return True, "تم إنشاء المستخدم"
     except sqlite3.IntegrityError:
@@ -1290,6 +1746,24 @@ def update_user_password(username, new_password):
     cur.execute("UPDATE users SET password=? WHERE username=?",
                 (hash_password(new_password), username))
     con.commit(); con.close()
+
+def update_user(username, role, full_name="", phone=""):
+    """تحديث بيانات المستخدم الأساسية."""
+    client = get_cloud_client()
+    if client.is_active():
+        res = client.post("/web/api/users/update", {
+            "username": username, "role": role, "full_name": full_name, "phone": phone
+        })
+        return res.get("ok", False), res.get("msg", "Error")
+
+    try:
+        con = get_db(); cur = con.cursor()
+        cur.execute(
+            "UPDATE users SET role=?, full_name=?, phone=?, allowed_tabs=NULL WHERE username=?",
+            (role, full_name, phone, username))
+        con.commit(); con.close(); return True, "تم تحديث البيانات بنجاح"
+    except Exception as e:
+        return False, str(e)
 
 def toggle_user_active(user_id, active):
     client = get_cloud_client()
@@ -1530,13 +2004,24 @@ def load_students(force_reload: bool = False) -> Dict[str, Any]:
         if client.is_active():
             return {"list": [], "by_id": {}}
             
-        root = tk.Tk(); root.withdraw()
-        confirm = messagebox.askyesno("بيانات الطلاب مفقودة", 
-                                     "ملف الطلاب غير موجود. هل تريد استيراد ملف Excel الآن؟\n(اختر 'لا' إذا كنت تنوي المزامنة مع السحاب لاحقاً)")
+        # تحذير: تجنب إنشاء Tk root جديد في الخيوط الخلفية
+        try:
+            from main import root as main_root
+            parent = main_root
+        except:
+            parent = None
+
+        if parent:
+            confirm = messagebox.askyesno("بيانات الطلاب مفقودة", 
+                                         "ملف الطلاب غير موجود. هل تريد استيراد ملف Excel الآن؟", parent=parent)
+        else:
+            # إذا لم نجد النافذة الرئيسية، نكتفي بالعودة بقائمة فارغة
+            return {"list": [], "by_id": {}}
+            
         if not confirm:
             return {"list": [], "by_id": {}}
             
-        path = filedialog.askopenfilename(title="اختر ملف Excel (طلاب)", filetypes=[("Excel files","*.xlsx *.xls")])
+        path = filedialog.askopenfilename(title="اختر ملف Excel (طلاب)", filetypes=[("Excel files","*.xlsx *.xls")], parent=parent)
         if not path: 
             return {"list": [], "by_id": {}}
         data = import_students_from_excel_sheet2_format(path)
@@ -2277,7 +2762,14 @@ def get_student_analytics_data(student_id: str) -> Dict[str, Any]:
             "section_rank": row[4],
         }
 
+
     # 6. تجميع البيانات المحسوبة للويب والرسوم البيانية
+    from database import get_student_total_points, get_student_points_history
+    data["total_points"] = get_student_total_points(student_id)
+    data["points_history"] = [{"points": r["points"], "reason": r["reason"], "date": r["date"], 
+                                "author_name": r.get("author_name", "مدير")} 
+                               for r in get_student_points_history(student_id)]
+
     data["total_absences"] = len(data["absences"])
     data["total_tardiness"] = sum(r["minutes"] for r in data["tardiness"])
     data["behavior_referrals"] = len(data["referrals"])
@@ -2289,6 +2781,9 @@ def get_student_analytics_data(student_id: str) -> Dict[str, Any]:
         if data["results"].get("rank"):
             gpa += f" (#{data['results']['rank']})"
     data["academic_results"] = gpa
+
+
+    # الاحداث الأخيرة (دمج الكل وترتيبهم)
 
     # اتجاه الغياب (شهرياً)
     trend = {}
@@ -2316,11 +2811,16 @@ def get_student_analytics_data(student_id: str) -> Dict[str, Any]:
         st = r["status"]
         st_ar = status_map.get(st, st) # الترجمة أو النص الأصلي إن لم يوجد
         events.append({"date": r["date"], "type": f"تحويل {r['type']}", "details": r["violation"], "status": st_ar})
+
     for r in data["sessions"]:
         events.append({"date": r["date"], "type": "جلسة إرشادية", "details": r["reason"], "status": "منتهية"})
+    for r in data["points_history"]:
+        auth = f" (بواسطة: {r['author_name']})" if r.get('author_name') else ""
+        events.append({"date": r["date"], "type": "نقطة تميز", "details": f"{r['reason']}{auth}", "status": f"+{r['points']}"})
     
     events.sort(key=lambda x: x["date"], reverse=True)
     data["recent_events"] = events[:20]
+    data["timeline"] = data["recent_events"] # للتوافق مع واجهة الويب
 
     # إجمالي أيام الدراسة الفعلية (أيام تم تسجيل غياب فيها لأي طالب)
     cur.execute("SELECT COUNT(DISTINCT date) FROM absences")
@@ -2377,4 +2877,129 @@ def delete_student_note(note_id: int):
 def clear_student_results():
     con = get_db(); cur = con.cursor()
     cur.execute("DELETE FROM student_results")
+    con.commit(); con.close()
+
+# ─── CIRCULARS & NOTIFICATIONS ───────────────────────────────
+
+def get_circulars(username: str = None, role: str = None):
+    con = get_db(); cur = con.cursor()
+    # التحقق من وجود الأعمدة لتجنب الأخطاء في حال لم يتم التحديث بعد
+    cols = [r[1] for r in cur.execute("PRAGMA table_info(circulars)")]
+    select_cols = ["id", "title", "content", "attachment_path", "date", "target_roles", "read_count"]
+    if "created_by" in cols:
+        select_cols.append("created_by")
+    
+    query = f"SELECT {','.join(select_cols)} FROM circulars ORDER BY id DESC"
+    cur.execute(query)
+    all_rows = cur.fetchall()
+    
+    # جلب قائمة التعاميم المقروءة لهذا المستخدم إذا وُجد
+    read_ids = set()
+    if username:
+        cur.execute("SELECT circular_id FROM circular_reads WHERE username = ?", (username,))
+        read_ids = {r[0] for r in cur.fetchall()}
+        
+    rows = []
+    for r in all_rows:
+        # خريطة الأعمدة
+        res = {
+            "id": r[0], "title": r[1], "content": r[2],
+            "attachment_path": r[3], "date": r[4],
+            "target_roles": r[5] or 'all',
+            "read_count": r[6] or 0,
+            "is_read": 1 if r[0] in read_ids else 0
+        }
+        if "created_by" in select_cols:
+            res["created_by"] = r[select_cols.index("created_by")]
+        else:
+            res["created_by"] = "الإدارة"
+            
+        # التصفية حسب الدور
+        target = res["target_roles"]
+        if role and role != 'admin' and target != 'all':
+            if role not in target:
+                continue
+
+        rows.append(res)
+    con.close()
+    return rows
+
+def get_user_unread_circulars(username, all_circulars):
+    con = get_db(); cur = con.cursor()
+    cur.execute("SELECT circular_id FROM circular_reads WHERE username = ?", (username,))
+    read_ids = {r[0] for r in cur.fetchall()}
+    con.close()
+    
+    unread = []
+    for c in all_circulars:
+        if c["id"] not in read_ids:
+            unread.append(c)
+    return unread
+
+def get_unread_referrals_count():
+    con = get_db(); cur = con.cursor()
+    cur.execute("SELECT COUNT(*) FROM behavioral_referrals WHERE status = 'pending'")
+    row = cur.fetchone()
+    con.close()
+    return row[0] if row else 0
+
+# ─── ADMIN POINTS MANAGEMENT FUNCTIONS ───
+
+def get_admin_points_logs(limit=500):
+    con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
+    cur.execute("""
+        SELECT p.*, s.name as student_name, s.class_name
+        FROM student_points p
+        JOIN students_temp s ON p.student_id = s.id
+        ORDER BY p.date DESC, p.id DESC
+        LIMIT ?
+    """, (limit,))
+    rows = [dict(r) for r in cur.fetchall()]
+    con.close()
+    return rows
+
+def get_teachers_points_usage(month_str):
+    con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
+    # جلب كافة المعلمين والوكلاء
+    cur.execute("SELECT username, full_name, role FROM users WHERE role IN ('teacher', 'deputy', 'activity_leader')")
+    users = [dict(r) for r in cur.fetchall()]
+    
+    usage = []
+    from config_manager import load_config
+    base_limit = load_config().get("monthly_points_limit", 100)
+    
+    for u in users:
+        # النقاط المستهلكة
+        cur.execute("SELECT SUM(points) FROM student_points WHERE author_id = ? AND date LIKE ?", (u['username'], f"{month_str}%"))
+        consumed = cur.fetchone()[0] or 0
+        
+        # الزيادات (الرصيد الإضافي)
+        cur.execute("SELECT SUM(extra_points) FROM teacher_points_adjustments WHERE username = ? AND month = ?", (u['username'], month_str))
+        extra = cur.fetchone()[0] or 0
+        
+        total_limit = base_limit + extra
+        usage.append({
+            "username": u['username'],
+            "full_name": u['full_name'] or u['username'],
+            "role": u['role'],
+            "consumed": consumed,
+            "extra": extra,
+            "total_limit": total_limit,
+            "remaining": max(0, total_limit - consumed)
+        })
+    con.close()
+    return usage
+
+def delete_points_record(record_id):
+    con = get_db(); cur = con.cursor()
+    cur.execute("DELETE FROM student_points WHERE id = ?", (record_id,))
+    con.commit(); con.close()
+
+def adjust_teacher_balance(username, points, reason, month=None):
+    if not month: month = datetime.date.today().isoformat()[:7]
+    con = get_db(); cur = con.cursor()
+    cur.execute("""
+        INSERT INTO teacher_points_adjustments (username, month, extra_points, reason, created_at)
+        VALUES (?, ?, ?, ?, ?)
+    """, (username, month, points, reason, datetime.datetime.now().isoformat()))
     con.commit(); con.close()

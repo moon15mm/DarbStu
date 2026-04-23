@@ -40,7 +40,8 @@ from database import (get_db, load_students, load_teachers,
                       delete_counselor_session, insert_counselor_alert,
                       get_counselor_alerts, insert_behavioral_contract,
                       get_behavioral_contracts, delete_behavioral_contract,
-                      delete_absence, delete_excuse, save_user_phone)
+                      delete_absence, delete_excuse, save_user_phone,
+                      get_exempted_students, add_exempted_student, remove_exempted_student)
 from whatsapp_service import (send_whatsapp_message, send_whatsapp_pdf,
                                check_whatsapp_server_status)
 from alerts_service import (log_message_status, run_smart_alerts,
@@ -72,11 +73,12 @@ from grade_analysis import _ga_parse_file, _ga_build_html
 
 router = APIRouter()
 
-def _create_token(username: str, role: str) -> str:
+def _create_token(username: str, role: str, full_name: str = "") -> str:
     import jwt as _jwt, datetime as _dt
     payload = {
         "sub":  username,
         "role": role,
+        "full_name": full_name,
         "exp":  _dt.datetime.utcnow() + _dt.timedelta(hours=_JWT_EXPIRE)
     }
     return _jwt.encode(payload, _JWT_SECRET, algorithm="HS256")
@@ -139,7 +141,7 @@ async def web_login(req: Request):
         user = authenticate(data.get("username",""), data.get("password",""))
         if not user:
             return JSONResponse({"ok": False, "msg": "اسم المستخدم أو كلمة المرور غير صحيحة"})
-        token        = _create_token(user["username"], user["role"])
+        token        = _create_token(user["username"], user["role"], user.get("full_name", ""))
         allowed_tabs = get_user_allowed_tabs(user["username"])
         resp  = JSONResponse({"ok": True, "role": user["role"],
                                "name": user.get("full_name") or user["username"],
@@ -272,6 +274,74 @@ async def api_student_analytics(request: Request, student_id: str):
     except Exception as e:
         return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
 
+# ─── ADMIN POINTS MANAGEMENT API ───────────────────────────────────
+
+@router.get("/web/api/admin/points-logs", response_class=JSONResponse)
+async def api_admin_points_logs(request: Request):
+    user = _get_current_user(request)
+    if not user or user["role"] != "admin": return JSONResponse({"ok": False}, status_code=401)
+    try:
+        from database import get_admin_points_logs
+        logs = get_admin_points_logs(limit=500)
+        return JSONResponse({"ok": True, "logs": logs})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/admin/points-usage", response_class=JSONResponse)
+async def api_admin_points_usage(request: Request, month: str):
+    user = _get_current_user(request)
+    if not user or user["role"] != "admin": return JSONResponse({"ok": False}, status_code=401)
+    try:
+        from database import get_teachers_points_usage
+        usage = get_teachers_points_usage(month)
+        return JSONResponse({"ok": True, "usage": usage})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.post("/web/api/admin/points-settings", response_class=JSONResponse)
+async def api_admin_points_settings(request: Request):
+    user = _get_current_user(request)
+    if not user or user["role"] != "admin": return JSONResponse({"ok": False}, status_code=401)
+    try:
+        data = await request.json()
+        limit = int(data.get("limit", 100))
+        from config_manager import load_config, save_config
+        cfg = load_config()
+        cfg["monthly_points_limit"] = limit
+        save_config(cfg)
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.delete("/web/api/admin/points-delete/{record_id}", response_class=JSONResponse)
+async def api_admin_points_delete(request: Request, record_id: int):
+    user = _get_current_user(request)
+    if not user or user["role"] != "admin": return JSONResponse({"ok": False}, status_code=401)
+    try:
+        from database import delete_points_record
+        delete_points_record(record_id)
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.post("/web/api/admin/points-adjust", response_class=JSONResponse)
+async def api_admin_points_adjust(request: Request):
+    user = _get_current_user(request)
+    if not user or user["role"] != "admin": return JSONResponse({"ok": False}, status_code=401)
+    try:
+        data = await request.json()
+        uname = data.get("username")
+        pts = int(data.get("points", 0))
+        reason = data.get("reason", "")
+        month = data.get("month") or datetime.date.today().isoformat()[:7]
+        if not uname: return JSONResponse({"ok": False, "msg": "اختر مستخدماً"})
+        
+        from database import add_teacher_points_adjustment
+        add_teacher_points_adjustment(uname, pts, reason, month)
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
 @router.get("/web/api/absences", response_class=JSONResponse)
 async def web_absences(request: Request, date: str = None, class_id: str = None):
     user = _get_current_user(request)
@@ -333,8 +403,13 @@ async def web_send_absence_messages(req: Request):
             for s in cls["students"]:
                 phone_map[s["id"]] = s.get("phone", "")
 
+        import random, asyncio
         sent = failed = 0
-        for stu in students:
+        for i, stu in enumerate(students):
+            # تأخير عشوائي بين الرسائل (إلا الأولى)
+            if i > 0:
+                await asyncio.sleep(random.uniform(7, 15))
+            
             sid   = str(stu.get("student_id", ""))
             sname = stu.get("student_name", "")
             cname = stu.get("class_name", "")
@@ -350,7 +425,7 @@ async def web_send_absence_messages(req: Request):
 
             ok, _ = send_whatsapp_message(phone, msg, student_data={
                 "student_id": sid, "student_name": sname,
-                "class_name": cname, "date": date_str})
+                "class_name": cname, "date": date_str}, humanize=True)
             if ok: sent += 1
             else:  failed += 1
 
@@ -381,8 +456,12 @@ async def web_send_tardiness_messages(req: Request):
             for s in cls["students"]:
                 phone_map[s["id"]] = s.get("phone", "")
 
+        import random, asyncio
         sent = failed = 0
-        for stu in students:
+        for i, stu in enumerate(students):
+            if i > 0:
+                await asyncio.sleep(random.uniform(7, 15))
+                
             sid   = str(stu.get("student_id", ""))
             sname = stu.get("student_name", "")
             cname = stu.get("class_name", "")
@@ -398,7 +477,7 @@ async def web_send_tardiness_messages(req: Request):
                 date=date_str,
                 minutes_late=mins)
 
-            ok, _ = send_whatsapp_message(phone, msg)
+            ok, _ = send_whatsapp_message(phone, msg, humanize=True)
             if ok: sent += 1
             else:  failed += 1
 
@@ -520,10 +599,16 @@ async def web_classes(request: Request):
 async def web_class_students(class_id: str, request: Request):
     user = _get_current_user(request)
     if not user: return JSONResponse({"error": "غير مصرح"}, status_code=401)
+    
+    from database import get_exempted_students
+    exempted_ids = {str(e["student_id"]) for e in get_exempted_students()}
+    
     store = load_students()
     cls   = next((c for c in store["list"] if c["id"] == class_id), None)
     if not cls: return JSONResponse({"ok": False, "msg": "فصل غير موجود"})
-    return JSONResponse({"ok": True, "students": cls["students"], "name": cls["name"]})
+    
+    filtered_students = [s for s in cls["students"] if str(s["id"]) not in exempted_ids]
+    return JSONResponse({"ok": True, "students": filtered_students, "name": cls["name"]})
 
 
 
@@ -564,7 +649,9 @@ async def web_stats_monthly(request: Request):
                           COUNT(DISTINCT date) as school_days,
                           COUNT(*) as total_abs,
                           COUNT(DISTINCT student_id) as unique_students
-                   FROM absences GROUP BY month ORDER BY month DESC LIMIT 6""")
+                   FROM absences 
+                   WHERE student_id NOT IN (SELECT student_id FROM exempted_students)
+                   GROUP BY month ORDER BY month DESC LIMIT 6""")
     rows = [dict(r) for r in cur.fetchall()]; con.close()
     return JSONResponse({"ok": True, "rows": rows})
 
@@ -800,6 +887,46 @@ async def api_get_contracts(request: Request, student_id: str = None):
     except Exception as e:
         return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
 
+# --- Exempted Students API ---
+
+@router.get("/web/api/exempted-students", response_class=JSONResponse)
+async def api_get_exempted_students(request: Request):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    try:
+        rows = get_exempted_students()
+        return JSONResponse({"ok": True, "rows": rows})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.post("/web/api/exempted-students/add", response_class=JSONResponse)
+async def api_add_exempted_student(req: Request):
+    user = _get_current_user(req)
+    if not user or user["role"] not in ("admin", "deputy"):
+        return JSONResponse({"ok": False, "msg": "Unauthorized"}, status_code=401)
+    try:
+        data = await req.json()
+        add_exempted_student(
+            data["student_id"], data["student_name"],
+            data.get("class_id", ""), data.get("class_name", ""),
+            data.get("reason", ""), user["sub"]
+        )
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.delete("/web/api/exempted-students/{student_id}", response_class=JSONResponse)
+async def api_remove_exempted_student(student_id: str, request: Request):
+    user = _get_current_user(request)
+    if not user or user["role"] not in ("admin", "deputy"):
+        return JSONResponse({"ok": False, "msg": "Unauthorized"}, status_code=401)
+    try:
+        remove_exempted_student(student_id)
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
 @router.delete("/web/api/counselor/contract/{cid}", response_class=JSONResponse)
 async def api_delete_contract(cid: int, request: Request):
     user = _get_current_user(request)
@@ -981,38 +1108,6 @@ def _send_circular_wa_alerts(circ_data):
     except Exception as e:
         print("[Circular-WA-Error]", e)
 
-@router.get("/web/api/circulars/list", response_class=JSONResponse)
-async def web_list_circulars(request: Request):
-    try:
-        user = _get_current_user(request)
-        if not user: return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
-        print(f"[API] 📜 طلب قائمة التعاميم للمستخدم: {user['sub']} ({user['role']})")
-        rows = get_circulars(username=user["sub"], role=user["role"])
-        print(f"[API] ✅ تم جلب {len(rows)} تعميم بنجاح")
-        return JSONResponse({"ok": True, "rows": rows})
-    except Exception as e:
-        import traceback
-        print(f"[API-CIRC-ERROR] {e}")
-        traceback.print_exc()
-        return JSONResponse({"ok": False, "msg": f"خطأ داخلي: {str(e)}"}, status_code=500)
-
-@router.post("/web/api/circulars/mark-read", response_class=JSONResponse)
-async def web_mark_read(req: Request):
-    user = _get_current_user(req)
-    if not user: return JSONResponse({"error": "غير مصرح"}, status_code=401)
-    try:
-        data = await req.json()
-        mark_circular_as_read(int(data["id"]), user["sub"])
-        return JSONResponse({"ok": True})
-    except Exception as e:
-        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
-
-@router.get("/web/api/circulars/unread-count", response_class=JSONResponse)
-async def web_unread_count(request: Request):
-    user = _get_current_user(request)
-    if not user: return JSONResponse({"error": "غير مصرح"}, status_code=401)
-    count = get_unread_circulars_count(user["sub"], user["role"])
-    return JSONResponse({"ok": True, "count": count})
 
 # ─── User Management Sync API ─────────────────────────────
 
@@ -1123,6 +1218,193 @@ async def api_get_schedule(request: Request, day_of_week: int):
         return JSONResponse({"ok": True, "rows": rows})
     except Exception as e:
         return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+# ─── Points & Leaderboard API ────────────────────────────────
+
+@router.get("/web/api/leaderboard", response_class=JSONResponse)
+async def api_get_leaderboard(request: Request, limit: int = 20):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    try:
+        from database import get_points_leaderboard
+        rows = get_points_leaderboard(limit)
+        return JSONResponse({"ok": True, "rows": rows})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.post("/web/api/points/add", response_class=JSONResponse)
+async def api_add_points(req: Request):
+    user = _get_current_user(req)
+    if not user or user["role"] not in ("admin", "deputy", "teacher", "supervisor", "staff", "lab", "guard", "counselor", "activity_leader"):
+        return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
+    try:
+        data = await req.json()
+        from database import add_student_points
+        author_id = user.get("username") or user.get("sub") or "admin"
+        author_name = user.get("full_name")
+        
+        if not author_name:
+            # محاولة جلب الاسم من قاعدة البيانات لضمان الظهور في السجلات
+            try:
+                from database import get_db
+                con = get_db(); cur = con.cursor()
+                cur.execute("SELECT full_name FROM users WHERE username = ?", (author_id,))
+                row = cur.fetchone()
+                if row and row[0]: author_name = row[0]
+                con.close()
+            except: pass
+        
+        if not author_name: author_name = author_id
+
+        add_student_points(
+            data["student_id"], data["points"], data.get("reason",""),
+            author_id=author_id, author_name=author_name
+        )
+        
+        # تحقق من منح شهادة تميز آلياً
+        from alerts_service import check_and_award_certificate
+        awarded, level = check_and_award_certificate(data["student_id"], data.get("student_name", "الطالب"))
+        
+        return JSONResponse({"ok": True, "awarded": awarded, "level": level})
+    except ValueError as ve:
+        return JSONResponse({"ok": False, "msg": str(ve)}, status_code=400)
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/points-summary", response_class=JSONResponse)
+async def api_points_summary(request: Request, date: str):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    try:
+        from database import get_points_awarded_on_date
+        total = get_points_awarded_on_date(date)
+        return JSONResponse({"ok": True, "total": total})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/student-analysis/{student_id}", response_class=JSONResponse)
+async def api_student_analysis(student_id: str, request: Request):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    try:
+        from database import get_student_analytics_data
+        data = get_student_analytics_data(student_id)
+        # دمج الاسم والفصل من الـ STORE إذا لم يكن موجوداً (لضمان الدقة)
+        from database import load_students
+        store = load_students()
+        for cls in store.get("list", []):
+            for s in cls.get("students", []):
+                if s["id"] == student_id:
+                    data["name"] = s["name"]
+                    data["class_name"] = cls["name"]
+                    break
+        return JSONResponse({"ok": True, "data": data})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/teacher-balance", response_class=JSONResponse)
+async def api_teacher_balance(request: Request, username: str, month: str):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    try:
+        from database import get_teachers_points_usage
+        rows = get_teachers_points_usage(month)
+        teacher_data = next((r for r in rows if r["username"] == username), None)
+        if teacher_data:
+            consumed = teacher_data.get("consumed", teacher_data.get("used", 0))
+            total_limit = teacher_data.get("total_limit", teacher_data.get("limit", 100))
+            extra = teacher_data.get("extra", 0)
+            remaining = teacher_data.get("remaining", max(0, total_limit - consumed))
+            return JSONResponse({
+                "ok": True,
+                "balance": consumed,
+                "limit": total_limit,
+                "remaining": remaining,
+                "extra": extra
+            })
+        
+        from config_manager import load_config
+        cfg = load_config()
+        limit = cfg.get("monthly_points_limit", 100)
+        return JSONResponse({"ok": True, "balance": 0, "limit": limit, "remaining": limit, "extra": 0})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/admin/points-logs", response_class=JSONResponse)
+async def api_admin_points_logs(request: Request, limit: int = 500):
+    user = _get_current_user(request)
+    if not user or user.get("role") != "admin":
+        return JSONResponse({"ok": False, "msg": "صلاحيات غير كافية"}, status_code=403)
+    try:
+        from database import get_admin_points_logs
+        rows = get_admin_points_logs(limit)
+        return JSONResponse({"ok": True, "rows": rows})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/admin/teachers-usage", response_class=JSONResponse)
+async def api_admin_teachers_usage(request: Request, month: str = None):
+    user = _get_current_user(request)
+    if not user or user.get("role") != "admin":
+        return JSONResponse({"ok": False, "msg": "صلاحيات غير كافية"}, status_code=403)
+    try:
+        if not month: month = datetime.date.today().isoformat()[:7]
+        from database import get_teachers_points_usage
+        rows = get_teachers_points_usage(month)
+        return JSONResponse({"ok": True, "rows": rows})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.post("/web/api/admin/points-settings", response_class=JSONResponse)
+async def api_admin_points_settings(request: Request):
+    user = _get_current_user(request)
+    if not user or user.get("role") != "admin":
+        return JSONResponse({"ok": False, "msg": "صلاحيات غير كافية"}, status_code=403)
+    try:
+        data = await request.json()
+        new_limit = int(data.get("limit", 100))
+        from config_manager import load_config, save_config
+        cfg = load_config()
+        cfg["monthly_points_limit"] = new_limit
+        save_config(cfg)
+        return JSONResponse({"ok": True, "msg": "تم تحديث الإعدادات"})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.delete("/web/api/admin/points-delete/{record_id}", response_class=JSONResponse)
+async def api_admin_points_delete(record_id: int, request: Request):
+    user = _get_current_user(request)
+    if not user or user.get("role") != "admin":
+        return JSONResponse({"ok": False, "msg": "صلاحيات غير كافية"}, status_code=403)
+    try:
+        from database import delete_points_record
+        delete_points_record(record_id)
+        return JSONResponse({"ok": True, "msg": "تم حذف السجل بنجاح"})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.post("/web/api/admin/points-adjust", response_class=JSONResponse)
+async def api_admin_points_adjust(request: Request):
+    user = _get_current_user(request)
+    if not user or user.get("role") != "admin":
+        return JSONResponse({"ok": False, "msg": "صلاحيات غير كافية"}, status_code=403)
+    try:
+        data = await request.json()
+        target_username = data.get("username")
+        points = int(data.get("points", 0))
+        reason = data.get("reason", "")
+        month = data.get("month") or datetime.date.today().isoformat()[:7]
+        
+        if not target_username or points <= 0:
+            return JSONResponse({"ok": False, "msg": "بيانات غير مكتملة"})
+        
+        from database import add_teacher_points_adjustment
+        add_teacher_points_adjustment(target_username, points, reason, month)
+        return JSONResponse({"ok": True, "msg": "تمت زيادة الرصيد بنجاح"})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+
 
 @router.post("/web/api/messages-log/create", response_class=JSONResponse)
 async def api_create_msg_log(req: Request):
@@ -1248,30 +1530,37 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
     school = cfg.get("school_name", "DarbStu")
     gender = cfg.get("school_gender", "boys")
 
+    # جلب التنبيهات الذكية
+    from database import get_unread_referrals_count, get_unread_circulars_count
+    unread_referrals = 0
+    if role in ("admin", "deputy", "supervisor", "counselor"):
+        unread_referrals = get_unread_referrals_count()
+    unread_circs = get_unread_circulars_count(username, role)
+
     # ── قائمة التبويبات مع مجموعاتها ──────────────────────────
     SIDEBAR_GROUPS = [
         ("الرئيسية", [
             ("لوحة المراقبة",      "dashboard",            "fas fa-chart-line"),
-            ("روابط الفصول",        "links",                "fas fa-link"),
             ("المراقبة الحية",      "live_monitor",         "fas fa-satellite-dish"),
+            ("روابط الفصول",        "links",                "fas fa-link"),
         ]),
         ("التسجيل اليومي", [
             ("تسجيل الغياب",        "reg_absence",          "fas fa-user-check"),
             ("تسجيل التأخر",        "reg_tardiness",        "fas fa-stopwatch"),
             ("طلب استئذان",         "new_permission",       "fas fa-bell"),
         ]),
-        ("السجلات", [
+        ("المتابعة الانضباطية", [
             ("سجل الغياب",          "absences",             "fas fa-history"),
             ("سجل التأخر",          "tardiness",            "fas fa-clock"),
             ("الأعذار",             "excuses",              "fas fa-file-medical"),
             ("الاستئذان",           "permissions",          "fas fa-door-open"),
-            ("السجلات / التصدير",   "logs",                 "fas fa-file-export"),
             ("إدارة الغياب",        "absence_mgmt",         "fas fa-users-cog"),
+            ("الموجّه الطلابي",     "counselor",            "fas fa-brain"),
+            ("استلام تحويلات",      "referral_deputy",      "fas fa-inbox"),
         ]),
-        ("التقارير والتحليل", [
+        ("التقارير والإحصائيات", [
             ("التقارير / الطباعة",  "reports_print",        "fas fa-print"),
             ("تقرير الفصل",         "term_report",          "fas fa-file-alt"),
-            ("تحليل النتائج",       "grade_analysis",       "fas fa-chart-bar"),
             ("تقرير الإدارة",       "admin_report",         "fas fa-user-tie"),
             ("تحليل طالب",          "student_analysis",     "fas fa-search"),
             ("أكثر الطلاب غياباً", "top_absent",           "fas fa-award"),
@@ -1281,24 +1570,26 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
             ("إرسال رسائل الغياب",  "send_absence",         "fas fa-envelope-open-text"),
             ("إرسال رسائل التأخر",  "send_tardiness",       "fas fa-paper-plane"),
             ("التعاميم والنشرات",   "circulars",            "fas fa-scroll"),
-            ("مستلمو التأخر",       "tardiness_recipients", "fas fa-users"),
-            ("جدولة الروابط",       "schedule_links",       "fas fa-calendar-alt"),
+            ("قصص المدرسة",         "school_stories",       "fas fa-camera-retro"),
+            ("تعزيز الحضور الأسبوعي", "weekly_reward",      "fas fa-medal"),
+            ("لوحة الصدارة (النقاط)", "leaderboard",        "fas fa-trophy"),
+            ("إدارة النقاط (إداري)",  "points_control",     "fas fa-tasks"),
         ]),
         ("إدارة البيانات", [
             ("إدارة الطلاب",        "student_mgmt",         "fas fa-graduation-cap"),
             ("إضافة طالب",          "add_student",          "fas fa-user-plus"),
             ("إدارة الفصول",        "class_naming",         "fas fa-school"),
             ("إدارة الجوالات",      "phones",               "fas fa-mobile-alt"),
-            ("تصدير نور",           "noor_export",          "fas fa-cloud-upload-alt"),
+            ("الطلاب المستثنون",    "exempted_students",    "fas fa-user-slash"),
             ("نشر النتائج",         "results",              "fas fa-medal"),
-            ("الموجّه الطلابي",     "counselor",            "fas fa-brain"),
-            ("استلام تحويلات",      "referral_deputy",      "fas fa-inbox"),
+            ("تصدير نور",           "noor_export",          "fas fa-cloud-upload-alt"),
         ]),
         ("أدوات المعلم", [
             ("تحويل طالب",          "referral_teacher",     "fas fa-clipboard-list"),
             ("نماذج المعلم",        "teacher_forms",        "fas fa-file-contract"),
+            ("تحليل النتائج",       "grade_analysis",       "fas fa-chart-bar"),
         ]),
-        ("الإعدادات", [
+        ("الإعدادات والنظام", [
             ("إعدادات المدرسة",     "school_settings",      "fas fa-university"),
             ("المستخدمون",          "users",                "fas fa-user-shield"),
             ("النسخ الاحتياطية",    "backup",               "fas fa-hdd"),
@@ -1463,15 +1754,21 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
         '}'
         '@media(max-width:420px){.topbar h1{font-size:13px}.section{padding:12px}}'
         '@media print{.topbar,.sidebar,#ov{display:none!important}.content{margin:0!important;padding:0!important}}'
-        '</style><script src="https://cdn.jsdelivr.net/npm/chart.js"></script></head><body>'
+        '</style><script src="https://cdn.jsdelivr.net/npm/chart.js"></script></head><body data-user="' + username + '">'
     )
 
     # ── محتوى التبويبات ────────────────────────────────────────
-    content_html = '''
+    content_html = f'''
 <div id="tab-dashboard">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
     <h2 class="pt"><i class="fas fa-chart-line"></i> لوحة المراقبة</h2>
     <input type="date" id="dash-date" onchange="loadDashboard()" style="width:auto">
+  </div>
+  <div id="smart-alert-banner" style="margin-bottom:20px; display: {'block' if (unread_referrals > 0 or unread_circs > 0) else 'none'}">
+    <div style="display:flex; flex-direction:column; gap:10px">
+      {'<div class="ab ai" style="background:#FFF7ED; border:1px solid #FFEDD5; color:#C2410C; padding:15px; border-radius:12px; display:flex; align-items:center; gap:12px; cursor:pointer" onclick="showTab(\'referral_deputy\')"><i class="fas fa-exclamation-circle" style="font-size:20px"></i> <div><b>تنبيه:</b> يوجد عدد <b>' + str(unread_referrals) + '</b> تحويلات جديدة بانتظار مراجعتك.</div></div>' if unread_referrals > 0 else ''}
+      {'<div class="ab ai" style="background:#F0F9FF; border:1px solid #E0F2FE; color:#0369A1; padding:15px; border-radius:12px; display:flex; align-items:center; gap:12px; cursor:pointer" onclick="showTab(\'circulars\')"><i class="fas fa-scroll" style="font-size:20px"></i> <div><b>تعميم جديد:</b> لديك <b>' + str(unread_circs) + '</b> تعاميم غير مقروءة.</div></div>' if unread_circs > 0 else ''}
+    </div>
   </div>
   <div class="stat-cards" id="dash-cards"><div class="loading">⏳ جارٍ التحميل...</div></div>
   <div class="section"><div class="st">أكثر الفصول غياباً</div>
@@ -1770,6 +2067,32 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
   </div>
 
   <div id="an-result" style="display:none;margin-top:20px">
+    <div class="section" id="an-header-name" style="background:var(--pr-lt); color:var(--pr); font-weight:900; font-size:20px; text-align:center; padding:15px; margin-bottom:20px; border:2px solid var(--pr); border-radius:12px"></div>
+    
+    <!-- Points & Portal Link Section -->
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:20px">
+      <div class="section" style="background:linear-gradient(135deg, #FFD700, #FFA500); border:none; color:#fff">
+        <div style="display:flex; align-items:center; gap:15px">
+            <i class="fas fa-star" style="font-size:30px"></i>
+            <div>
+                <div style="font-size:14px; opacity:0.9">إجمالي نقاط التميز</div>
+                <div id="an-total-points" style="font-size:28px; font-weight:900">0</div>
+            </div>
+        </div>
+      </div>
+      <div class="section" style="background:#fff; border:2px dashed #E2E8F0; display:flex; align-items:center; justify-content:space-between">
+        <div style="display:flex; align-items:center; gap:12px">
+            <i class="fas fa-user-shield" style="color:var(--pr); font-size:24px"></i>
+            <div>
+                <div style="font-size:13px; color:var(--mu)">بوابة ولي الأمر</div>
+                <div style="font-size:11px; color:#94A3B8">رابط المتابعة المباشرة لولي الأمر</div>
+            </div>
+        </div>
+        <div id="an-portal-st">
+            <button class="btn bsm bp1" onclick="getPortalLink(document.getElementById('an-student').value)">توليد الرابط</button>
+        </div>
+      </div>
+    </div>
     <!-- كروت الإحصائيات -->
     <div id="an-cards" class="stat-cards" style="margin-bottom:20px"></div>
 
@@ -1798,6 +2121,19 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
             <tr><th>التاريخ</th><th>النوع</th><th>التفاصيل</th><th>الحالة</th></tr>
           </thead>
           <tbody id="an-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- سجل نقاط التميز -->
+    <div class="section" id="an-pts-section" style="display:none">
+      <div class="st">⭐ سجل نقاط التميز التفصيلي</div>
+      <div class="tw">
+        <table>
+          <thead>
+            <tr><th>التاريخ</th><th>النقاط</th><th>السبب</th><th>بواسطة</th></tr>
+          </thead>
+          <tbody id="an-pts-table-body"></tbody>
         </table>
       </div>
     </div>
@@ -1909,6 +2245,9 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
     <div id="circ-container" class="loading">⏳ جارٍ التحميل...</div>
   </div>
 </div>
+
+
+
 
 <div id="tab-tardiness_recipients">
   <h2 class="pt"><i class="fas fa-users"></i> مستلمو رسائل التأخر</h2>
@@ -2362,7 +2701,6 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
         <button class="btn bp4" onclick="submitTeacherForm('program', true)">📲 إرسال للمدير</button>
       </div><div id="tfp-st"></div>
     </div>
-    </div>
   </div>
   
   <div id="tf-inq" class="ip" style="margin-top:16px">
@@ -2416,7 +2754,223 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
     </div>
   </div>
 </div>
+<!-- ── تبويب تعزيز الحضور الأسبوعي ────────────────── -->
+<div id="tab-weekly_reward">
+  <h2 class="pt"><i class="fas fa-medal"></i> تعزيز الحضور الأسبوعي</h2>
+  <div class="cards" style="margin-bottom:20px">
+    <div class="card g"><div class="v" id="wr-count">0</div><div>طالباً ملتزماً</div></div>
+    <div class="card"><div class="v" id="wr-sent">0</div><div>تم الإرسال</div></div>
+    <div class="card r"><div class="v" id="wr-failed">0</div><div>فشل الإرسال</div></div>
+  </div>
+
+  <div class="section">
+    <div class="st">التحقق من طلاب الأسبوع</div>
+    <div class="fg2">
+      <div class="fg"><label class="fl">من تاريخ</label><input type="date" id="wr-from"></div>
+      <div class="fg"><label class="fl">إلى تاريخ</label><input type="date" id="wr-to"></div>
+      <button class="btn bp2" onclick="loadPerfectStudents()" style="margin-top:24px">🔎 فحص الطلاب</button>
+    </div>
+    <div class="ab ai" style="margin-top:10px">هذه الميزة تحصر الطلاب الذين لم يسجلوا أي غياب طوال الفترة المحددة (الأسبوع الدراسي).</div>
+    <div class="tw" style="margin-top:14px"><table>
+      <thead><tr><th>الطالب</th><th>الفصل</th><th>الجوال</th></tr></thead>
+      <tbody id="wr-table"></tbody></table></div>
+    <div class="bg-btn" style="margin-top:16px">
+      <button class="btn bp4" id="wr-send-btn" onclick="runManualRewards()" style="display:none">🚀 إرسال رسائل التعزيز الآن</button>
+    </div>
+    <div id="wr-status" style="margin-top:10px"></div>
+  </div>
+
+  <div class="section">
+    <div class="st">إعدادات الجدولة والرسالة</div>
+    <div class="fg2">
+      <div class="fg"><label class="fl">تفعيل التعزيز التلقائي</label>
+        <select id="wr-cfg-enabled"><option value="1">مفعّل</option><option value="0">معطّل</option></select>
+      </div>
+      <div class="fg"><label class="fl">يوم التنفيذ</label>
+        <select id="wr-cfg-day">
+          <option value="0">الأحد</option><option value="1">الاثنين</option><option value="2">الثلاثاء</option>
+          <option value="3">الأربعاء</option><option value="4" selected>الخميس</option>
+        </select>
+      </div>
+      <div class="fg"><label class="fl">وقت التنفيذ (ساعة:دقيقة)</label>
+        <div style="display:flex;gap:5px">
+          <input type="number" id="wr-cfg-hour" min="0" max="23" placeholder="ساعة" style="width:70px">
+          <input type="number" id="wr-cfg-min" min="0" max="59" placeholder="دقيقة" style="width:70px">
+        </div>
+      </div>
+    </div>
+    <div class="fg" style="margin-top:14px">
+      <label class="fl">قالب رسالة التعزيز</label>
+      <textarea id="wr-cfg-tpl" rows="5" style="width:100%;font-family:inherit;padding:10px"></textarea>
+      <div style="font-size:11px;color:var(--mu);margin-top:4px">الوسوم المتاحة: {student_name}, {school_name}, {guardian}, {son}, {his}</div>
+    </div>
+    <button class="btn bp1" style="margin-top:14px" onclick="saveRewardSettings()">💾 حفظ الإعدادات</button>
+    <div id="wr-cfg-st" style="margin-top:10px"></div>
+  </div>
+</div>
+
+<!-- ── تبويب لوحة الصدارة (النقاط) ────────────────── -->
+<div id="tab-leaderboard">
+  <h2 class="pt"><i class="fas fa-trophy" style="color:#D97706"></i> لوحة صدارة فرسان الانضباط</h2>
+  <div class="section">
+    <div class="st">أعلى الطلاب نقاطاً (تراكمي)</div>
+    <div class="tw"><table>
+      <thead><tr><th>المركز</th><th>الطالب</th><th>الفصل</th><th>إجمالي النقاط</th><th>إجراء</th></tr></thead>
+      <tbody id="lb-table"></tbody></table></div>
+  </div>
+
+  <!-- بطاقة رصيد النقاط المتبقي -->
+  <div id="lb-balance-card" style="display:none; background:linear-gradient(135deg,#1e40af,#3b82f6); color:#fff; border-radius:14px; padding:16px 20px; margin-bottom:18px; align-items:center; gap:18px; flex-wrap:wrap; box-shadow:0 4px 14px rgba(59,130,246,.35)">
+    <i class="fas fa-coins" style="font-size:32px; opacity:.9"></i>
+    <div>
+      <div style="font-size:12px; opacity:.85; margin-bottom:4px">رصيدك المتبقي من النقاط هذا الشهر</div>
+      <div style="display:flex; align-items:baseline; gap:8px">
+        <span id="lb-remaining" style="font-size:34px; font-weight:900; line-height:1">—</span>
+        <span style="font-size:14px; opacity:.8">/ <span id="lb-limit-val">100</span> نقطة</span>
+      </div>
+      <div style="margin-top:6px; background:rgba(255,255,255,.25); border-radius:20px; height:8px; overflow:hidden">
+        <div id="lb-balance-bar" style="height:100%; background:#fff; border-radius:20px; width:0%; transition:width .6s ease"></div>
+      </div>
+    </div>
+    <div id="lb-balance-note" style="margin-right:auto; font-size:12px; opacity:.85; text-align:left"></div>
+  </div>
+
+  <!-- إضافة نقاط يدوية -->
+  <div class="section" style="background:#FFFBEB; border: 1px solid #FEF3C7">
+    <div class="st">منح نقاط تميز (يدوي)</div>
+    <div class="fg2">
+      <div class="fg"><label class="fl">الفصل</label><select id="lb-cls" onchange="loadLbStus()"><option value="">اختر</option></select></div>
+      <div class="fg"><label class="fl">الطالب</label><select id="lb-stu"><option value="">اختر</option></select></div>
+      <div class="fg"><label class="fl">عدد النقاط</label><input type="number" id="lb-pts" value="5"></div>
+      <div class="fg"><label class="fl">السبب</label><input type="text" id="lb-reason" placeholder="مثال: مشاركة متميزة"></div>
+    </div>
+    <button class="btn bp1" onclick="addPointsManual()">✨ منح النقاط</button>
+    <div id="lb-st" style="margin-top:10px"></div>
+  </div>
+</div>
+
+<!-- ── تبويب الطلاب المستثنون (جديد) ────────────────── -->
+<div id="tab-exempted_students">
+  <h2 class="pt"><i class="fas fa-user-slash"></i> الطلاب المستثنون (ظروف خاصة)</h2>
+  <div class="section">
+    <div class="st">إضافة طالب للاستثناء</div>
+    <div class="ab ai">📌 الطالب المستثنى لن يظهر في أي رصد للغياب أو التأخر أو التقارير والرسائل.</div>
+    <div class="fg2">
+      <div class="fg"><label class="fl">الفصل</label><select id="ex-cls" onchange="loadClsForEx()"><option value="">اختر</option></select></div>
+      <div class="fg"><label class="fl">الطالب</label><select id="ex-stu"><option value="">اختر</option></select></div>
+      <div class="fg"><label class="fl">سبب الاستثناء</label><input type="text" id="ex-reason" placeholder="مثال: ظروف صحية خاصة"></div>
+    </div>
+    <button class="btn bp1" onclick="addExemptedStudent()">+ إضافة للقائمة</button>
+    <div id="ex-st" style="margin-top:10px"></div>
+  </div>
+  <div class="section">
+    <div class="st">القائمة الحالية للطلاب المستثنين</div>
+    <div class="tw"><table>
+      <thead><tr><th>الطالب</th><th>الفصل</th><th>السبب</th><th>تاريخ الإضافة</th><th>حذف</th></tr></thead>
+      <tbody id="ex-table"></tbody></table></div>
+  </div>
+</div>
+
+<!-- ── تبويب قصص المدرسة (جديد) ────────────────── -->
+<div id="tab-school_stories">
+  <h2 class="pt"><i class="fas fa-camera-retro" style="color:#E91E63"></i> قصص المدرسة (أنشطة الطلاب)</h2>
+  <div class="section">
+    <div class="st">إضافة قصة جديدة</div>
+    <div class="ab ai">💡 الصور المرفوعة هنا ستظهر كـ "سناب" أو "كاروسيل" في بوابة ولي الأمر لتبرز أنشطة المدرسة.</div>
+    <div class="fg2">
+      <div class="fg"><label class="fl">عنوان النشاط (اختياري)</label><input type="text" id="ss-title" placeholder="مثال: تكريم المتفوقين"></div>
+      <div class="fg"><label class="fl">الصورة</label><input type="file" id="ss-file" accept="image/*"></div>
+    </div>
+    <button class="btn bp1" onclick="uploadStory()" style="margin-top:10px">📤 رفع ونشر القصة</button>
+    <div id="ss-upload-st" style="margin-top:10px"></div>
+  </div>
+  
+  <div class="section">
+    <div class="st">القصص المنشورة حالياً</div>
+    <div id="ss-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:15px;margin-top:10px">
+      <!-- ستُملأ بالجافا سكريبت -->
+    </div>
+  </div>
+</div>
+
+<!-- ── تبويب إدارة النقاط (إداري) ────────────────── -->
+<div id="tab-points_control">
+  <div class="top-header" style="margin-bottom:20px">
+    <h2 class="pt" style="margin:0"><i class="fas fa-coins" style="color:#f59e0b"></i> إدارة أرصدة وسياسات النقاط</h2>
+    <p style="color:var(--mu); font-size:14px">تحكم في أرصدة المعلمين الشهرية وراقب استهلاكهم لنقاط التميز.</p>
+  </div>
+
+  <!-- بطاقات التحكم السريع -->
+  <div class="fg2" style="margin-bottom:24px">
+    <!-- بطاقة الإعدادات -->
+    <div class="section" style="flex:1; border-top:4px solid #3b82f6">
+      <div class="st"><i class="fas fa-cog"></i> سياسة النقاط الشهرية</div>
+      <p style="font-size:13px; color:var(--mu); margin:8px 0">حدد عدد النقاط الافتراضي الذي يحصل عليه كل معلم شهرياً.</p>
+      <div class="fg" style="margin-top:15px">
+        <label class="fl">الحد الشهري الافتراضي</label>
+        <div style="display:flex; gap:8px">
+          <input type="number" id="pc-limit-cfg" placeholder="مثال: 100" style="flex:1; font-weight:700; text-align:center; font-size:18px">
+          <button class="btn bp1" onclick="savePointsSettings()"><i class="fas fa-save"></i> حفظ</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- بطاقة زيادة الرصيد -->
+    <div class="section" style="flex:1.5; border-top:4px solid #10b981; background:linear-gradient(to bottom, #f0fdf4, #fff)">
+      <div class="st" style="color:#15803d"><i class="fas fa-plus-circle"></i> منح رصيد إضافي (استثنائي)</div>
+      <div class="fg2" style="margin-top:12px">
+        <div class="fg" style="flex:1.5"><label class="fl">المستخدم (المعلم/الموظف)</label>
+          <select id="pc-adj-user" style="font-weight:600"><option value="">جاري التحميل...</option></select></div>
+        <div class="fg" style="flex:0.8"><label class="fl">عدد النقاط</label>
+          <input type="number" id="pc-adj-pts" value="50" style="font-weight:700; color:#16a34a; text-align:center"></div>
+      </div>
+      <div class="fg" style="margin-top:10px">
+        <label class="fl">السبب (يظهر في سجلات الإدارة)</label>
+        <div style="display:flex; gap:8px">
+          <input type="text" id="pc-adj-reason" placeholder="مثال: مكافأة لنشاط مدرسي محدد" style="flex:1">
+          <button class="btn bp1" style="background:#16a34a" onclick="adjustUserPoints()"><i class="fas fa-check"></i> تنفيذ المنح</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- جداول البيانات -->
+  <div class="fg2">
+    <!-- استهلاك المعلمين -->
+    <div class="section" style="flex:1">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px">
+        <div class="st"><i class="fas fa-chart-pie"></i> استهلاك المعلمين</div>
+        <input type="month" id="pc-month" onchange="loadTeachersUsage()" class="bsm" style="width:auto; padding:4px 8px">
+      </div>
+      <div class="tw" style="max-height:450px">
+        <table>
+          <thead>
+            <tr><th>المعلم</th><th>المستهلك</th><th>إضافي</th><th>المتبقي</th><th>الحالة</th></tr>
+          </thead>
+          <tbody id="pc-usage-table-v2"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- السجل العام -->
+    <div class="section" style="flex:1.5">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px">
+        <div class="st"><i class="fas fa-list-ul"></i> سجل عمليات المنح (الأخيرة)</div>
+        <button class="btn bp2 bsm" onclick="loadPointsAdminLogs()"><i class="fas fa-sync"></i> تحديث</button>
+      </div>
+      <div class="tw" style="max-height:450px">
+        <table>
+          <thead>
+            <tr><th>التاريخ</th><th>بواسطة</th><th>للطالب</th><th>النقاط</th><th>السبب</th><th>إجراء</th></tr>
+          </thead>
+          <tbody id="pc-logs-table-v2"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
 '''
+
 
     # ── JavaScript الكامل المضغوط ─────────────────────────────
     js = r"""
@@ -2428,12 +2982,25 @@ var today=new Date().toISOString().split('T')[0];
 var _gender='boys', _me=null, _notes=[];
 try{_notes=JSON.parse(localStorage.getItem('darb_notes')||'[]');}catch(e){}
 
-window.onload=function(){setDates();loadMe();showTab('dashboard');checkUnreadCirculars();};
+window.onload=function(){
+  console.log("🚀 DarbStu Web Dashboard Loaded - Version Update Applied");
+  setDates();loadMe();showTab('dashboard');checkUnreadCirculars();
+};
 
 function setDates(){
   ['dash-date','abs-date','tard-date','exc-date','perm-date','sa-date','st-date','ar-date',
-   'np-date','lm-date','exc-date-new','noor-date','co-date','lg-from','lg-to'].forEach(function(id){
+   'np-date','lm-date','exc-date-new','noor-date','co-date','lg-from','lg-to','wr-from','wr-to'].forEach(function(id){
     var el=document.getElementById(id);if(el)el.value=today;});
+  // ضبط تواريخ الأسبوع للتعزيز
+  var d = new Date();
+  var day = d.getDay(); // 0=Sun, 4=Thu
+  var sun = new Date(d); sun.setDate(d.getDate() - day);
+  var thu = new Date(sun); thu.setDate(sun.getDate() + 4);
+  var f1 = document.getElementById('wr-from'); if(f1) f1.value = sun.toISOString().split('T')[0];
+  var f2 = document.getElementById('wr-to'); if(f2) f2.value = thu.toISOString().split('T')[0];
+  
+  // ضبط حقل شهر إدارة النقاط
+  var pcm = document.getElementById('pc-month'); if(pcm) pcm.value = today.slice(0,7);
 }
 
 async function api(url,opts){
@@ -2462,6 +3029,16 @@ async function loadMe(){
   else if(d.username)document.getElementById('user-name').textContent='أهلاً بعودتك، ' + d.username;
   if(d.gender)_gender=d.gender;
   if(d.is_girls)document.documentElement.style.setProperty('--pr','#7C3AED');
+  
+  // تحميل إعدادات النقاط للمدير
+  if(d.role === 'admin'){
+      api('/web/api/config').then(cfg => {
+          if(cfg && cfg.monthly_points_limit){
+              var el = document.getElementById('pc-limit-cfg');
+              if(el) el.value = cfg.monthly_points_limit;
+          }
+      });
+  }
   loadClasses();
 }
 
@@ -2498,8 +3075,16 @@ function showTab(key){
     'tardiness_recipients':loadRecipients,
     'grade_analysis':function(){fillSel('ga-cls');},
     'term_report':function(){fillSel('tr-cls');},
+    'weekly_reward':loadWeeklyReward,
+    'leaderboard':function(){fillSel('lb-cls');loadLeaderboard();loadTeacherBalance();},
+    'exempted_students':function(){fillSel('ex-cls');loadExemptedStudents();},
+    'points_control': function(){ loadPointsAdminLogs(); loadTeachersUsage(); loadUsersForAdj(); },
+    'school_stories':loadStories,
     'referral_teacher':function(){loadRefStudents();loadRefHistory();},
     'referral_deputy':loadDeputyReferrals,
+    'teacher_forms':function(){},
+    'send_absence':function(){},
+    'send_tardiness':function(){},
   };
   if(L[key])L[key]();
   if(window.innerWidth<=768)closeSidebar();
@@ -2684,7 +3269,7 @@ async function loadClasses(){
   var d=await api('/web/api/classes');if(!d||!d.ok)return;
   _classes=d.classes;
   var opts='<option value="">اختر فصلاً</option>'+d.classes.map(function(c){return '<option value="'+c.id+'" data-name="'+c.name+'">'+c.name+' ('+c.count+')</option>';}).join('');
-  ['ra-class','rt-class','np-class','an-class'].forEach(function(id){var el=document.getElementById(id);if(el)el.innerHTML=opts;});
+  ['ra-class','rt-class','np-class','an-class','lb-cls','ex-cls','co-cls'].forEach(function(id){var el=document.getElementById(id);if(el)el.innerHTML=opts;});
 }
 function fillSel(id){
   var el=document.getElementById(id);if(!el)return;
@@ -2693,7 +3278,6 @@ function fillSel(id){
   if(cur)el.value=cur;
 }
 
-/* ── ABSENCES ── */
 async function loadClassStudentsForAbs(){
   var sel=document.getElementById('ra-class');var cid=sel?sel.value:'';if(!cid)return;
   var d=await api('/web/api/class-students/'+cid);if(!d||!d.ok)return;
@@ -2813,6 +3397,49 @@ async function loadPermissions(){
            '<td><button class="btn bp4 bsm" onclick="approvePerm('+r.id+')">✅ موافقة</button></td></tr>';
   }).join('')||'<tr><td colspan="5" style="color:#9CA3AF">لا يوجد</td></tr>';
 }
+
+async function loadClsForAn(){
+  var cid = document.getElementById('an-class').value; if(!cid) return;
+  var d = await api('/web/api/class-students/'+cid); if(!d||!d.ok) return;
+  document.getElementById('an-student').innerHTML = '<option value="">اختر طالباً</option>' +
+    d.students.map(function(s){return '<option value="'+s.id+'">'+s.name+'</option>';}).join('');
+}
+
+function renderAnCharts(data){
+  if(anCharts.line) anCharts.line.destroy();
+  if(anCharts.pie) anCharts.pie.destroy();
+  var lineCtx = document.getElementById('an-chart-line').getContext('2d');
+  var trend = data.absence_trend || {};
+  var labels = Object.keys(trend).sort();
+  var points = labels.map(function(l){ return trend[l]; });
+  anCharts.line = new Chart(lineCtx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'حالات الغياب',
+        data: points,
+        borderColor: '#1565C0',
+        backgroundColor: 'rgba(21, 101, 192, 0.1)',
+        tension: 0.3, fill: true
+      }]
+    },
+    options: { responsive: true, maintainAspectRatio: false }
+  });
+  var pieCtx = document.getElementById('an-chart-pie').getContext('2d');
+  anCharts.pie = new Chart(pieCtx, {
+    type: 'doughnut',
+    data: {
+      labels: ['تأخر', 'مخالفات سلوكية', 'جلسات إرشادية'],
+      datasets: [{
+        data: [data.total_tardiness, data.behavior_referrals, data.counselor_sessions],
+        backgroundColor: ['#f59e0b', '#ef4444', '#10b981']
+      }]
+    },
+    options: { responsive: true, maintainAspectRatio: false }
+  });
+}
+
 async function approvePerm(id){
   var r=await fetch('/web/api/approve-permission/'+id,{method:'POST'});
   var d=await r.json();if(d.ok)loadPermissions();}
@@ -2923,9 +3550,17 @@ async function analyzeStudent(){
   var sid = document.getElementById('an-student').value;
   if(!sid){ alert('يرجى اختيار طالب أولاً'); return; }
   
-  document.getElementById('an-result').style.display = 'block';
   document.getElementById('an-cards').innerHTML = '<div class="loading">⏳ جارٍ التحميل...</div>';
   
+  // إضافة زر بوابة ولي الأمر
+  var actionArea = document.getElementById('an-action-area');
+  if(!actionArea) {
+      actionArea = document.createElement('div');
+      actionArea.id = 'an-action-area';
+      actionArea.style.marginBottom = '15px';
+      document.getElementById('an-result').insertBefore(actionArea, document.getElementById('an-cards'));
+  }
+  actionArea.innerHTML = '<button class="btn bp2" onclick="getPortalLink(\''+sid+'\')"><i class="fas fa-share-alt"></i> مشاركة رابط بوابة ولي الأمر</button> <span id="an-portal-st"></span>';
   try {
     var res = await fetch('/web/api/student-analytics/' + sid);
     var d = await res.json();
@@ -4124,6 +4759,245 @@ async function saveNoorCfg(){
 }
 
 /* ── GRADE ANALYSIS — يستخدم نفس محرّك التطبيق المكتبي ── */
+async function analyzeStudent(forcedSid){
+  var sid = forcedSid || document.getElementById('an-student').value;
+  if(!sid){alert('اختر طالباً');return;}
+  
+  if(forcedSid) {
+      showTab('student_analysis');
+      var sel = document.getElementById('an-student');
+      if(sel) {
+          // جلب أو إنشاء الخيار
+          var existing = Array.from(sel.options).find(o => o.value === sid);
+          if(!existing){
+              var opt = document.createElement('option');
+              opt.value = sid; opt.text = 'تحميل الطالب...'; opt.selected = true;
+              sel.appendChild(opt);
+          } else {
+              existing.selected = true;
+          }
+      }
+  }
+
+  var box=document.getElementById('an-result');
+  box.style.display='block';
+  document.getElementById('an-header-name').textContent = '⏳ جاري تحميل بيانات الطالب...';
+  
+  var d=await api('/web/api/student-analysis/'+sid);
+  if(!d||!d.ok){
+      document.getElementById('an-header-name').textContent = '❌ فشل التحميل';
+      return;
+  }
+  var a=d.data||{};
+  
+  // تحديث الاسم في الهيدر والدروب داون
+  var fullName = a.name || 'طالب';
+  var className = a.class_name || '';
+  document.getElementById('an-header-name').innerHTML = '<i class="fas fa-user-graduate"></i> ' + fullName + (className ? ' — <span style="font-weight:400; font-size:16px">' + className + '</span>' : '');
+  
+  // تحديث نص الخيار في الدروب داون إذا كان غير واضح
+  var sel = document.getElementById('an-student');
+  if(sel && sel.value === sid){
+      var opt = sel.options[sel.selectedIndex];
+      if(opt.text === 'تحميل الطالب...' || opt.text === 'طالب محدد...') {
+          opt.text = fullName;
+      }
+  }
+  
+  document.getElementById('an-total-points').textContent = a.total_points || 0;
+  document.getElementById('an-portal-st').innerHTML = '<button class="btn bsm bp1" onclick="getPortalLink(\''+sid+'\')">توليد الرابط</button>';
+  
+  var cardsHtml=crd(a.total_absences||0,'#C62828','أيام الغياب','🔴')+
+                crd(a.total_tardiness||0,'#E65100','مرات التأخر','⏰')+
+                crd(a.total_excuses||0,'#2E7D32','أعذار مقبولة','✅')+
+                crd(a.referrals_count||0,'#7c3aed','تحويلات الموجّه','🧠');
+  document.getElementById('an-cards').innerHTML=cardsHtml;
+  
+  renderStudentCharts(a);
+  
+  var tblBody=document.getElementById('an-table-body');
+  tblBody.innerHTML=(a.timeline||[]).map(function(t){
+    var cl=(t.type==='غياب')?'r':(t.type==='تأخر')?'o':'g';
+    return '<tr><td>'+t.date+'</td><td><span class="badge '+cl+'">'+t.type+'</span></td><td>'+(t.notes||t.details||'-')+'</td><td>'+(t.status||'مسجل')+'</td></tr>';
+  }).join('')||'<tr><td colspan="4" style="color:var(--mu);text-align:center">لا يوجد سجل</td></tr>';
+
+  var ptsBody=document.getElementById('an-pts-table-body');
+  var ptsHist = a.points_history || [];
+  if(ptsHist.length > 0){
+      document.getElementById('an-pts-section').style.display = 'block';
+      ptsBody.innerHTML = ptsHist.map(function(p){
+          var auth = p.author_name || p.author_id || 'مدير';
+          return '<tr><td>'+p.date+'</td><td><span class="badge g">+'+p.points+'</span></td><td>'+(p.reason||'-')+'</td><td>'+auth+'</td></tr>';
+      }).join('');
+  } else {
+      document.getElementById('an-pts-section').style.display = 'none';
+  }
+}
+
+function renderStudentCharts(data){
+    // منطق رسم المخططات (يمكن تفصيله لاحقاً)
+}
+
+/* ── LEADERBOARD & POINTS ── */
+async function loadLeaderboard(){
+  // جلب الرصيد إذا كان المستخدم معلماً
+  var uname = document.body.dataset.user;
+  var month = new Date().toISOString().slice(0, 7);
+  var d_bal = await api('/web/api/teacher-balance?username='+uname+'&month='+month);
+  
+  if(d_bal && d_bal.ok){
+      var limit = d_bal.limit || 100;
+      var used = d_bal.balance || 0;
+      var rem = limit - used;
+      if(rem < 0) rem = 0;
+      
+      var card = document.getElementById('lb-balance-card');
+      var remEl = document.getElementById('lb-remaining');
+      var barEl = document.getElementById('lb-balance-bar');
+      var noteEl = document.getElementById('lb-balance-note');
+      
+      if(uname === 'admin') {
+          if(card) card.style.display = 'none'; // المدير لا يحتاج لرؤية رصيده الخاص في هذا الكارت
+      } else {
+          if(card) {
+              card.style.display = 'flex';
+              if(remEl) remEl.textContent = rem;
+              if(barEl) barEl.style.width = Math.max(0, Math.min(100, (rem/limit)*100)) + '%';
+              if(noteEl) noteEl.innerHTML = 'الحد المسموح لك: ' + limit + ' نقطة شهرياً<br>تم استهلاك: ' + used;
+              
+              // تغيير لون البار إذا قارب على الانتهاء
+              if(barEl) barEl.style.background = (rem <= limit * 0.2) ? '#f87171' : '#fff';
+          }
+      }
+  }
+
+  var d=await api('/web/api/leaderboard'); if(!d||!d.ok) return;
+  document.getElementById('lb-table').innerHTML = d.rows.map(function(r, i){
+    var icon = (i===0)?'🥇':(i===1)?'🥈':(i===2)?'🥉':'';
+    return '<tr><td>'+(i+1)+' '+icon+'</td><td>'+r.name+'</td><td>'+r.class_name+'</td>'+
+           '<td><span class="badge bg" style="font-size:14px">'+r.points+' ⭐</span></td>'+
+           '<td><button class="btn bsm bp2" onclick="showAnForLb(\''+r.student_id+'\')">تحليل</button></td></tr>';
+  }).join('') || '<tr><td colspan="5" style="color:var(--mu);text-align:center">لا توجد بيانات حالياً</td></tr>';
+}
+function showAnForLb(sid){
+  analyzeStudent(sid);
+}
+async function loadLbStus(){
+  var cid = document.getElementById('lb-cls').value; if(!cid) return;
+  var d = await api('/web/api/class-students/'+cid); if(!d||!d.ok) return;
+  document.getElementById('lb-stu').innerHTML = '<option value="">اختر</option>' +
+    d.students.map(function(s){return '<option value="'+s.id+'">'+s.name+'</option>';}).join('');
+}
+async function addPointsManual(){
+  var sid = document.getElementById('lb-stu').value;
+  var pts = document.getElementById('lb-pts').value;
+  var reason = document.getElementById('lb-reason').value;
+  if(!sid||!pts){ alert('أكمل البيانات'); return; }
+  ss('lb-st', '⏳ جارٍ المنح...', 'in');
+  try {
+      var r=await fetch('/web/api/points/add', {method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({student_id:sid, points:parseInt(pts), reason:reason})});
+      var d=await r.json();
+      if(d.ok){ 
+          ss('lb-st', '✅ تم منح النقاط بنجاح — تم الخصم من رصيدك الشهري', 'ok'); 
+          loadLeaderboard(); 
+          document.getElementById('lb-pts').value = 5;
+          document.getElementById('lb-reason').value = '';
+      } else { ss('lb-st', '❌ '+(d.msg||'فشل'), 'er'); }
+  } catch(e) { ss('lb-st', '❌ خطأ اتصال', 'er'); }
+}
+
+async function loadPointsAdminLogs(){
+  var tb=document.getElementById('pc-logs-table-v2'); if(!tb) return;
+  tb.innerHTML='<tr><td colspan="6" style="text-align:center;padding:15px">⏳ جارٍ التحميل...</td></tr>';
+  var d=await api('/web/api/admin/points-logs-v2');if(!d||!d.ok){
+    tb.innerHTML='<tr><td colspan="6" style="text-align:center;color:#ef4444;padding:15px">❌ فشل تحميل البيانات</td></tr>';
+    return;
+  }
+  var logs = d.logs || [];
+  if(logs.length===0){
+    tb.innerHTML='<tr><td colspan="6" style="text-align:center;color:#64748b;padding:15px">لا توجد عمليات مسجلة حالياً</td></tr>';
+    return;
+  }
+  tb.innerHTML=logs.map(function(r){
+    var teacher = r.teacher_full_name || r.author_name || r.author_id || 'مدير';
+    return '<tr><td style="font-size:12px">'+r.date+'</td><td style="font-weight:600">'+teacher+'</td><td>'+(r.student_name||'طالب')+' <small style="display:block;color:#94a3b8">'+(r.class_name||'-')+'</small></td>'+
+           '<td><span class="badge bg" style="font-size:13px">+'+r.points+'</span></td><td style="font-size:12px;color:#475569">'+(r.reason||'-')+'</td>'+
+           '<td><button class="btn bp3 bsm" onclick="deletePointsRecord('+r.id+')"><i class="fas fa-trash-alt"></i></button></td></tr>';
+  }).join('');
+}
+
+async function loadTeachersUsage(){
+  var tb=document.getElementById('pc-usage-table-v2'); if(!tb) return;
+  tb.innerHTML='<tr><td colspan="5" style="text-align:center;padding:15px">⏳ جارٍ التحميل...</td></tr>';
+  var month = document.getElementById('pc-month') ? document.getElementById('pc-month').value : new Date().toISOString().slice(0,7);
+  var d=await api('/web/api/admin/points-usage-v2?month='+month);if(!d||!d.ok){
+    tb.innerHTML='<tr><td colspan="5" style="text-align:center;color:#ef4444;padding:15px">❌ فشل تحميل البيانات</td></tr>';
+    return;
+  }
+  var usage = d.usage || [];
+  if(usage.length===0){
+    tb.innerHTML='<tr><td colspan="5" style="text-align:center;color:#64748b;padding:15px">لا توجد بيانات لهذا الشهر</td></tr>';
+    return;
+  }
+  tb.innerHTML=usage.map(function(r){
+    var used = r.used || 0;
+    var limit = r.limit || 100;
+    var rem = r.remaining || 0;
+    var pct = limit > 0 ? Math.min(100, (used/limit)*100) : 0;
+    var color = pct > 90 ? '#ef4444' : (pct > 70 ? '#f59e0b' : '#10b981');
+    var statusTxt = rem <= 0 ? 'منتهي' : (rem < 20 ? 'منخفض' : 'متوفر');
+    var statusBg = rem <= 0 ? '#fee2e2' : (rem < 20 ? '#fef3c7' : '#dcfce7');
+    var statusColor = rem <= 0 ? '#991b1b' : (rem < 20 ? '#92400e' : '#166534');
+    
+    return '<tr>' +
+           '<td style="font-weight:700">'+(r.name||r.username)+'<br><small style="font-weight:normal;color:#64748b">'+(r.role==='activity_leader'?'رائد نشاط':'معلم')+'</small></td>' +
+           '<td><b>'+used+'</b> / '+limit+'</td>' +
+           '<td style="color:#16a34a; font-weight:bold">+' + (r.extra || 0) + '</td>' +
+           '<td style="color:'+color+'; font-weight:900; font-size:15px">'+rem+'</td>' +
+           '<td><span class="badge" style="background:'+statusBg+'; color:'+statusColor+'; font-size:11px; padding:3px 8px">'+statusTxt+'</span></td>' +
+           '</tr>';
+  }).join('');
+}
+async function savePointsSettings(){
+  var lim=document.getElementById('pc-limit-cfg').value;if(!lim){alert('أدخل الحد');return;}
+  var r=await fetch('/web/api/admin/points-settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({limit:parseInt(lim)})});
+  var d=await r.json();if(d.ok){alert('✅ تم الحفظ');loadTeachersUsage();}
+}
+async function deletePointsRecord(id){
+  if(!confirm('هل أنت متأكد من حذف هذا السجل؟ سيتم إعادة النقاط لرصيد المعلم.'))return;
+  var r=await fetch('/web/api/admin/points-delete/'+id,{method:'DELETE'});
+  var d=await r.json();if(d.ok){loadPointsAdminLogs();loadTeachersUsage();}
+}
+async function loadUsersForAdj(){
+  var d=await api('/web/api/users');if(!d||!d.ok)return;
+  var sel = document.getElementById('pc-adj-user'); if(!sel) return;
+  var users = d.users || [];
+  sel.innerHTML='<option value="">اختر مستخدماً</option>'+
+    users.filter(u=>u.role!=='admin').map(u=>'<option value="'+u.username+'">'+u.full_name+' ('+u.role+')</option>').join('');
+}
+async function adjustUserPoints(){
+  var u=document.getElementById('pc-adj-user').value;
+  var p=document.getElementById('pc-adj-pts').value;
+  var r=document.getElementById('pc-adj-reason').value;
+  if(!u||!p){alert('أكمل البيانات');return;}
+  var res=await fetch('/web/api/admin/points-adjust',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({username:u,points:parseInt(p),reason:r})});
+  var d=await res.json();
+  if(d.ok){alert('✅ تم زيادة الرصيد بنجاح');loadTeachersUsage();loadPointsAdminLogs();}else{alert('❌ '+d.msg);}
+}
+
+
+async function getPortalLink(sid){
+  var st = document.getElementById('an-portal-st');
+  st.textContent = '⏳ جاري التوليد...';
+  var d = await api('/web/api/portal-link/'+sid);
+  if(d && d.ok){
+    st.innerHTML = '<a href="'+d.link+'" target="_blank" style="color:var(--pr);font-weight:700;margin-right:10px">🔗 فتح الرابط</a> ' +
+                   '<button class="btn bsm bp1" onclick="navigator.clipboard.writeText(\''+d.link+'\');alert(\'تم نسخ الرابط\')">نسخ</button>';
+  } else { st.textContent = '❌ فشل'; }
+}
+
 async function loadGradeAnalysis(){
   // عند فتح التبويب: حاول جلب آخر تحليل محفوظ
   var d=await api('/web/api/grade-analysis');
@@ -4440,35 +5314,235 @@ async function checkUnreadCirculars(){
   } catch(e) { console.error('checkUnreadCirculars Error:', e); }
 }
 
+/* ── WEEKLY REWARDS ── */
+async function loadWeeklyReward(){
+  var d=await api('/web/api/rewards/settings');
+  if(d && d.ok){
+    document.getElementById('wr-cfg-enabled').value = d.enabled ? "1" : "0";
+    document.getElementById('wr-cfg-day').value = d.day;
+    document.getElementById('wr-cfg-hour').value = d.hour;
+    document.getElementById('wr-cfg-min').value = d.minute;
+    document.getElementById('wr-cfg-tpl').value = d.template;
+  }
+}
+async function loadPerfectStudents(){
+  var f=document.getElementById('wr-from').value;
+  var t=document.getElementById('wr-to').value;
+  if(!f || !t) return;
+  ss('wr-status', '🔎 جاري الفحص...', 'in');
+  var d=await api('/web/api/rewards/perfect-attendance?start='+f+'&end='+t);
+  if(!d || !d.ok){ ss('wr-status', '❌ فشل الفحص', 'er'); return; }
+  document.getElementById('wr-count').textContent = d.students.length;
+  document.getElementById('wr-table').innerHTML = d.students.map(function(s){
+    return '<tr><td>'+s.name+'</td><td>'+s.class_name+'</td><td>'+(s.phone||'-')+'</td></tr>';
+  }).join('') || '<tr><td colspan="3" style="color:var(--mu);text-align:center">لا يوجد طلاب ملتزمون في هذه الفترة</td></tr>';
+  document.getElementById('wr-send-btn').style.display = d.students.length > 0 ? 'inline-block' : 'none';
+  ss('wr-status', '✅ تم العثور على ' + d.students.length + ' طالب ملتزم', 'ok');
+}
+async function runManualRewards(){
+  if(!confirm('هل أنت متأكد من إرسال رسائل التعزيز لجميع هؤلاء الطلاب الآن؟')) return;
+  ss('wr-status', '🚀 جاري بدء عملية الإرسال...', 'in');
+  var r=await fetch('/web/api/rewards/send', {method:'POST'});
+  var d=await r.json();
+  if(d.ok){
+    document.getElementById('wr-sent').textContent = d.results.sent;
+    document.getElementById('wr-failed').textContent = d.results.failed;
+    ss('wr-status', '✅ اكتمل الإرسال: تم إرسال ' + d.results.sent + ' بنجاح، وفشل ' + d.results.failed, 'ok');
+  } else {
+    ss('wr-status', '❌ فشل التشغيل: ' + d.msg, 'er');
+  }
+}
+async function saveRewardSettings(){
+  var data = {
+    enabled: document.getElementById('wr-cfg-enabled').value === "1",
+    day: parseInt(document.getElementById('wr-cfg-day').value),
+    hour: parseInt(document.getElementById('wr-cfg-hour').value),
+    minute: parseInt(document.getElementById('wr-cfg-min').value),
+    template: document.getElementById('wr-cfg-tpl').value
+  };
+  ss('wr-cfg-st', '⏳ جاري الحفظ...', 'in');
+  var r=await fetch('/web/api/rewards/save-settings', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)
+  });
+  var d=await r.json();
+  ss('wr-cfg-st', d.ok ? '✅ تم حفظ الإعدادات بنجاح' : '❌ فشل الحفظ', d.ok ? 'ok' : 'er');
+}
+
+/* ── LEADERBOARD & POINTS ── */
+async function loadTeacherBalance(){
+  if(!_me || !_me.username) return;
+  var card = document.getElementById('lb-balance-card');
+  var remEl = document.getElementById('lb-remaining');
+  var barEl = document.getElementById('lb-balance-bar');
+  var noteEl = document.getElementById('lb-balance-note');
+  if(!card || !remEl) return;
+
+  if(_me.role === 'admin') {
+      card.style.display = 'flex';
+      card.style.background = 'linear-gradient(135deg, #475569, #1e293b)';
+      remEl.textContent = '∞';
+      if(noteEl) noteEl.innerHTML = 'مدير النظام — رصيد غير محدود';
+      return;
+  }
+
+  var month = new Date().toISOString().slice(0,7);
+  var d = await api('/web/api/teacher-balance?username='+encodeURIComponent(_me.username)+'&month='+month);
+  if(!d || !d.ok){ card.style.display='none'; return; }
+
+  var limit = d.limit || 100;
+  var used = d.balance || 0;
+  var remaining = d.remaining != null ? d.remaining : Math.max(0, limit - used);
+  card.style.display = 'flex';
+  remEl.textContent = remaining;
+  var limitEl = document.getElementById('lb-limit-val');
+  if(limitEl) limitEl.textContent = limit;
+  if(barEl) barEl.style.width = Math.max(0, Math.min(100, (remaining/limit)*100)) + '%';
+  if(noteEl) noteEl.innerHTML = 'الحد المسموح: ' + limit + ' نقطة شهرياً<br>تم استهلاك: ' + used;
+  if(barEl) barEl.style.background = (remaining <= limit*0.2) ? '#f87171' : '#fff';
+  if(remaining === 0) card.style.background = 'linear-gradient(135deg, #dc2626, #b91c1c)';
+  else if(remaining <= 20) card.style.background = 'linear-gradient(135deg, #d97706, #b45309)';
+  else card.style.background = 'linear-gradient(135deg, #1e40af, #3b82f6)';
+}
+async function loadLeaderboard(){
+  var d=await api('/web/api/leaderboard'); if(!d||!d.ok) return;
+  document.getElementById('lb-table').innerHTML = d.rows.map(function(r, i){
+    var icon = (i===0)?'\ud83e\udd47':(i===1)?'\ud83e\udd48':(i===2)?'\ud83e\udd49':'';
+    return '<tr><td>'+(i+1)+' '+icon+'</td><td>'+r.name+'</td><td>'+r.class_name+'</td>'+
+           '<td><span class="badge bg" style="font-size:14px">'+r.points+' \u2b50</span></td>'+
+           '<td><button class="btn bsm bp2" onclick="showAnForLb(\''+r.student_id+'\')">تحليل</button></td></tr>';
+  }).join('') || '<tr><td colspan="5" style="color:var(--mu);text-align:center">لا توجد بيانات حالياً</td></tr>';
+  loadTeacherBalance();
+}
+function showAnForLb(sid){
+  analyzeStudent(sid);
+}
+async function loadLbStus(){
+  var cid = document.getElementById('lb-cls').value; if(!cid) return;
+  var d = await api('/web/api/class-students/'+cid); if(!d||!d.ok) return;
+  document.getElementById('lb-stu').innerHTML = '<option value="">اختر</option>' +
+    d.students.map(function(s){return '<option value="'+s.id+'">'+s.name+'</option>';}).join('');
+}
+async function addPointsManual(){
+  var sid = document.getElementById('lb-stu').value;
+  var pts = document.getElementById('lb-pts').value;
+  var reason = document.getElementById('lb-reason').value;
+  if(!sid||!pts){ alert('أكمل البيانات'); return; }
+  ss('lb-st', '⏳ جارٍ المنح...', 'in');
+  var r=await fetch('/web/api/points/add', {method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({student_id:sid, points:parseInt(pts), reason:reason})});
+  var d=await r.json();
+  if(d.ok){ ss('lb-st', '✅ تم منح النقاط بنجاح', 'ok'); loadLeaderboard(); }
+  else ss('lb-st', '❌ فشل: '+d.msg, 'er');
+}
+async function getPortalLink(sid){
+  var st = document.getElementById('an-portal-st');
+  st.textContent = '⏳ جاري التوليد...';
+  var d = await api('/web/api/portal-link/'+sid);
+  if(d && d.ok){
+    st.innerHTML = '<a href="'+d.link+'" target="_blank" style="color:var(--pr);font-weight:700;margin-right:10px">🔗 فتح الرابط</a> ' +
+                   '<button class="btn bsm bp1" onclick="navigator.clipboard.writeText(\''+d.link+'\');alert(\'تم نسخ الرابط\')">نسخ</button>';
+  } else { st.textContent = '❌ فشل'; }
+}
+
+/* ── EXEMPTED STUDENTS ── */
+async function loadExemptedStudents(){
+  var d=await api('/web/api/exempted-students');if(!d||!d.ok)return;
+  document.getElementById('ex-table').innerHTML=(d.rows||[]).map(function(r){
+    return '<tr><td>'+r.student_name+'</td><td>'+r.class_name+'</td><td>'+(r.reason||'-')+'</td><td>'+(r.exempted_at?r.exempted_at.split('T')[0]:'-')+'</td>'+
+      '<td><button class="btn bp3 bsm" onclick="removeExemptedStudent(\''+r.student_id+'\')"><i class="fas fa-trash"></i></button></td></tr>';
+  }).join('')||'<tr><td colspan="5" style="color:#9CA3AF;text-align:center">لا يوجد طلاب مستثنون</td></tr>';
+}
+async function addExemptedStudent(){
+  var cls=document.getElementById('ex-cls').value;
+  var stu=document.getElementById('ex-stu').value;
+  var reason=document.getElementById('ex-reason').value.trim();
+  if(!stu){alert('اختر طالباً');return;}
+  var sName = document.getElementById('ex-stu').options[document.getElementById('ex-stu').selectedIndex].text;
+  var cName = document.getElementById('ex-cls').options[document.getElementById('ex-cls').selectedIndex].text;
+  ss('ex-st','⏳ جارٍ الحفظ...','ai');
+  var r=await fetch('/web/api/exempted-students/add',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({student_id:stu,student_name:sName,class_id:cls,class_name:cName,reason:reason})});
+  var d=await r.json();
+  if(d.ok){ss('ex-st','✅ تم الإضافة للقائمة','ok');loadExemptedStudents();document.getElementById('ex-reason').value='';}
+  else ss('ex-st','❌ خطأ: '+d.msg,'er');
+}
+async function removeExemptedStudent(id){
+  if(!confirm('هل تريد حذف الطالب من قائمة الاستثناء؟'))return;
+  var r=await fetch('/web/api/exempted-students/'+id,{method:'DELETE'});
+  var d=await r.json();if(d.ok)loadExemptedStudents();
+}
+async function loadClsForEx(){
+  var cid=document.getElementById('ex-cls').value;if(!cid)return;
+  var d=await api('/web/api/class-students/'+cid);if(!d||!d.ok)return;
+  document.getElementById('ex-stu').innerHTML='<option value="">اختر طالباً</option>'+
+    d.students.map(function(s){return '<option value="'+s.id+'">'+s.name+'</option>';}).join('');
+}
+
+async function loadStories(){
+  var d=await api('/web/api/stories');
+  if(!d || !d.ok) return;
+  var html = (d.stories||[]).map(function(s){
+    var fname = s.image_path.split(/[\\/]/).pop();
+    return '<div class="card" style="padding:10px;text-align:center">' +
+           '<img src="/data/school_stories/'+fname+'" style="width:100%;height:120px;object-fit:cover;border-radius:8px;margin-bottom:8px">' +
+           '<div style="font-size:12px;font-weight:700;margin-bottom:5px">'+(s.title||'بدون عنوان')+'</div>' +
+           '<button class="btn bsm bp3" onclick="deleteStory('+s.id+')">حذف</button></div>';
+  }).join('');
+  document.getElementById('ss-list').innerHTML = html || '<div style="grid-column:1/-1;text-align:center;color:var(--mu)">لا يوجد قصص منشورة</div>';
+}
+async function uploadStory(){
+  var title = document.getElementById('ss-title').value;
+  var fileInput = document.getElementById('ss-file');
+  var file = fileInput.files[0];
+  if(!file){ alert('يرجى اختيار صورة أولاً'); return; }
+  ss('ss-upload-st', '⏳ جاري الرفع...', 'in');
+  var fd = new FormData(); fd.append('title', title); fd.append('file', file);
+  try {
+    var r = await fetch('/web/api/stories/add', {method:'POST', body:fd});
+    var d = await r.json();
+    if(d.ok){
+      ss('ss-upload-st', '✅ تم النشر بنجاح', 'ok');
+      document.getElementById('ss-title').value = ''; fileInput.value = '';
+      loadStories();
+    } else ss('ss-upload-st', '❌ فشل الرفع: ' + (d.msg||'خطأ'), 'er');
+  } catch(e){ ss('ss-upload-st', '❌ خطأ اتصال', 'er'); }
+}
+async function deleteStory(id){
+  if(!confirm('حذف القصة؟')) return;
+  try {
+    var r = await fetch('/web/api/stories/delete/'+id, {method:'DELETE'});
+    var d = await r.json(); if(d.ok) loadStories();
+  } catch(e){ alert('❌ خطأ اتصال'); }
+}
+async function toBase64(file){
+  if(!file) return null;
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = error => reject(error);
+  });
+}
 """
 
-    return (
-        '<!DOCTYPE html><html lang="ar" dir="rtl"><head>'
-        '<meta charset="UTF-8">'
-        '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">'
-        '<title>' + school + ' — لوحة التحكم</title>'
-        '<style>' + css + '</style>'
-        '</head><body>'
-        '<div class="topbar">'
-        '<div class="tb-l">'
-        '<button id="mt" onclick="toggleSidebar()" aria-label="القائمة">'
-        '<span></span><span></span><span></span></button>'
-        '<h1><i class="fas fa-university" style="margin-left:8px;font-size:18px"></i> <span id="sc-name">' + school + '</span></h1>'
-        '</div>'
-        '<div class="tb-r">'
-        '<div class="ub"><i class="fas fa-user-circle" style="margin-left:6px"></i> <span id="user-name">أهلاً بك...</span></div>'
-        '<a href="/web/logout" class="lo">خروج</a>'
-        '</div></div>'
-        '<div id="ov" onclick="closeSidebar()"></div>'
-        '<div class="sidebar" id="sb">' + sidebar_html + '</div>'
-        '<div class="content">'
-        '<div id="tc">'
-        + content_html +
-        '</div></div>'
-        '<script>' + js + '</script>'
-        '</body></html>'
-    )
+    h = '<!DOCTYPE html><html lang="ar" dir="rtl"><head>'
+    h += '<meta charset="UTF-8">'
+    h += '<meta name="viewport" content="width=device-width,initial-scale=1">'
+    h += '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">'
+    h += '<title>' + str(school) + ' — لوحة التحكم</title>'
+    h += '<style>' + str(css) + '</style>'
+    h += '</head><body>'
+    h += '<div class="topbar">'
+    h += '<div class="tb-l"><button id="mt" onclick="toggleSidebar()"><span></span><span></span><span></span></button>'
+    h += '<h1><i class="fas fa-university" style="margin-left:8px;font-size:18px"></i> <span id="sc-name">' + str(school) + '</span></h1></div>'
+    h += '<div class="tb-r"><div class="ub"><i class="fas fa-user-circle"></i> <span id="user-name">أهلاً بك...</span></div>'
+    h += '<a href="/web/logout" class="lo">خروج</a></div></div>'
+    h += '<div id="ov" onclick="closeSidebar()"></div>'
+    h += '<div class="sidebar" id="sb">' + str(sidebar_html) + '</div>'
+    h += '<div class="content"><div id="tc">' + str(content_html) + '</div></div>'
+    h += '<script>' + str(js) + '</script>'
+    h += '</body></html>'
+    return h
 
 
 
@@ -6129,91 +7203,66 @@ async def web_generate_teacher_form(request: Request):
     except Exception as e:
         return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
 
-# ─── CIRCULARS API ───────────────────────────────────────────────
 
-@router.post("/web/api/circulars/create", response_class=JSONResponse)
-async def web_create_circular(
-    request: Request,
-    title: str = Form(...),
-    content: str = Form(""),
-    target_role: str = Form("all"),
-    file: UploadFile = File(None)
-):
-    user = _get_current_user(request)
-    if not user or user["role"] != "admin":
-        return JSONResponse({"ok": False, "msg": "غير مصرح - للمدير فقط"}, status_code=401)
-    
-    try:
-        att_path = ""
-        if file and file.filename:
-            # Ensure data/attachments/circulars exists
-            rel_dir = os.path.join("attachments", "circulars")
-            abs_dir = os.path.join(DATA_DIR, rel_dir)
-            os.makedirs(abs_dir, exist_ok=True)
-            
-            ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            safe_name = re.sub(r'[^\w\.-]', '_', file.filename)
-            att_name = f"{ts}_{safe_name}"
-            att_path = os.path.join(rel_dir, att_name)
-            
-            with open(os.path.join(abs_dir, att_name), "wb") as buffer:
-                buffer.write(await file.read())
-        
-        c_id = create_circular({
-            "title": title,
-            "target_role": target_role.lower(), # توحيد الحالة
-            "content": content,
-            "attachment_path": att_path,
-            "created_by": user.get("name") or user["sub"]
-        })
-        return JSONResponse({"ok": True, "id": c_id})
-    except Exception as e:
-        print(f"[ERROR] web_create_circular: {e}")
-        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+# ─── CIRCULARS API ───────────────────────────────────────────────
 
 @router.get("/web/api/circulars/list", response_class=JSONResponse)
 async def web_list_circulars(request: Request):
-    user = _get_current_user(request)
-    if not user: return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
     try:
-        # جلب التعاميم مع حالة القراءة الصحيحة
-        rows = get_circulars(user["sub"], user["role"])
+        user = _get_current_user(request)
+        if not user: return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
+        rows = get_circulars(username=user["sub"], role=user["role"])
         return JSONResponse({"ok": True, "rows": rows})
     except Exception as e:
-        print(f"[ERROR] web_list_circulars: {e}")
         return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
 
 @router.post("/web/api/circulars/mark-read", response_class=JSONResponse)
-async def web_mark_read_circular(request: Request):
-    user = _get_current_user(request)
-    if not user: return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
+async def web_mark_read(req: Request):
+    user = _get_current_user(req)
+    if not user: return JSONResponse({"error": "غير مصرح"}, status_code=401)
     try:
-        data = await request.json()
+        data = await req.json()
         mark_circular_as_read(int(data["id"]), user["sub"])
         return JSONResponse({"ok": True})
     except Exception as e:
         return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
 
-@router.post("/web/api/circulars/delete/{cid}", response_class=JSONResponse)
-async def web_delete_circular(request: Request, cid: int):
+@router.get("/web/api/circulars/unread-count", response_class=JSONResponse)
+async def web_unread_count(request: Request):
     user = _get_current_user(request)
-    if not user or user["role"] != "admin":
-        return JSONResponse({"ok": False, "msg": "غير مصرح للمدير فقط"}, status_code=401)
+    if not user: return JSONResponse({"error": "غير مصرح"}, status_code=401)
+    count = get_unread_circulars_count(user["sub"], user["role"])
+    return JSONResponse({"ok": True, "count": count})
+
+@router.post("/web/api/circulars/create", response_class=JSONResponse)
+async def web_create_circular(request: Request, title: str = Form(...), content: str = Form(""), target_role: str = Form("all"), file: UploadFile = File(None)):
+    user = _get_current_user(request)
+    if not user or user["role"] not in ("admin", "deputy"):
+        return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
     try:
-        delete_circular(cid)
+        fpath = None
+        if file and file.filename:
+            os.makedirs(os.path.join(DATA_DIR, "attachments", "circulars"), exist_ok=True)
+            fpath = os.path.join("attachments", "circulars", f"{int(datetime.datetime.now().timestamp())}_{file.filename}")
+            with open(os.path.join(DATA_DIR, fpath), "wb") as b:
+                import shutil
+                shutil.copyfileobj(file.file, b)
+        
+        from database import create_circular
+        create_circular(title, content, target_role, fpath)
         return JSONResponse({"ok": True})
     except Exception as e:
         return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
 
-@router.get("/web/api/circulars/unread-count", response_class=JSONResponse)
-async def web_unread_circulars_count(request: Request):
+@router.post("/web/api/circulars/delete/{id}", response_class=JSONResponse)
+async def web_delete_circular(id: int, request: Request):
     user = _get_current_user(request)
-    if not user: return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
+    if not user or user["role"] not in ("admin", "deputy"):
+        return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
     try:
-        # حساب التنبيهات بناءً على التعاميم غير المقروءة
-        circs = get_circulars(user["sub"], user["role"])
-        unread = sum(1 for c in circs if not c.get("is_read") and user["role"] != "admin")
-        return JSONResponse({"ok": True, "count": unread})
+        from database import delete_circular
+        delete_circular(id)
+        return JSONResponse({"ok": True})
     except Exception as e:
         return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
 
@@ -6263,6 +7312,376 @@ async def web_send_teacher_form(request: Request):
             return JSONResponse({"ok": False, "msg": "فشل إرسال رسالة الواتساب"})
     except Exception as e:
         return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+# ─── REWARDS API ────────────────────────────────────────────────
+
+@router.get("/web/api/rewards/perfect-attendance", response_class=JSONResponse)
+async def api_perfect_attendance(request: Request, start: str, end: str):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    try:
+        from alerts_service import get_perfect_attendance_students
+        students = get_perfect_attendance_students(start, end)
+        return JSONResponse({"ok": True, "students": students})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.post("/web/api/rewards/send", response_class=JSONResponse)
+async def api_run_rewards(request: Request):
+    user = _get_current_user(request)
+    if not user or user["role"] != "admin":
+        return JSONResponse({"ok": False, "msg": "غير مصرح للمدير فقط"}, status_code=401)
+    try:
+        from alerts_service import run_weekly_rewards
+        # تشغيل في خلفية (أو بشكل متزامن للويب لسهولة المتابعة)
+        res = run_weekly_rewards()
+        return JSONResponse({"ok": True, "results": res})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/rewards/settings", response_class=JSONResponse)
+async def api_get_reward_settings(request: Request):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    cfg = load_config()
+    return JSONResponse({
+        "ok": True,
+        "enabled": cfg.get("weekly_reward_enabled", False),
+        "day":     cfg.get("weekly_reward_day", 4),
+        "hour":    cfg.get("weekly_reward_hour", 14),
+        "minute":  cfg.get("weekly_reward_minute", 0),
+        "template": cfg.get("weekly_reward_template", "")
+    })
+
+@router.post("/web/api/rewards/save-settings", response_class=JSONResponse)
+async def api_save_reward_settings(request: Request):
+    user = _get_current_user(request)
+    if not user or user["role"] != "admin":
+        return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
+    try:
+        data = await request.json()
+        cfg = load_config()
+        cfg["weekly_reward_enabled"] = bool(data.get("enabled"))
+        cfg["weekly_reward_day"]     = int(data.get("day", 4))
+        cfg["weekly_reward_hour"]    = int(data.get("hour", 14))
+        cfg["weekly_reward_minute"]  = int(data.get("minute", 0))
+        cfg["weekly_reward_template"] = data.get("template", "").strip()
+        
+        from config_manager import save_config
+        save_config(cfg)
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+
+# ─── POINTS & LEADERBOARD API ────────────────────────────────────
+
+@router.get("/web/api/leaderboard", response_class=JSONResponse)
+async def api_get_leaderboard(request: Request, limit: int = 20):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    from database import get_points_leaderboard
+    rows = get_points_leaderboard(limit)
+    return JSONResponse({"ok": True, "rows": rows})
+
+
+@router.get("/web/api/teacher-balance", response_class=JSONResponse)
+async def api_get_teacher_balance(request: Request, username: str, month: str):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    try:
+        from database import get_teacher_points_balance
+        used = get_teacher_points_balance(username, month)
+        return JSONResponse({"ok": True, "balance": used})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)})
+
+
+
+
+
+@router.get("/web/api/portal-link/{student_id}", response_class=JSONResponse)
+async def api_get_portal_link(request: Request, student_id: str):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    from database import get_or_create_portal_token
+    token = get_or_create_portal_token(student_id)
+    base_url = str(request.base_url).rstrip("/")
+    return JSONResponse({"ok": True, "link": f"{base_url}/p/{token}"})
+
+# ─── PARENT PORTAL (SNAP-VIEW) ───────────────────────────────────
+
+@router.get("/p/{token}", response_class=HTMLResponse)
+async def web_parent_portal(token: str):
+    from database import (get_student_id_by_portal_token, get_student_total_points,
+                          get_active_stories)
+    from alerts_service import get_student_full_analysis
+    student_id = get_student_id_by_portal_token(token)
+    if not student_id:
+        return HTMLResponse("<h1>404 - الرابط غير صالح</h1><p>عذراً، هذا الرابط غير موجود أو تم إبطاله.</p>", status_code=404)
+    
+    analysis = get_student_full_analysis(student_id)
+    points = get_student_total_points(student_id)
+    stories = get_active_stories()
+    cfg = load_config()
+    school = cfg.get("school_name", "مدرسة درب")
+    
+    # بناء قسم قصص المدرسة (Carousel)
+    stories_html = ""
+    if stories:
+        slides = ""
+        for i, s in enumerate(stories):
+            active = "active" if i == 0 else ""
+            slides += f"""
+            <div class="slide {active}" style="background-image: url('/data/school_stories/{os.path.basename(s['image_path'])}')">
+                <div class="slide-caption">{s['title'] or ''}</div>
+            </div>"""
+        
+        stories_html = f"""
+        <div class="section-title"><i class="fas fa-camera-retro" style="color: #E91E63"></i> قصص المدرسة</div>
+        <div class="card" style="padding: 0; overflow: hidden; height: 250px; position: relative;">
+            <div class="carousel">
+                {slides}
+            </div>
+            <div class="carousel-dots">
+                {"".join([f'<div class="dot {"active" if i==0 else ""}" onclick="showSlide({i})"></div>' for i in range(len(stories))])}
+            </div>
+        </div>
+        """
+
+    # تحويل البيانات لعرضها بشكل جذاب
+    html = f"""<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>بوابة ولي الأمر - {analysis.get('name', 'طالب')}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {{ --pr: #1565C0; --bg: #F8FAFC; --txt: #1E293B; --sh: 0 4px 6px -1px rgba(0,0,0,0.1); }}
+        body {{ font-family: 'Cairo', sans-serif; background: var(--bg); color: var(--txt); margin: 0; padding: 20px; }}
+        .container {{ max-width: 500px; margin: 0 auto; }}
+        .header {{ text-align: center; margin-bottom: 30px; }}
+        .card {{ background: #fff; border-radius: 20px; padding: 20px; box-shadow: var(--sh); margin-bottom: 20px; border: 1px solid #E2E8F0; }}
+        .profile-header {{ display: flex; align-items: center; gap: 15px; margin-bottom: 15px; }}
+        .avatar {{ width: 60px; height: 60px; background: #E0F2FE; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; color: var(--pr); }}
+        .student-name {{ font-weight: 900; font-size: 20px; margin: 0; }}
+        .class-name {{ color: #64748B; font-size: 14px; margin: 0; }}
+        .stats-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }}
+        .stat-item {{ padding: 15px; border-radius: 15px; text-align: center; color: #fff; }}
+        .stat-blue {{ background: linear-gradient(135deg, #3B82F6, #1E40AF); }}
+        .stat-orange {{ background: linear-gradient(135deg, #F97316, #C2410C); }}
+        .stat-red {{ background: linear-gradient(135deg, #EF4444, #B91C1C); }}
+        .stat-green {{ background: linear-gradient(135deg, #10B981, #047857); }}
+        .stat-value {{ font-size: 28px; font-weight: 900; margin-bottom: 5px; }}
+        .stat-label {{ font-size: 12px; opacity: 0.9; }}
+        .section-title {{ font-weight: 700; font-size: 16px; margin: 20px 0 10px; display: flex; align-items: center; gap: 8px; }}
+        .absence-item {{ display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid #F1F5F9; font-size: 14px; }}
+        .absence-item:last-child {{ border-bottom: none; }}
+        .points-badge {{ background: #FEF3C7; color: #92400E; padding: 4px 12px; border-radius: 20px; font-weight: 700; font-size: 14px; }}
+        
+        /* Carousel Styles */
+        .carousel {{ height: 100%; width: 100%; position: relative; }}
+        .slide {{ position: absolute; inset: 0; background-size: cover; background-position: center; opacity: 0; transition: opacity 0.5s ease; }}
+        .slide.active {{ opacity: 1; }}
+        .slide-caption {{ position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.5); color: #fff; padding: 10px; font-size: 13px; text-align: center; backdrop-filter: blur(4px); }}
+        .carousel-dots {{ position: absolute; bottom: 40px; left: 0; right: 0; display: flex; justify-content: center; gap: 8px; }}
+        .dot {{ width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.5); cursor: pointer; }}
+        .dot.active {{ background: #fff; width: 20px; border-radius: 10px; }}
+        
+        .footer {{ text-align: center; color: #94A3B8; font-size: 12px; margin-top: 40px; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 style="font-size: 24px; margin-bottom: 5px; color: var(--pr);">{school}</h1>
+            <p style="margin:0; opacity:0.7">بوابة ولي الأمر الذكية</p>
+        </div>
+
+        <div class="card">
+            <div class="profile-header">
+                <div class="avatar"><i class="fas fa-user-graduate"></i></div>
+                <div>
+                    <h2 class="student-name">{analysis.get('name', 'طالب')}</h2>
+                    <p class="class-name">{analysis.get('class_name', 'فصل')} — <span class="points-badge">{points} نقطة تميز ⭐</span></p>
+                </div>
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-item stat-blue">
+                <div class="stat-value">{analysis.get('total_absences', 0)}</div>
+                <div class="stat-label">أيام غياب كلي</div>
+            </div>
+            <div class="stat-item stat-orange">
+                <div class="stat-value">{analysis.get('total_tardiness', 0)}</div>
+                <div class="stat-label">حالات تأخر</div>
+            </div>
+            <div class="stat-item stat-green">
+                <div class="stat-value">{analysis.get('attendance_rate', '100')}%</div>
+                <div class="stat-label">نسبة الانضباط</div>
+            </div>
+            <div class="stat-item stat-red">
+                <div class="stat-value">{analysis.get('unexcused_days', 0)}</div>
+                <div class="stat-label">غياب غير مبرر</div>
+            </div>
+        </div>
+
+        {stories_html}
+
+        <div class="section-title"><i class="fas fa-history" style="color: var(--pr)"></i> آخر المسجلات</div>
+        <div class="card" style="padding: 10px;">
+            {"".join([f'<div class="absence-item"><span>📅 {r["date"]}</span> <span style="color:#C62828">غياب</span></div>' for r in (analysis.get('absence_rows', [])[:5])])}
+            {f'<p style="text-align:center; opacity:0.5; font-size:13px; padding:10px">لا يوجد غياب مسجل مؤخراً</p>' if not analysis.get('absence_rows') else ''}
+        </div>
+
+        <div class="section-title"><i class="fas fa-medal" style="color: #D97706"></i> سجل التميز</div>
+        <div class="card" style="padding: 10px;">
+             {"".join([f'<div class="absence-item"><span>🌟 {r["points"]} نقطة</span> <span style="font-size:12px; color:#64748B">{r["reason"]}</span></div>' for r in (analysis.get('points_history', [])[:3])])}
+             {f'<p style="text-align:center; opacity:0.5; font-size:13px; padding:10px">ابدأ في جمع النقاط لتظهر هنا!</p>' if not analysis.get('points_history') else ''}
+        </div>
+
+        <div class="footer">
+            <p>جميع الحقوق محفوظة © {datetime.datetime.now().year} DarbStu</p>
+        </div>
+    </div>
+    
+    <script>
+        let currentSlide = 0;
+        const slides = document.querySelectorAll('.slide');
+        const dots = document.querySelectorAll('.dot');
+        
+        function showSlide(n) {{
+            if (slides.length === 0) return;
+            slides[currentSlide].classList.remove('active');
+            dots[currentSlide].classList.remove('active');
+            currentSlide = (n + slides.length) % slides.length;
+            slides[currentSlide].classList.add('active');
+            dots[currentSlide].classList.add('active');
+        }}
+        
+        if (slides.length > 1) {{
+            setInterval(() => showSlide(currentSlide + 1), 5000);
+        }}
+    </script>
+</body>
+</html>"""
+    return HTMLResponse(html)
+
+# ─── ADMIN POINTS MANAGEMENT ───
+
+@router.get("/web/api/admin/points-logs", response_class=JSONResponse)
+async def api_admin_points_logs(request: Request):
+    user = _get_current_user(request)
+    if not user or user["role"] != "admin": return JSONResponse({"ok": False}, status_code=401)
+    from database import get_admin_points_logs
+    return JSONResponse({"ok": True, "logs": get_admin_points_logs()})
+
+@router.get("/web/api/admin/points-usage", response_class=JSONResponse)
+async def api_admin_points_usage(request: Request):
+    user = _get_current_user(request)
+    if not user or user["role"] != "admin": return JSONResponse({"ok": False}, status_code=401)
+    month = request.query_params.get("month", datetime.date.today().isoformat()[:7])
+    from database import get_teachers_points_usage
+    return JSONResponse({"ok": True, "usage": get_teachers_points_usage(month)})
+
+@router.delete("/web/api/admin/points-delete/{record_id}", response_class=JSONResponse)
+async def api_admin_points_delete(request: Request, record_id: int):
+    user = _get_current_user(request)
+    if not user or user["role"] != "admin": return JSONResponse({"ok": False}, status_code=401)
+    from database import delete_points_record
+    delete_points_record(record_id)
+    return JSONResponse({"ok": True})
+
+@router.post("/web/api/admin/points-settings", response_class=JSONResponse)
+async def api_admin_save_points_settings(request: Request):
+    user = _get_current_user(request)
+    if not user or user["role"] != "admin": return JSONResponse({"ok": False}, status_code=401)
+    data = await request.json()
+    limit = data.get("limit", 100)
+    from config_manager import load_config, save_config
+    cfg = load_config()
+    cfg["monthly_points_limit"] = int(limit)
+    save_config(cfg)
+    return JSONResponse({"ok": True})
+
+@router.post("/web/api/admin/points-adjust", response_class=JSONResponse)
+async def api_admin_points_adjust(request: Request):
+    user = _get_current_user(request)
+    if not user or user["role"] != "admin": return JSONResponse({"ok": False}, status_code=401)
+    data = await request.json()
+    username = data.get("username")
+    points = data.get("points", 0)
+    reason = data.get("reason", "")
+    from database import adjust_teacher_balance
+    adjust_teacher_balance(username, points, reason)
+    return JSONResponse({"ok": True})
+
+# ─── SCHOOL STORIES API ──────────────────────────────────────────
+
+@router.get("/web/api/stories", response_class=JSONResponse)
+async def api_get_stories(request: Request):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    from database import get_active_stories
+    return JSONResponse({"ok": True, "stories": get_active_stories()})
+
+@router.post("/web/api/stories/add", response_class=JSONResponse)
+async def api_add_story(request: Request, title: str = Form(None), file: UploadFile = File(...)):
+    user = _get_current_user(request)
+    if not user or user["role"] not in ("admin", "deputy", "activity_leader"):
+        return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
+    
+    try:
+        from constants import DATA_DIR
+        import shutil
+        
+        stories_dir = os.path.join(DATA_DIR, "school_stories")
+        os.makedirs(stories_dir, exist_ok=True)
+        
+        # حفظ الملف
+        ext = os.path.splitext(file.filename)[1]
+        fname = f"story_{int(datetime.datetime.now().timestamp())}{ext}"
+        fpath = os.path.join(stories_dir, fname)
+        
+        with open(fpath, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        from database import add_school_story
+        add_school_story(title, fpath)
+        
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.delete("/web/api/stories/delete/{story_id}", response_class=JSONResponse)
+async def api_delete_story(request: Request, story_id: int):
+    user = _get_current_user(request)
+    if not user or user["role"] not in ("admin", "deputy", "activity_leader"):
+        return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
+    
+    try:
+        from database import get_db
+        con = get_db(); cur = con.cursor()
+        cur.execute("SELECT image_path FROM school_stories WHERE id = ?", (story_id,))
+        row = cur.fetchone()
+        con.close()
+        
+        if row:
+            fpath = row[0]
+            if fpath and os.path.exists(fpath):
+                try: os.remove(fpath)
+                except: pass
+
+        from database import delete_school_story
+        delete_school_story(story_id)
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+
 
 # ===================== main =====================
 

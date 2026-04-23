@@ -144,6 +144,13 @@ class StudentAnalysisTabMixin:
         self._ana_wa_btn.pack(pady=(8, 0))
         self._ana_parent_phone = ""
 
+        self._ana_portal_btn = tk.Button(
+            risk_col, text="🔗 نسخ رابط بوابة ولي الأمر",
+            bg="#1565C0", fg="white", relief="flat",
+            font=("Tahoma", 9, "bold"), cursor="hand2",
+            command=self._ana_copy_portal_link)
+        self._ana_portal_btn.pack(pady=(5, 0))
+
         # ═══ كروت KPI (6 كروت) ══════════════════════════════════
         kpi_row = tk.Frame(self._ana_inner, bg="#F1F5F9")
         kpi_row.pack(fill="x", padx=20, pady=6)
@@ -154,6 +161,7 @@ class StudentAnalysisTabMixin:
             ("غياب مبرر",         "#22C55E", "✅"),
             ("غياب غير مبرر",     "#F97316", "⚠️"),
             ("دقائق التأخر",      "#F59E0B", "⏱️"),
+            ("نقاط التميز",       "#D97706", "⭐"),
             ("تحويلات للوكيل",    "#6366F1", "📋"),
             ("جلسات الموجه",      "#8B5CF6", "🧑‍🏫"),
             ("المعدل / الترتيب",  "#10B981", "🎓"),
@@ -235,6 +243,27 @@ class StudentAnalysisTabMixin:
         self.analysis_tree.configure(yscrollcommand=tl_sb.set)
         tl_sb.pack(side="right", fill="y")
         self.analysis_tree.pack(side="left", fill="both", expand=True)
+        
+        # ═══ سجل نقاط التميز ══════════════════════════════════════
+        pts_lf = tk.LabelFrame(self._ana_inner,
+                               text=" ⭐ سجل نقاط التميز التفصيلي ",
+                               bg="white", font=("Tahoma", 9, "bold"),
+                               padx=8, pady=8)
+        pts_lf.pack(fill="x", padx=20, pady=6)
+
+        pts_cols = ("date", "points", "reason", "author")
+        self.points_tree = ttk.Treeview(pts_lf, columns=pts_cols,
+                                           show="headings", height=5)
+        for c, h, w in zip(pts_cols,
+                           ["التاريخ","النقاط","السبب","بواسطة"],
+                           [100, 80, 350, 180]):
+            self.points_tree.heading(c, text=h)
+            self.points_tree.column(c, width=w, anchor="center" if w<200 else "e")
+        pts_sb = ttk.Scrollbar(pts_lf, orient="vertical",
+                                command=self.points_tree.yview)
+        self.points_tree.configure(yscrollcommand=pts_sb.set)
+        pts_sb.pack(side="right", fill="y")
+        self.points_tree.pack(side="left", fill="both", expand=True)
 
         # ═══ قسم النتائج الدراسية (قابل للطي) ══════════════════════
         self._results_section = tk.Frame(self._ana_inner, bg="#F1F5F9")
@@ -463,6 +492,7 @@ class StudentAnalysisTabMixin:
         self.analysis_cards["غياب مبرر"].config(text=str(excused))
         self.analysis_cards["غياب غير مبرر"].config(text=str(unexcused))
         self.analysis_cards["دقائق التأخر"].config(text=str(tard_mins))
+        self.analysis_cards["نقاط التميز"].config(text=str(data.get("total_points", 0)))
         self.analysis_cards["تحويلات للوكيل"].config(text=str(ref_count))
         self.analysis_cards["جلسات الموجه"].config(text=str(ses_count))
         self.analysis_cards["المعدل / الترتيب"].config(text=gpa_str)
@@ -497,6 +527,12 @@ class StudentAnalysisTabMixin:
         for ev in data.get("recent_events", []):
             self.analysis_tree.insert("", "end",
                 values=(ev["date"], ev["type"], ev["details"], ev["status"]))
+                
+        # سجل النقاط التفصيلي
+        self.points_tree.delete(*self.points_tree.get_children())
+        for p in data.get("points_history", []):
+            self.points_tree.insert("", "end",
+                values=(p["date"], f"+{p['points']}", p["reason"], p.get("author_name", "—")))
 
         # النتائج الدراسية
         res = data.get("results")
@@ -639,6 +675,28 @@ class StudentAnalysisTabMixin:
         if not phone.startswith("966"):
             phone = "966" + phone
         webbrowser.open(f"https://wa.me/{phone}")
+
+    def _ana_copy_portal_link(self):
+        if not self._current_ana_student_id:
+            messagebox.showwarning("تنبيه", "اختر طالباً أولاً"); return
+        
+        try:
+            from database import get_or_create_portal_token
+            from constants import MY_STATIC_DOMAIN, STATIC_DOMAIN, local_ip, PORT, debug_on
+            
+            token = get_or_create_portal_token(self._current_ana_student_id)
+            
+            base = STATIC_DOMAIN or MY_STATIC_DOMAIN
+            if not base or debug_on():
+                base = f"http://{local_ip()}:{PORT}"
+            
+            link = f"{base}/p/{token}"
+            
+            self.root.clipboard_clear()
+            self.root.clipboard_append(link)
+            messagebox.showinfo("تم النسخ", f"تم نسخ رابط ولي الأمر للمحفظة:\n{link}")
+        except Exception as e:
+            messagebox.showerror("خطأ", f"فشل توليد الرابط: {e}")
 
     # ─────────────────────────────────────────────────────────────
     def _ana_export_pdf(self):

@@ -79,6 +79,10 @@ class DashboardTabMixin:
         # كل المحتوى داخل _dash_inner بدلاً من self.dashboard_frame
         _f = _dash_inner  # اختصار
 
+        # ─ شريط التنبيهات الذكية (جديد)
+        self.dash_alerts_frame = ttk.Frame(_f)
+        self.dash_alerts_frame.pack(fill="x", padx=10, pady=(4,0))
+        
         # ─ بطاقات الإحصاء (صف واحد)
         cards_row = ttk.Frame(_f)
         cards_row.pack(fill="x", padx=10, pady=6)
@@ -102,7 +106,9 @@ class DashboardTabMixin:
         self.lbl_absent,  self.lbl_absent_sub   = make_card(cards_row, "الغياب اليوم",   "#EF4444")
         self.lbl_tard,    self.lbl_tard_sub      = make_card(cards_row, "التأخر اليوم",   "#F59E0B")
         self.lbl_week,    self.lbl_week_sub      = make_card(cards_row, "غياب الأسبوع",   "#8B5CF6",
-                                                              "مقارنة بالأسبوع الماضي")
+                                                               "مقارنة بالأسبوع الماضي")
+        self.lbl_points,  self.lbl_points_sub    = make_card(cards_row, "نقاط التميز",    "#D97706",
+                                                               "إجمالي النقاط اليوم")
 
         # ─ الجسم الرئيسي: جدول + رسوم بيانية
         body = ttk.Frame(_f)
@@ -228,6 +234,8 @@ class DashboardTabMixin:
             try:
                 metrics    = compute_today_metrics(date_str)
                 tard_today = len(query_tardiness(date_filter=date_str))
+                from database import get_points_awarded_on_date
+                pts_today  = get_points_awarded_on_date(date_str)
                 if refresh_heavy or DashboardTabMixin._dash_cache_wk is None:
                     month      = date_str[:7]
                     wk         = get_week_comparison()
@@ -243,9 +251,19 @@ class DashboardTabMixin:
             except Exception as e:
                 self.root.after(0, lambda: messagebox.showerror("خطأ", str(e)))
                 return
-            self.root.after(0, lambda: _update_ui(metrics, tard_today, wk, top_absent, dow_data, refresh_heavy))
+            self.root.after(0, lambda: _update_ui(metrics, tard_today, pts_today, wk, top_absent, dow_data, refresh_heavy))
+            
+            # فحص التنبيهات الذكية (تحويلات الموجه والتعاميم)
+            from database import get_unread_referrals_count, get_circulars, get_user_unread_circulars
+            from constants import CURRENT_USER
+            try:
+                ref_unread = get_unread_referrals_count()
+                circs = get_circulars()
+                unread_circs = get_user_unread_circulars(CURRENT_USER.get("username", ""), circs)
+                self.root.after(0, lambda: self._show_dash_alerts(ref_unread, len(unread_circs)))
+            except: pass
 
-        def _update_ui(metrics, tard_today, wk, top_absent, dow_data, refresh_heavy=True):
+        def _update_ui(metrics, tard_today, pts_today, wk, top_absent, dow_data, refresh_heavy=True):
             t = metrics["totals"]
             pct_absent = round(t["absent"] / max(t["students"], 1) * 100, 1)
 
@@ -257,6 +275,8 @@ class DashboardTabMixin:
                 self.lbl_absent_sub.config(text="{}% من الإجمالي".format(pct_absent))
             if hasattr(self, "lbl_tard"):
                 self.lbl_tard.config(text=str(tard_today))
+            if hasattr(self, "lbl_points"):
+                self.lbl_points.config(text=str(pts_today))
 
             # مقارنة الأسبوع
             try:
@@ -359,6 +379,34 @@ class DashboardTabMixin:
                 print("[DASH-DOW]", e)
 
         threading.Thread(target=_fetch, daemon=True).start()
+
+    def _show_dash_alerts(self, ref_count, circ_count):
+        for widget in self.dash_alerts_frame.winfo_children():
+            widget.destroy()
+        
+        if ref_count == 0 and circ_count == 0:
+            return
+        
+        container = tk.Frame(self.dash_alerts_frame, bg="#FFFBEB", highlightbackground="#FCD34D", highlightthickness=1)
+        container.pack(fill="x", pady=4)
+        
+        lbl_icon = tk.Label(container, text="🔔", bg="#FFFBEB", font=("Tahoma", 14))
+        lbl_icon.pack(side="right", padx=10, pady=10)
+        
+        txt = []
+        if ref_count > 0:
+            txt.append(f"يوجد ({ref_count}) تحويلات جديدة للموجه الطلابي بانتظار الإجراء.")
+        if circ_count > 0:
+            txt.append(f"لديك ({circ_count}) تعاميم جديدة غير مقروءة.")
+            
+        lbl_msg = tk.Label(container, text="\n".join(txt), bg="#FFFBEB", fg="#92400E",
+                           font=("Tahoma", 10, "bold"), justify="right")
+        lbl_msg.pack(side="right", padx=5)
+        
+        btn_go = tk.Button(container, text="عرض التفاصيل", bg="#D97706", fg="white", relief="flat",
+                           font=("Tahoma", 9, "bold"), cursor="hand2", padx=10,
+                           command=lambda: self._switch_tab("التعاميم") if circ_count > 0 else None)
+        btn_go.pack(side="left", padx=15, pady=10)
 
     def _start_msg_polling(self):
         def _poll():

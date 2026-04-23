@@ -41,6 +41,10 @@ class UsersTabMixin:
                    command=self._user_send_teacher_creds).pack(side="right", padx=3)
         ttk.Button(ctrl, text="⚙️ توليد حسابات المعلمين",
                    command=self._user_generate_teachers).pack(side="right", padx=3)
+        ttk.Button(ctrl, text="✏️ تعديل",
+                   command=self._user_edit_dialog).pack(side="right", padx=3)
+        ttk.Button(ctrl, text="📲 إرسال للمحدد",
+                   command=self._user_send_individual_creds).pack(side="right", padx=3)
 
         cols = ("id","username","full_name","role","active","last_login","tabs_info")
         self.tree_users = ttk.Treeview(left_lf, columns=cols,
@@ -99,17 +103,19 @@ class UsersTabMixin:
             "الموجّه الطلابي",       "استلام تحويلات",
             # السجلات
             "السجلات / التصدير",    "إدارة الغياب",          "التقارير / الطباعة",
-            "تقرير الفصل",           "نشر النتائج",           "تحليل النتائج",           "تصدير نور",
-            "الإشعارات الذكية",
+            "تقرير الفصل",           "تقرير الإدارة",         "نشر النتائج",           
+            "تحليل النتائج",         "تصدير نور",            "الإشعارات الذكية",
+            "الطلاب المستثنون",      "أكثر الطلاب غياباً",
             # الرسائل
-            "إرسال رسائل الغياب",   "رسائل التأخر",          "مستلمو التأخر",
-            "جدولة الروابط",         "إدارة الواتساب",
+            "إرسال رسائل الغياب",   "إرسال رسائل التأخر",    "مستلمو التأخر",
+            "جدولة الروابط",         "إدارة الواتساب",       "قصص المدرسة",
+            "تعزيز الحضور الأسبوعي",
             # البيانات
             "إدارة الطلاب",          "إضافة طالب",            "إدارة الفصول",
             "إدارة أرقام الجوالات",
             # أدوات المعلم
             "تحويل طالب",            "نماذج المعلم",          "خطابات الاستفسار",
-            "التعاميم والنشرات",
+            "التعاميم والنشرات",     "لوحة الصدارة (النقاط)", "تحليل طالب",
             # الإعدادات
             "إعدادات المدرسة",       "المستخدمون",            "النسخ الاحتياطية",
         ]
@@ -354,6 +360,12 @@ class UsersTabMixin:
             e.pack(side="right", fill="x", expand=True)
             fields[key] = var
 
+        f_ph = ttk.Frame(form); f_ph.pack(fill="x", pady=4)
+        ttk.Label(f_ph, text="رقم الجوال", width=18, anchor="e").pack(side="right")
+        var_ph = tk.StringVar()
+        ttk.Entry(f_ph, textvariable=var_ph, justify="right").pack(side="right", fill="x", expand=True)
+        fields["phone"] = var_ph
+
         f = ttk.Frame(form); f.pack(fill="x", pady=4)
         ttk.Label(f, text="الدور *", width=18, anchor="e").pack(side="right")
         
@@ -373,6 +385,7 @@ class UsersTabMixin:
         def save():
             un = fields["username"].get().strip()
             fn = fields["full_name"].get().strip()
+            ph = fields["phone"].get().strip()
             pw = fields["password"].get()
             cp = fields["confirm"].get()
             
@@ -388,7 +401,7 @@ class UsersTabMixin:
             if len(pw) < 6:
                 status_lbl.config(text="⚠️ كلمة المرور يجب أن تكون 6 أحرف على الأقل",
                                    foreground="orange"); return
-            ok, msg = create_user(un, pw, role_key, fn)
+            ok, msg = create_user(un, pw, role_key, fn, ph)
             if ok:
                 status_lbl.config(text="✅ "+msg, foreground="green")
                 self.users_frame.after(100, self._users_load)
@@ -397,6 +410,71 @@ class UsersTabMixin:
                 status_lbl.config(text="❌ "+msg, foreground="red")
 
         ttk.Button(win, text="إنشاء المستخدم", command=save).pack(pady=10)
+
+    def _user_edit_dialog(self):
+        sel = self.tree_users.selection()
+        if not sel: messagebox.showwarning("تنبيه","حدد مستخدماً للتعديل"); return
+        
+        vals = self.tree_users.item(sel[0])["values"]
+        user_id = vals[0]
+        
+        # جلب البيانات الكاملة
+        from database import get_all_users, update_user
+        user_data = next((u for u in get_all_users() if str(u["id"]) == str(user_id)), None)
+        if not user_data:
+            messagebox.showerror("خطأ", "تعذر العثور على بيانات المستخدم."); return
+        username = user_data["username"]
+
+        win = tk.Toplevel(self.root)
+        win.title(f"تعديل المستخدم: {username}")
+        win.geometry("400x320")
+        win.transient(self.root); win.grab_set()
+
+        ttk.Label(win, text=f"تعديل بيانات: {username}",
+                  font=("Tahoma",12,"bold")).pack(pady=(14,8))
+        form = ttk.Frame(win, padding=16); form.pack(fill="both")
+
+        fields = {}
+        for lbl, key, val in [
+            ("الاسم الكامل","full_name", user_data.get("full_name","")),
+            ("رقم الجوال","phone", user_data.get("phone","")),
+        ]:
+            f = ttk.Frame(form); f.pack(fill="x", pady=4)
+            ttk.Label(f, text=lbl, width=18, anchor="e").pack(side="right")
+            var = tk.StringVar(value=val)
+            e = ttk.Entry(f, textvariable=var, justify="right")
+            e.pack(side="right", fill="x", expand=True)
+            fields[key] = var
+
+        f = ttk.Frame(form); f.pack(fill="x", pady=4)
+        ttk.Label(f, text="الدور *", width=18, anchor="e").pack(side="right")
+        
+        role_labels = [r['label'] for r in ROLES.values()]
+        label_to_key = {r['label']: k for k, r in ROLES.items()}
+        
+        current_role_label = ROLES.get(user_data["role"], {}).get("label", user_data["role"])
+        role_label_var = tk.StringVar(value=current_role_label)
+        combo = ttk.Combobox(f, textvariable=role_label_var,
+                     values=role_labels,
+                     state="readonly", justify="right")
+        combo.pack(side="right", fill="x", expand=True)
+
+        status_lbl = ttk.Label(win, text=""); status_lbl.pack()
+
+        def save():
+            fn = fields["full_name"].get().strip()
+            ph = fields["phone"].get().strip()
+            role_key = label_to_key.get(role_label_var.get(), "teacher")
+            
+            ok, msg = update_user(username, role_key, fn, ph)
+            if ok:
+                status_lbl.config(text="✅ "+msg, foreground="green")
+                self.users_frame.after(100, self._users_load)
+                win.after(1000, win.destroy)
+            else:
+                status_lbl.config(text="❌ "+msg, foreground="red")
+
+        ttk.Button(win, text="حفظ التعديلات", command=save).pack(pady=10)
 
     def _user_change_pw(self):
         sel = self.tree_users.selection()
@@ -535,6 +613,67 @@ class UsersTabMixin:
             messagebox.showinfo("اكتمل",
                 f"✅ تم الإرسال لـ {sent_count} معلم.\n"
                 f"⏭️ تم تخطي {skip_count} (لا حساب أو لا رقم جوال).")
+        finally:
+            self.root.config(cursor="")
+
+    def _user_send_individual_creds(self):
+        """إرسال بيانات الدخول للمستخدم المحدد حالياً."""
+        sel = self.tree_users.selection()
+        if not sel:
+            messagebox.showwarning("تنبيه", "يرجى تحديد مستخدم من القائمة أولاً."); return
+        
+        vals = self.tree_users.item(sel[0])["values"]
+        user_id = vals[0]
+        
+        # جلب بيانات المستخدم كاملة للحصول على رقم الجوال
+        from database import get_all_users, update_user_password
+        user_data = next((u for u in get_all_users() if str(u["id"]) == str(user_id)), None)
+        
+        if not user_data:
+            messagebox.showerror("خطأ", "تعذر العثور على بيانات المستخدم."); return
+        
+        username = user_data["username"]
+        name = user_data.get("full_name") or username
+            
+        phone = user_data.get("phone", "").strip()
+        if not phone:
+            # إذا لم يوجد رقم جوال، نطلبه من المستخدم
+            from tkinter import simpledialog
+            phone = simpledialog.askstring("رقم الجوال", f"لم يتم العثور على رقم جوال لـ {name}.\nأدخل رقم الجوال (مثال: 9665...):", parent=self.root)
+            if not phone: return
+            # حفظ الرقم للمستقبل
+            from database import save_user_phone
+            save_user_phone(username, phone)
+
+        if not messagebox.askyesno("تأكيد", f"سيتم إنشاء كلمة مرور جديدة وإرسالها إلى {name} عبر الواتساب.\nهل تريد المتابعة؟"):
+            return
+
+        import random
+        from config_manager import load_config
+        from whatsapp_service import send_whatsapp_message
+        
+        cfg = load_config()
+        public_url = cfg.get("cloud_url_internal", "") or cfg.get("cloud_url", "")
+        if not public_url:
+            messagebox.showwarning("تنبيه", "لم يتم العثور على الرابط العام للبرنامج."); return
+
+        password = str(random.randint(100000, 999999))
+        update_user_password(username, password)
+        
+        msg = (f"مرحباً أستاذ {name}\n\n"
+               f"بيانات دخولك للنظام:\n\n"
+               f"الرابط: {public_url}/web/login\n"
+               f"اسم المستخدم: {username}\n"
+               f"كلمة المرور: {password}\n\n"
+               f"مع تحيات إدارة المدرسة")
+        
+        self.root.config(cursor="wait")
+        try:
+            ok = send_whatsapp_message(phone, msg)
+            if ok:
+                messagebox.showinfo("تم", f"تم إرسال بيانات الدخول إلى {name} بنجاح.")
+            else:
+                messagebox.showerror("خطأ", "فشل إرسال الرسالة عبر الواتساب. تأكد من اتصال الهاتف.")
         finally:
             self.root.config(cursor="")
 

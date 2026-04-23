@@ -2,9 +2,36 @@
 """
 whatsapp_service.py — خدمة إرسال رسائل الواتساب
 """
-import requests, os, subprocess, sys, time, threading, base64
+import requests, os, subprocess, sys, time, threading, base64, random
 from constants import BASE_DIR, WHATS_PATH, DATA_DIR
 from config_manager import load_config, render_message
+
+# ─── ميزات مكافحة الحظر (Anti-Ban Features) ───
+GREETINGS = [
+    "عزيزي ولي الأمر،",
+    "الأخ الفاضل ولي أمر الطالب،",
+    "المحترم ولي أمر الطالب/",
+    "نحييكم من إدارة المدرسة،",
+    "السلام عليكم ورحمة الله وبركاته،",
+    "ولي الأمر الكريم،",
+    "إلى ولي أمر الطالب المحترم،"
+]
+
+def get_random_greeting():
+    return random.choice(GREETINGS)
+
+def humanize_message(message: str) -> str:
+    """تضيف ترحيباً عشوائياً وتغير بعض الكلمات لجعل الرسالة فريدة."""
+    # إذا كانت الرسالة تبدأ بترحيب بالفعل، لا تضف واحداً آخر
+    for g in GREETINGS:
+        if message.startswith(g):
+            return message
+    return f"{get_random_greeting()}\n{message}"
+
+def random_delay(min_sec=5, max_sec=15):
+    """تأخير عشوائي لمحاكاة السلوك البشري."""
+    delay = random.uniform(min_sec, max_sec)
+    time.sleep(delay)
 
 def check_whatsapp_server_status() -> bool:
     """يفحص إذا كان خادم الواتساب يعمل ويستجيب"""
@@ -33,7 +60,10 @@ def get_next_wa_server() -> dict:
     _WA_SERVER_INDEX = (_WA_SERVER_INDEX + 1) % len(servers)
     return server
 
-def send_whatsapp_message(phone: str, message_body: str, student_data: dict = None) -> (bool, str):
+def send_whatsapp_message(phone: str, message_body: str, student_data: dict = None, humanize: bool = False) -> (bool, str):
+    if humanize:
+        message_body = humanize_message(message_body)
+    
     # اختر الخادم التالي بالتناوب
     _srv    = get_next_wa_server()
     _port   = _srv.get("port", 3000)

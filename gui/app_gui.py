@@ -51,6 +51,7 @@ from gui.tabs.teacher_inquiries_tab import TeacherInquiriesTabMixin
 from gui.tabs.student_analysis_tab import StudentAnalysisTabMixin
 from gui.tabs.circulars_tab        import CircularsTabMixin
 from gui.tabs.exempted_tab         import ExemptedTabMixin
+from gui.tabs.leaderboard_tab       import LeaderboardTabMixin
 
 # ─── استيراد كل الوحدات اللازمة ───────────────────────
 from constants import (APP_TITLE, APP_VERSION, DB_PATH, DATA_DIR, HOST, PORT,
@@ -156,6 +157,7 @@ class AppGUI(
     ClassNamingTabMixin,
     CircularsTabMixin,
     ExemptedTabMixin,
+    LeaderboardTabMixin,
 ):
     """الواجهة الرئيسية للتطبيق — تجمع كل Mixins في class واحد."""
     def __init__(self, root, public_url=None):
@@ -228,6 +230,7 @@ class AppGUI(
             "خطابات الاستفسار":    "_build_teacher_inquiries_tab",
             "التعاميم والنشرات":    "_build_circulars_tab",
             "الطلاب المستثنون":     "_build_exempted_tab",
+            "لوحة الصدارة (النقاط)": "_build_leaderboard_tab",
         }
 
         # مجموعات القائمة الجانبية
@@ -238,7 +241,7 @@ class AppGUI(
 
         sidebar_groups = [
             ("⬤  يومي", [t for t in [
-                "لوحة المراقبة","روابط الفصول","التأخر",
+                "لوحة المراقبة","روابط الفصول","التأخر","لوحة الصدارة (النقاط)",
                 "الأعذار","الاستئذان","المراقبة الحية","الموجّه الطلابي"] if _vis(t)]),
             ("⬤  السجلات", [t for t in [
                 "السجلات / التصدير","إدارة الغياب",
@@ -495,6 +498,9 @@ class AppGUI(
             self.refresh_analysis_students()
             if self._current_tab.get() == "تحليل الطالب":
                 self._on_analysis_student_selected()
+        if hasattr(self, "refresh_leaderboard"):
+            self.refresh_leaderboard()
+
 
     def _refresh_report_options(self):
         if hasattr(self, "report_class_combo"):
