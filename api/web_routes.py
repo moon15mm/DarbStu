@@ -2538,6 +2538,14 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
       </div>
       <button class="btn bp1" onclick="saveAdvSettings()">💾 حفظ</button>
     </div>
+    <div class="section" style="border:2px solid #dc2626;border-radius:10px;margin-top:16px">
+      <div class="st" style="color:#dc2626">تحديث طارئ فوري</div>
+      <p style="color:#555;font-size:13px;margin:8px 0 14px">يُنزِّل آخر إصدار من الخادم ويُعيد تشغيل البرنامج فوراً. استخدمه فقط عند الضرورة.</p>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <button class="btn" style="background:#dc2626;color:#fff;font-size:14px;padding:10px 22px" onclick="triggerEmergencyUpdate()">تحديث فوري الآن</button>
+        <span id="eu-status" style="font-size:13px;color:#555"></span>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -3815,6 +3823,17 @@ async function saveAdvSettings(){
     body:JSON.stringify({public_url:document.getElementById('ss-url').value,
       admin_report_phone:document.getElementById('ss-rpt-phone').value})});
   var d=await r.json();alert(d.ok?'✅ تم الحفظ':'❌ '+(d.msg||'خطأ'));
+}
+async function triggerEmergencyUpdate(){
+  var st=document.getElementById('eu-status');
+  if(!confirm('سيتم تحديث البرنامج على السيرفر وإعادة تشغيله فوراً. هل أنت متأكد؟')) return;
+  st.textContent='جارٍ التحديث...';st.style.color='#1565C0';
+  try{
+    var r=await fetch('/web/api/admin/trigger-update',{method:'POST'});
+    var d=await r.json();
+    if(d.ok){st.textContent='تم التحديث إلى '+d.msg+' — البرنامج يُعاد تشغيله الآن';st.style.color='#16a34a';}
+    else{st.textContent=d.msg||'لا يوجد تحديث جديد';st.style.color='#555';}
+  }catch(e){st.textContent='انقطع الاتصال — البرنامج يُعاد تشغيله';st.style.color='#d97706';}
 }
 async function checkWA(){
   var el=document.getElementById('wa-ind');

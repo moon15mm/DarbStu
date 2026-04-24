@@ -1,6 +1,6 @@
 {
-  "version": "3.2.15",
-  "notes": "تحديث فوري للسيرفر عبر واجهة الويب — بدون polling أو بطء",
+  "version": "3.2.16",
+  "notes": "زر التحديث الطارئ الفوري في صفحة الإعدادات المتقدمة",
   "force_update": false,
   "download_url": "https://github.com/moon15mm/DarbStu/archive/refs/heads/main.zip",
   "release_date": "2026-04-24"
