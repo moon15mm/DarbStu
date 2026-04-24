@@ -447,6 +447,12 @@ def main():
         schedule_weekly_rewards(root)
         # جدولة التحديث التلقائي
         from updater import schedule_auto_update
+        # ترحيل: إذا كانت الساعة لا تزال على القيمة القديمة (3) غيّرها لمنتصف الليل (0)
+        _ucfg = load_config()
+        if _ucfg.get("auto_update_hour", 0) == 3:
+            from config_manager import save_config
+            _ucfg["auto_update_hour"] = 0
+            save_config(_ucfg)
         schedule_auto_update(root)
         # جدول تصدير نور التلقائي
         def _noor_auto_check():
