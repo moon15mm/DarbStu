@@ -445,14 +445,19 @@ async def lab_docs_submissions(request: Request):
         has_pdf = pdf_path and os.path.exists(pdf_path)
         view_btn = (
             f'<a href="/web/lab-docs/view/{sub_id}" target="_blank" '
-            f'style="background:#1565C0;color:white;padding:6px 14px;border-radius:8px;'
+            f'style="background:#1565C0;color:white;padding:6px 12px;border-radius:8px;'
             f'text-decoration:none;font-size:13px;font-weight:700">📄 عرض PDF</a>'
         ) if has_pdf else '<span style="color:#aaa;font-size:12px">لا يوجد PDF</span>'
+        del_btn = (
+            f'<button onclick="delSub({sub_id},this)" '
+            f'style="background:#ef4444;color:white;border:none;padding:6px 12px;border-radius:8px;'
+            f'font-size:13px;font-weight:700;cursor:pointer;font-family:Cairo,sans-serif">🗑 حذف</button>'
+        )
         rows_html += f"""
-        <tr style="{'background:#fff' if is_read else 'background:#FFF7ED'}">
+        <tr id="row-{sub_id}" style="{'background:#fff' if is_read else 'background:#FFF7ED'}">
           <td style="padding:10px 14px;direction:rtl">{badge}{uname}</td>
           <td style="padding:10px 14px;color:#666;font-size:13px">{dt}</td>
-          <td style="padding:10px 14px">{view_btn}</td>
+          <td style="padding:10px 14px;display:flex;gap:8px;align-items:center">{view_btn}{del_btn}</td>
         </tr>"""
 
     page = f"""<!DOCTYPE html>
@@ -464,7 +469,7 @@ async def lab_docs_submissions(request: Request):
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap" rel="stylesheet">
 <style>
   body{{font-family:Cairo,sans-serif;background:#f0f4f3;margin:0;padding:20px}}
-  .card{{background:white;border-radius:14px;padding:24px;max-width:860px;margin:0 auto;box-shadow:0 2px 12px rgba(0,0,0,0.08)}}
+  .card{{background:white;border-radius:14px;padding:24px;max-width:900px;margin:0 auto;box-shadow:0 2px 12px rgba(0,0,0,0.08)}}
   h2{{color:#0f6e56;margin-top:0}}
   table{{width:100%;border-collapse:collapse}}
   thead tr{{background:#0f6e56;color:white}}
@@ -472,16 +477,63 @@ async def lab_docs_submissions(request: Request):
   tr:hover{{background:#f0fdf9!important}}
   .back{{display:inline-block;margin-bottom:16px;color:#2da88a;text-decoration:none;font-weight:700}}
 </style>
+<script>
+async function delSub(id, btn) {{
+  if (!confirm('⚠️ هل أنت متأكد من حذف هذا الملف نهائياً؟')) return;
+  btn.disabled = true; btn.textContent = '⏳';
+  try {{
+    var r = await fetch('/web/api/lab-docs/submissions/' + id + '/delete', {{method:'DELETE'}});
+    var d = await r.json();
+    if (d.ok) {{
+      var row = document.getElementById('row-' + id);
+      if (row) row.remove();
+    }} else {{
+      alert('❌ فشل الحذف: ' + (d.msg || ''));
+      btn.disabled = false; btn.textContent = '🗑 حذف';
+    }}
+  }} catch(e) {{
+    alert('❌ خطأ في الاتصال');
+    btn.disabled = false; btn.textContent = '🗑 حذف';
+  }}
+}}
+</script>
 </head>
 <body>
 <div class="card">
   <a class="back" href="/web/dashboard">← العودة للوحة التحكم</a>
   <h2>📋 شواهد الأداء الوظيفي — المُرسَلة للمدير</h2>
-  {'<p style="color:#888;text-align:center;padding:30px">لا توجد ملفات مُرسَلة بعد.</p>' if not rows else f'<table><thead><tr><th>المحضر</th><th>تاريخ الإرسال</th><th>الإجراء</th></tr></thead><tbody>{rows_html}</tbody></table>'}
+  {'<p style="color:#888;text-align:center;padding:30px">لا توجد ملفات مُرسَلة بعد.</p>' if not rows else f'<table><thead><tr><th>المحضر</th><th>تاريخ الإرسال</th><th>الإجراءات</th></tr></thead><tbody>{rows_html}</tbody></table>'}
 </div>
 </body>
 </html>"""
     return HTMLResponse(page)
+
+
+@router.delete("/web/api/lab-docs/submissions/{sub_id}/delete")
+async def lab_docs_delete_submission(sub_id: int, request: Request):
+    user = _get_current_user(request)
+    if not user or user.get("role") != "admin":
+        return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=403)
+
+    con = get_db(); cur = con.cursor()
+    try:
+        cur.execute("SELECT pdf_path FROM lab_doc_submissions WHERE id = ?", (sub_id,))
+        row = cur.fetchone()
+        if not row:
+            return JSONResponse({"ok": False, "msg": "السجل غير موجود"}, status_code=404)
+        pdf_path = row[0]
+        cur.execute("DELETE FROM lab_doc_submissions WHERE id = ?", (sub_id,))
+        con.commit()
+    finally:
+        con.close()
+
+    if pdf_path and os.path.exists(pdf_path):
+        try:
+            os.remove(pdf_path)
+        except Exception:
+            pass
+
+    return JSONResponse({"ok": True})
 
 
 @router.get("/web/lab-docs/view/{sub_id}")
