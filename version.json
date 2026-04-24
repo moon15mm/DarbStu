@@ -1,6 +1,6 @@
 {
-  "version": "3.2.8",
-  "notes": "إصلاح عاجل: حل خطأ SyntaxError في f-string",
+  "version": "3.2.9",
+  "notes": "إصلاح نظام التحديث التلقائي — يعمل الآن بدقة في الوقت المحدد",
   "download_url": "https://github.com/moon15mm/DarbStu/archive/refs/heads/main.zip",
   "release_date": "2026-04-24"
 }

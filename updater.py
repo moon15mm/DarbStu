@@ -200,47 +200,52 @@ def perform_silent_update(latest, notes, dl_url):
 
 
 def schedule_auto_update(root_widget):
-    """جدولة فحص التحديثات التلقائي يومياً في ساعة محددة."""
-    def _check():
+    """جدولة فحص التحديثات التلقائي يومياً في ساعة محددة (بدقة متناهية)."""
+    import datetime
+
+    def _run_update_check():
+        """ينفذ فحص التحديث الآن ثم يجدول الفحص التالي."""
         from config_manager import load_config
-        import datetime
-        
         cfg = load_config()
         if not cfg.get("auto_update_enabled", False):
-            # أعد الفحص بعد ساعة إذا تم إيقافه
-            root_widget.after(3600000, _check)
+            _schedule_next()
             return
-
-        now = datetime.datetime.now()
-        target_hour = cfg.get("auto_update_hour", 3) # الافتراضي 3 فجراً
-        
-        # إذا كنا في الساعة المحددة (ولم يتم التحديث مؤخراً في نفس الساعة)
-        if now.hour == target_hour and now.minute < 10:
+        try:
+            import json as _j
             try:
-                import json as _j
-                try:
-                    with urllib.request.urlopen(UPDATE_URL, timeout=5, context=_SSL_CTX) as r:
-                        data = _j.loads(r.read().decode())
-                except:
-                    with urllib.request.urlopen(UPDATE_URL, timeout=5) as r:
-                        data = _j.loads(r.read().decode())
-                
-                latest = data.get("version", "0.0.0")
-                dl_url = data.get("download_url", "") or _ZIP_FALLBACK
-                
-                def _v(v): return tuple(int(x) for x in str(v).split("."))
-                if _v(latest) > _v(_get_installed_version()):
-                    print(f"[AUTO-UPDATE] Found new version {latest}. Updating now...")
-                    root_widget.after(0, lambda: perform_silent_update(latest, "", dl_url))
-                    return # سيخرج البرنامج لإعادة التشغيل
-            except Exception as e:
-                print(f"[AUTO-UPDATE-ERROR] {e}")
+                with urllib.request.urlopen(UPDATE_URL, timeout=10, context=_SSL_CTX) as r:
+                    data = _j.loads(r.read().decode())
+            except Exception:
+                with urllib.request.urlopen(UPDATE_URL, timeout=10) as r:
+                    data = _j.loads(r.read().decode())
+            latest  = data.get("version", "0.0.0")
+            dl_url  = data.get("download_url", "") or _ZIP_FALLBACK
+            def _v(v): return tuple(int(x) for x in str(v).split("."))
+            if _v(latest) > _v(_get_installed_version()):
+                print(f"[AUTO-UPDATE] إصدار جديد {latest} — جارٍ التحديث الصامت...")
+                root_widget.after(0, lambda: perform_silent_update(latest, "", dl_url))
+                return  # البرنامج سيُعاد تشغيله — لا نجدول مرة أخرى
+            else:
+                print(f"[AUTO-UPDATE] الإصدار محدّث ({_get_installed_version()})")
+        except Exception as e:
+            print(f"[AUTO-UPDATE-ERROR] {e}")
+        _schedule_next()
 
-        # فحص كل 10 دقائق
-        root_widget.after(600000, _check)
+    def _schedule_next():
+        """يحسب الوقت المتبقي حتى الساعة المستهدفة غداً ويجدوله بدقة."""
+        from config_manager import load_config
+        cfg = load_config()
+        target_hour = cfg.get("auto_update_hour", 3)
+        now = datetime.datetime.now()
+        target = now.replace(hour=target_hour, minute=0, second=0, microsecond=0)
+        if target <= now:
+            target += datetime.timedelta(days=1)
+        delay_ms = int((target - now).total_seconds() * 1000)
+        print(f"[AUTO-UPDATE] الفحص التالي: {target.strftime('%Y-%m-%d %H:%M')} (بعد {delay_ms/3600000:.1f} ساعة)")
+        root_widget.after(delay_ms, _run_update_check)
 
-    # ابدأ الفحص الأول بعد دقيقة من التشغيل
-    root_widget.after(60000, _check)
+    # ابدأ الجدولة بعد دقيقتين من التشغيل
+    root_widget.after(120_000, _schedule_next)
 
 
 def _show_update_dialog(latest, notes, dl_url):
