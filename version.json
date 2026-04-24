@@ -1,6 +1,6 @@
 {
-  "version": "3.3.7",
-  "notes": "إظهار الاسم الحقيقي للمحضر في قائمة شواهد الأداء",
+  "version": "3.3.8",
+  "notes": "تحسينات عامة وإصلاح أخطاء",
   "download_url": "https://github.com/moon15mm/DarbStu/archive/refs/heads/main.zip",
   "release_date": "2026-04-24"
 }
