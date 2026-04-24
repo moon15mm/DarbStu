@@ -39,6 +39,10 @@ def _ensure_table():
         cur.execute("ALTER TABLE lab_doc_submissions ADD COLUMN pdf_path TEXT DEFAULT NULL")
     except Exception:
         pass
+    try:
+        cur.execute("ALTER TABLE lab_doc_submissions ADD COLUMN full_name TEXT DEFAULT NULL")
+    except Exception:
+        pass
     con.commit(); con.close()
     os.makedirs(os.path.join(DATA_DIR, "lab_submissions"), exist_ok=True)
 
@@ -382,6 +386,7 @@ async def lab_docs_submit(request: Request):
         return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=403)
 
     username = user.get("username", "")
+    full_name = user.get("full_name", "") or username
     try:
         body = await request.json()
         pdf_b64 = body.get("pdf_data", "")
@@ -402,9 +407,9 @@ async def lab_docs_submit(request: Request):
 
         con = get_db(); cur = con.cursor()
         cur.execute("""
-            INSERT INTO lab_doc_submissions (username, form_data, submitted_at, is_read, pdf_path)
-            VALUES (?, ?, ?, 0, ?)
-        """, (username, form_data, now_str, pdf_path))
+            INSERT INTO lab_doc_submissions (username, full_name, form_data, submitted_at, is_read, pdf_path)
+            VALUES (?, ?, ?, ?, 0, ?)
+        """, (username, full_name, form_data, now_str, pdf_path))
         con.commit(); con.close()
         return JSONResponse({"ok": True, "submitted_at": now_str})
     except Exception as e:
@@ -427,7 +432,7 @@ async def lab_docs_submissions(request: Request):
     con = get_db(); cur = con.cursor()
     try:
         cur.execute("""
-            SELECT id, username, submitted_at, is_read, pdf_path
+            SELECT id, username, COALESCE(full_name, username) as display_name, submitted_at, is_read, pdf_path
             FROM lab_doc_submissions
             ORDER BY submitted_at DESC
         """)
@@ -439,7 +444,7 @@ async def lab_docs_submissions(request: Request):
 
     rows_html = ""
     for row in rows:
-        sub_id, uname, sub_at, is_read, pdf_path = row
+        sub_id, uname, display_name, sub_at, is_read, pdf_path = row
         badge = "" if is_read else '<span style="background:#ef4444;color:white;padding:2px 8px;border-radius:20px;font-size:11px;margin-right:6px">جديد</span>'
         dt = sub_at[:16].replace("T", " ") if sub_at else ""
         has_pdf = pdf_path and os.path.exists(pdf_path)
@@ -455,7 +460,7 @@ async def lab_docs_submissions(request: Request):
         )
         rows_html += f"""
         <tr id="row-{sub_id}" style="{'background:#fff' if is_read else 'background:#FFF7ED'}">
-          <td style="padding:10px 14px;direction:rtl">{badge}{uname}</td>
+          <td style="padding:10px 14px;direction:rtl">{badge}{display_name}</td>
           <td style="padding:10px 14px;color:#666;font-size:13px">{dt}</td>
           <td style="padding:10px 14px;display:flex;gap:8px;align-items:center">{view_btn}{del_btn}</td>
         </tr>"""
