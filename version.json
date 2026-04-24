@@ -1,6 +1,6 @@
 {
-  "version": "3.2.11",
-  "notes": "تحديث تلقائي صامت عند منتصف الليل مع إعادة تشغيل تلقائية",
+  "version": "3.2.12",
+  "notes": "إصلاح عاجل: ظهور الدور الخاطئ (معلم) لحساب admin في وضع السحاب",
   "download_url": "https://github.com/moon15mm/DarbStu/archive/refs/heads/main.zip",
   "release_date": "2026-04-24"
 }

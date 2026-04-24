@@ -1595,10 +1595,9 @@ def authenticate(username: str, password: str):
         # في وضع السحاب، نستخدم الـ API للتحقق
         res = client.post("/web/api/login", {"username": username, "password": password})
         if res.get("ok"):
-            user      = res.get("user", {})
-            author_id = user.get("username") or user.get("sub") or "admin"
-            author_name = user.get("full_name") or author_id
-            role      = user.get("role", "teacher")
+            # الـ API يُرجع role و name في المستوى الأول وليس داخل "user"
+            role        = res.get("role", "admin")
+            author_name = res.get("name", username)
             # احفظ المستخدم محلياً حتى تعمل get_user_allowed_tabs بشكل صحيح
             try:
                 _con = get_db(); _cur = _con.cursor()
@@ -1640,11 +1639,7 @@ def authenticate(username: str, password: str):
 
 def get_user_info(username: str):
     """يُرجع معلومات المستخدم من لقاعدة البيانات."""
-    client = get_cloud_client()
-    if client.is_active():
-        # في وضع السحاب، قد نحتاج لإضافة نقطة نهاية لهذا أو استخدام authenticate
-        return {"username": username, "role": "teacher", "full_name": username}
-
+    # في وضع السحاب وغيره: نقرأ من قاعدة البيانات المحلية (مُحدَّثة عند تسجيل الدخول)
     con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
     cur.execute("SELECT username, role, full_name, active FROM users WHERE username=?", (username,))
     row = cur.fetchone(); con.close()
