@@ -7,13 +7,8 @@ from config_manager import load_config
 router = APIRouter()
 
 def _get_current_user(request: Request) -> dict:
-    try:
-        user_json = request.cookies.get("user_data")
-        if user_json:
-            import urllib.parse
-            return json.loads(urllib.parse.unquote(user_json))
-    except: pass
-    return {"role": "admin", "username": "admin"} # Fallback safe for admin
+    from api.web_routes import _get_current_user as _web_get_user
+    return _web_get_user(request)
 
 def _ensure_tables():
     con = get_db(); cur = con.cursor()
@@ -46,6 +41,8 @@ _ensure_tables()
 @router.get("/web/api/admin/points-logs-v2")
 async def api_admin_points_logs_v2(request: Request):
     user = _get_current_user(request)
+    if user.get("role") not in ("admin", "deputy", "staff"):
+        return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=403)
     con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
     try:
         cur.execute("SELECT * FROM student_points ORDER BY date DESC, id DESC LIMIT 500")
@@ -58,6 +55,8 @@ async def api_admin_points_logs_v2(request: Request):
 @router.get("/web/api/admin/points-usage-v2")
 async def api_admin_points_usage_v2(request: Request):
     user = _get_current_user(request)
+    if user.get("role") not in ("admin", "deputy", "staff"):
+        return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=403)
     month = request.query_params.get("month", datetime.date.today().isoformat()[:7])
     con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
     try:
@@ -87,6 +86,9 @@ async def api_admin_points_usage_v2(request: Request):
 
 @router.post("/web/api/admin/points-adjust")
 async def api_admin_points_adjust(request: Request):
+    user = _get_current_user(request)
+    if user.get("role") not in ("admin", "deputy"):
+        return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=403)
     try:
         data = await request.json()
         u = data.get("username"); p = data.get("points", 0); r = data.get("reason", "")
@@ -101,6 +103,9 @@ async def api_admin_points_adjust(request: Request):
 
 @router.delete("/web/api/admin/points-delete/{rid}")
 async def api_admin_points_delete(request: Request, rid: int):
+    user = _get_current_user(request)
+    if user.get("role") not in ("admin", "deputy"):
+        return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=403)
     con = get_db(); cur = con.cursor()
     try:
         cur.execute("DELETE FROM student_points WHERE id = ?", (rid,))

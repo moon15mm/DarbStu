@@ -1,7 +1,6 @@
 {
-  "version": "3.2.17",
-  "notes": "إصلاح: حذف الدوال المكررة في قاعدة البيانات وتنظيف الاستيرادات",
-  "force_update": false,
+  "version": "3.3.0",
+  "notes": "تحسينات عامة وإصلاح أخطاء",
   "download_url": "https://github.com/moon15mm/DarbStu/archive/refs/heads/main.zip",
   "release_date": "2026-04-24"
 }

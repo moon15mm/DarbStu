@@ -29,7 +29,10 @@
       "Bash(cmd.exe /c \"cloudflared tunnel route dns darb-tunnel darbte.uk 2>&1\")",
       "Bash(wait)",
       "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d['teachers'][:3] if isinstance\\(d,dict\\) else d[:3], ensure_ascii=False, indent=2\\)\\)\")",
-      "Bash(python3 -c ' *)"
+      "Bash(python3 -c ' *)",
+      "Bash(python -c ' *)",
+      "Bash(python -m py_compile api/web_routes.py)",
+      "Bash(python -m py_compile updater.py)"
     ]
   }
 }
