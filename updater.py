@@ -194,9 +194,36 @@ def _auto_update(latest, dl_url, win=None, status_lbl=None, btn=None):
         if btn: btn.config(state="normal")
 
 
-def perform_silent_update(latest, notes, dl_url):
-    """ينفذ التحديث فوراً وبصمت (للتحديثات المجدولة)."""
-    _auto_update(latest, dl_url)
+def perform_silent_update(root_widget, latest, notes, dl_url):
+    """يعرض نافذة إشعار مرئية (حتى في وضع الإخفاء) ثم ينفّذ التحديث."""
+    notif = tk.Toplevel()
+    notif.title("🔄 تحديث تلقائي — DarbStu")
+    notif.geometry("440x190")
+    notif.resizable(False, False)
+    notif.attributes("-topmost", True)
+    notif.lift()
+
+    hdr = tk.Frame(notif, bg="#1565C0", height=52)
+    hdr.pack(fill="x"); hdr.pack_propagate(False)
+    tk.Label(hdr, text="🔄  جارٍ تثبيت تحديث تلقائي",
+             bg="#1565C0", fg="white",
+             font=("Tahoma", 11, "bold")).pack(expand=True)
+
+    body = ttk.Frame(notif, padding=14); body.pack(fill="both", expand=True)
+    ttk.Label(body,
+              text=f"الإصدار الجديد:  {latest}",
+              font=("Tahoma", 10, "bold"), foreground="#1565C0").pack(anchor="e")
+    if notes:
+        ttk.Label(body, text=notes, font=("Tahoma", 9),
+                  foreground="#555", wraplength=400, justify="right").pack(anchor="e", pady=(3, 0))
+    status_lbl = ttk.Label(body, text="⬇️  جارٍ التحميل...", font=("Tahoma", 9), foreground="#333")
+    status_lbl.pack(anchor="e", pady=(10, 0))
+
+    threading.Thread(
+        target=_auto_update,
+        args=(latest, dl_url, notif, status_lbl, None),
+        daemon=True
+    ).start()
 
 
 def schedule_auto_update(root_widget):
@@ -219,11 +246,12 @@ def schedule_auto_update(root_widget):
                 with urllib.request.urlopen(UPDATE_URL, timeout=10) as r:
                     data = _j.loads(r.read().decode())
             latest  = data.get("version", "0.0.0")
+            notes   = data.get("notes", "")
             dl_url  = data.get("download_url", "") or _ZIP_FALLBACK
             def _v(v): return tuple(int(x) for x in str(v).split("."))
             if _v(latest) > _v(_get_installed_version()):
-                print(f"[AUTO-UPDATE] إصدار جديد {latest} — جارٍ التحديث الصامت...")
-                root_widget.after(0, lambda: perform_silent_update(latest, "", dl_url))
+                print(f"[AUTO-UPDATE] إصدار جديد {latest} — جارٍ عرض إشعار التحديث...")
+                root_widget.after(0, lambda: perform_silent_update(root_widget, latest, notes, dl_url))
                 return  # البرنامج سيُعاد تشغيله — لا نجدول مرة أخرى
             else:
                 print(f"[AUTO-UPDATE] الإصدار محدّث ({_get_installed_version()})")
@@ -232,10 +260,10 @@ def schedule_auto_update(root_widget):
         _schedule_next()
 
     def _schedule_next():
-        """يحسب الوقت المتبقي حتى الساعة المستهدفة غداً ويجدوله بدقة."""
+        """يحسب الوقت المتبقي حتى الساعة المستهدفة ويجدوله بدقة."""
         from config_manager import load_config
         cfg = load_config()
-        target_hour = cfg.get("auto_update_hour", 3)
+        target_hour = cfg.get("auto_update_hour", 12)  # الافتراضي: 12 ظهراً
         now = datetime.datetime.now()
         target = now.replace(hour=target_hour, minute=0, second=0, microsecond=0)
         if target <= now:

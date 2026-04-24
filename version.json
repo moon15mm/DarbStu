@@ -1,6 +1,6 @@
 {
-  "version": "3.2.9",
-  "notes": "إصلاح نظام التحديث التلقائي — يعمل الآن بدقة في الوقت المحدد",
+  "version": "3.2.10",
+  "notes": "تحديث تلقائي يومياً عند الساعة 12 ظهراً مع إشعار مرئي",
   "download_url": "https://github.com/moon15mm/DarbStu/archive/refs/heads/main.zip",
   "release_date": "2026-04-24"
 }
