@@ -1531,11 +1531,12 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
     gender = cfg.get("school_gender", "boys")
 
     # جلب التنبيهات الذكية
-    from database import get_unread_referrals_count, get_unread_circulars_count
+    from database import get_unread_referrals_count, get_unread_circulars_count, get_unread_lab_submissions_count
     unread_referrals = 0
     if role in ("admin", "deputy", "supervisor", "counselor"):
         unread_referrals = get_unread_referrals_count()
     unread_circs = get_unread_circulars_count(username, role)
+    unread_lab_submissions = get_unread_lab_submissions_count() if role == "admin" else 0
 
     # ── قائمة التبويبات مع مجموعاتها ──────────────────────────
     SIDEBAR_GROUPS = [
@@ -1761,16 +1762,18 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
     _circ_add_btn = '<button class="btn bp1 bsm" onclick="si(\'circulars\',\'circ-add\')">+ إصدار تعميم</button>' if role == 'admin' else ''
     _alert_referral_html = ('<div class="ab ai" style="background:#FFF7ED; border:1px solid #FFEDD5; color:#C2410C; padding:15px; border-radius:12px; display:flex; align-items:center; gap:12px; cursor:pointer" onclick="showTab(\'referral_deputy\')"><i class="fas fa-exclamation-circle" style="font-size:20px"></i> <div><b>تنبيه:</b> يوجد عدد <b>' + str(unread_referrals) + '</b> تحويلات جديدة بانتظار مراجعتك.</div></div>') if unread_referrals > 0 else ''
     _alert_circs_html = ('<div class="ab ai" style="background:#F0F9FF; border:1px solid #E0F2FE; color:#0369A1; padding:15px; border-radius:12px; display:flex; align-items:center; gap:12px; cursor:pointer" onclick="showTab(\'circulars\')"><i class="fas fa-scroll" style="font-size:20px"></i> <div><b>تعميم جديد:</b> لديك <b>' + str(unread_circs) + '</b> تعاميم غير مقروءة.</div></div>') if unread_circs > 0 else ''
+    _alert_lab_html = ('<div class="ab ai" style="background:#F0FDF4; border:1px solid #BBF7D0; color:#166534; padding:15px; border-radius:12px; display:flex; align-items:center; gap:12px; cursor:pointer" onclick="window.open(\'/web/lab-docs/submissions\',\'_blank\')"><i class="fas fa-clipboard-check" style="font-size:20px"></i> <div><b>شواهد أداء جديدة:</b> وصل <b>' + str(unread_lab_submissions) + '</b> ملف شواهد أداء وظيفي من المحضر.</div></div>') if unread_lab_submissions > 0 else ''
     content_html = f'''
 <div id="tab-dashboard">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
     <h2 class="pt"><i class="fas fa-chart-line"></i> لوحة المراقبة</h2>
     <input type="date" id="dash-date" onchange="loadDashboard()" style="width:auto">
   </div>
-  <div id="smart-alert-banner" style="margin-bottom:20px; display: {'block' if (unread_referrals > 0 or unread_circs > 0) else 'none'}">
+  <div id="smart-alert-banner" style="margin-bottom:20px; display: {'block' if (unread_referrals > 0 or unread_circs > 0 or unread_lab_submissions > 0) else 'none'}">
     <div style="display:flex; flex-direction:column; gap:10px">
       {_alert_referral_html}
       {_alert_circs_html}
+      {_alert_lab_html}
     </div>
   </div>
   {'<div style="margin-bottom:18px"><a href="/web/lab-docs" target="_blank" style="display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,#0f6e56,#2da88a);color:white;padding:16px 22px;border-radius:12px;text-decoration:none;font-weight:700;font-size:15px;box-shadow:0 4px 14px rgba(45,168,138,0.35)"><span style="font-size:28px">📋</span><div><div>توثيق شواهد الأداء الوظيفي</div><div style="font-size:12px;font-weight:400;opacity:0.85;margin-top:3px">سجّل وأرشف شواهد أدائك الوظيفي بشكل تفاعلي</div></div><span style="margin-right:auto;opacity:0.7">↗</span></a></div>' if role == "lab" else ''}

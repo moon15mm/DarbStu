@@ -2985,3 +2985,14 @@ def adjust_teacher_balance(username, points, reason, month=None):
         VALUES (?, ?, ?, ?, ?)
     """, (username, month, points, reason, datetime.datetime.now().isoformat()))
     con.commit(); con.close()
+
+
+def get_unread_lab_submissions_count() -> int:
+    try:
+        con = get_db(); cur = con.cursor()
+        cur.execute("SELECT COUNT(*) FROM lab_doc_submissions WHERE is_read = 0")
+        count = cur.fetchone()[0]
+        con.close()
+        return count
+    except Exception:
+        return 0
