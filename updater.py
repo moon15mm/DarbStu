@@ -195,33 +195,10 @@ def _auto_update(latest, dl_url, win=None, status_lbl=None, btn=None):
 
 
 def perform_silent_update(root_widget, latest, notes, dl_url):
-    """يعرض نافذة إشعار مرئية (حتى في وضع الإخفاء) ثم ينفّذ التحديث."""
-    notif = tk.Toplevel()
-    notif.title("🔄 تحديث تلقائي — DarbStu")
-    notif.geometry("440x190")
-    notif.resizable(False, False)
-    notif.attributes("-topmost", True)
-    notif.lift()
-
-    hdr = tk.Frame(notif, bg="#1565C0", height=52)
-    hdr.pack(fill="x"); hdr.pack_propagate(False)
-    tk.Label(hdr, text="🔄  جارٍ تثبيت تحديث تلقائي",
-             bg="#1565C0", fg="white",
-             font=("Tahoma", 11, "bold")).pack(expand=True)
-
-    body = ttk.Frame(notif, padding=14); body.pack(fill="both", expand=True)
-    ttk.Label(body,
-              text=f"الإصدار الجديد:  {latest}",
-              font=("Tahoma", 10, "bold"), foreground="#1565C0").pack(anchor="e")
-    if notes:
-        ttk.Label(body, text=notes, font=("Tahoma", 9),
-                  foreground="#555", wraplength=400, justify="right").pack(anchor="e", pady=(3, 0))
-    status_lbl = ttk.Label(body, text="⬇️  جارٍ التحميل...", font=("Tahoma", 9), foreground="#333")
-    status_lbl.pack(anchor="e", pady=(10, 0))
-
+    """تحديث صامت تماماً — تنزيل وتثبيت وإعادة تشغيل بدون أي نافذة."""
     threading.Thread(
         target=_auto_update,
-        args=(latest, dl_url, notif, status_lbl, None),
+        args=(latest, dl_url, None, None, None),
         daemon=True
     ).start()
 
@@ -263,7 +240,7 @@ def schedule_auto_update(root_widget):
         """يحسب الوقت المتبقي حتى الساعة المستهدفة ويجدوله بدقة."""
         from config_manager import load_config
         cfg = load_config()
-        target_hour = cfg.get("auto_update_hour", 12)  # الافتراضي: 12 ظهراً
+        target_hour = cfg.get("auto_update_hour", 0)  # الافتراضي: منتصف الليل (00:00)
         now = datetime.datetime.now()
         target = now.replace(hour=target_hour, minute=0, second=0, microsecond=0)
         if target <= now:

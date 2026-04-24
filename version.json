@@ -1,6 +1,6 @@
 {
-  "version": "3.2.10",
-  "notes": "تحديث تلقائي يومياً عند الساعة 12 ظهراً مع إشعار مرئي",
+  "version": "3.2.11",
+  "notes": "تحديث تلقائي صامت عند منتصف الليل مع إعادة تشغيل تلقائية",
   "download_url": "https://github.com/moon15mm/DarbStu/archive/refs/heads/main.zip",
   "release_date": "2026-04-24"
 }
