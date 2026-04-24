@@ -1,6 +1,6 @@
 {
-  "version": "3.3.3",
-  "notes": "إرسال شواهد الأداء الوظيفي للمحضر مباشرةً للمدير مع تنبيه فوري",
+  "version": "3.3.4",
+  "notes": "إرسال شواهد الأداء PDF غير قابل للتعديل إلى المدير مع تنبيه فوري",
   "download_url": "https://github.com/moon15mm/DarbStu/archive/refs/heads/main.zip",
   "release_date": "2026-04-24"
 }

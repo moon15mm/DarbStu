@@ -3,11 +3,11 @@
 api/lab_docs_routes.py — توثيق شواهد الأداء الوظيفي لمحضر المختبر
 يخدم صفحة HTML التفاعلية ويوفر API للحفظ والتحميل من قاعدة البيانات.
 """
-import os, json, datetime
+import os, json, datetime, base64 as _b64
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, FileResponse
 from database import get_db
-from constants import BASE_DIR
+from constants import BASE_DIR, DATA_DIR
 
 router = APIRouter()
 
@@ -35,7 +35,12 @@ def _ensure_table():
             is_read      INTEGER NOT NULL DEFAULT 0
         )
     """)
+    try:
+        cur.execute("ALTER TABLE lab_doc_submissions ADD COLUMN pdf_path TEXT DEFAULT NULL")
+    except Exception:
+        pass
     con.commit(); con.close()
+    os.makedirs(os.path.join(DATA_DIR, "lab_submissions"), exist_ok=True)
 
 _ensure_table()
 
@@ -155,32 +160,102 @@ def _body_inject(username: str) -> str:
     }}
   }});
 
-  // ── زر إرسال الملف للمدير ────────────────────────────────────
+  // ── زر إرسال الملف للمدير (PDF) ─────────────────────────────
   window.addEventListener('load', function() {{
-    var topbar = document.querySelector('.page-topbar');
-    if (!topbar) return;
     var sendBtn = document.createElement('button');
     sendBtn.textContent = '📤 إرسال للمدير';
     sendBtn.style.cssText = 'position:fixed;bottom:22px;left:22px;z-index:9999;background:#1565C0;color:white;border:none;border-radius:10px;padding:12px 20px;font-size:14px;font-weight:700;font-family:Cairo,sans-serif;cursor:pointer;box-shadow:0 4px 14px rgba(21,101,192,0.45);direction:rtl';
+
+    function _loadScript(src) {{
+      return new Promise(function(res, rej) {{
+        if (document.querySelector('script[src="' + src + '"]')) {{ res(); return; }}
+        var s = document.createElement('script');
+        s.src = src; s.onload = res; s.onerror = rej;
+        document.head.appendChild(s);
+      }});
+    }}
+
     sendBtn.onclick = async function() {{
-      if (!confirm('📤 هل تريد إرسال نسخة من شواهد أدائك الوظيفي إلى مدير المدرسة الآن؟')) return;
-      var raw = localStorage.getItem('lab_perf_data_v1');
-      if (!raw) {{ alert('⚠️ لا توجد بيانات محفوظة بعد — احفظ أولاً ثم أرسل.'); return; }}
-      sendBtn.disabled = true; sendBtn.textContent = '⏳ جارٍ الإرسال...';
+      if (!confirm('📤 هل تريد إرسال ملف PDF لشواهد أدائك الوظيفي إلى مدير المدرسة الآن؟')) return;
+      if (typeof saveAllData === 'function') saveAllData();
+
+      // بناء overlay التحميل
+      var overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(10,30,25,0.82);z-index:99999;display:flex;align-items:center;justify-content:center';
+      overlay.innerHTML = '<div style="background:#fff;padding:36px 44px;border-radius:18px;text-align:center;font-family:Cairo,sans-serif;min-width:300px"><div id="_dstatus" style="font-size:16px;font-weight:700;color:#0f6e56;margin-bottom:8px">⏳ جارٍ تحضير الملف...</div><div style="color:#888;font-size:13px">يُرجى الانتظار</div></div>';
+      document.body.appendChild(overlay);
+      sendBtn.disabled = true;
+
+      function setStatus(msg) {{
+        var el = document.getElementById('_dstatus');
+        if (el) el.textContent = msg;
+      }}
+
       try {{
+        setStatus('⏳ جارٍ تحميل مكتبات PDF...');
+        await _loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+        await _loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+
+        setStatus('⏳ جارٍ تحضير الصفحات...');
+        // إظهار جميع الصفحات مؤقتاً
+        var tmpStyle = document.createElement('style');
+        tmpStyle.id = '_ds_tmp';
+        tmpStyle.textContent = '#pagesContainer .page{{display:block!important;max-width:860px!important}}';
+        document.head.appendChild(tmpStyle);
+        await new Promise(function(r){{ setTimeout(r, 350); }});
+
+        var pages = document.querySelectorAll('#pagesContainer .page');
+        var {{ jsPDF }} = window.jspdf;
+        var pdf = new jsPDF('p', 'mm', 'a4');
+        var first = true;
+
+        for (var i = 0; i < pages.length; i++) {{
+          setStatus('⏳ جارٍ التقاط الصفحة ' + (i+1) + ' من ' + pages.length + '...');
+          var pg = pages[i];
+          try {{
+            var cvs = await html2canvas(pg, {{
+              scale: 1.8,
+              useCORS: true,
+              allowTaint: true,
+              backgroundColor: '#ffffff',
+              logging: false,
+            }});
+            if (cvs.width === 0 || cvs.height === 0) continue;
+            var imgData = cvs.toDataURL('image/jpeg', 0.88);
+            var ratio = cvs.width / cvs.height;
+            var mW = 190, mH = 277;
+            var iW = mW, iH = mW / ratio;
+            if (iH > mH) {{ iH = mH; iW = mH * ratio; }}
+            if (!first) pdf.addPage();
+            pdf.addImage(imgData, 'JPEG', (210 - iW) / 2, (297 - iH) / 2, iW, iH);
+            first = false;
+          }} catch(e) {{ /* تخطّي الصفحة عند خطأ */ }}
+        }}
+
+        // إزالة السيتيل المؤقت
+        var ts = document.getElementById('_ds_tmp');
+        if (ts) ts.remove();
+
+        setStatus('⏳ جارٍ رفع الملف...');
+        var pdfB64 = pdf.output('datauristring').split(',')[1];
+
         var r = await fetch('/web/api/lab-docs/submit', {{
           method: 'POST',
           headers: {{ 'Content-Type': 'application/json' }},
-          body: JSON.stringify({{ form_data: raw }})
+          body: JSON.stringify({{ pdf_data: pdfB64 }})
         }});
         var d = await r.json();
+        overlay.remove();
         if (d.ok) {{
-          alert('✅ تم الإرسال بنجاح! سيصل التنبيه للمدير.');
+          alert('✅ تم إرسال الملف بنجاح! سيصل التنبيه للمدير.');
         }} else {{
           alert('❌ فشل الإرسال: ' + (d.msg || 'خطأ غير معروف'));
         }}
       }} catch(e) {{
-        alert('❌ تعذّر الاتصال بالخادم');
+        var ts2 = document.getElementById('_ds_tmp');
+        if (ts2) ts2.remove();
+        overlay.remove();
+        alert('❌ خطأ أثناء إنشاء PDF: ' + e.message);
       }}
       sendBtn.disabled = false; sendBtn.textContent = '📤 إرسال للمدير';
     }};
@@ -309,18 +384,29 @@ async def lab_docs_submit(request: Request):
     username = user.get("username", "")
     try:
         body = await request.json()
+        pdf_b64 = body.get("pdf_data", "")
         form_data = body.get("form_data", "{}")
         if not isinstance(form_data, str):
             form_data = json.dumps(form_data)
-        now = datetime.datetime.now().isoformat()
+        now = datetime.datetime.now()
+        now_str = now.isoformat()
+
+        pdf_path = None
+        if pdf_b64:
+            subs_dir = os.path.join(DATA_DIR, "lab_submissions")
+            os.makedirs(subs_dir, exist_ok=True)
+            fname = f"lab_{username}_{now.strftime('%Y%m%d_%H%M%S')}.pdf"
+            pdf_path = os.path.join(subs_dir, fname)
+            with open(pdf_path, "wb") as f:
+                f.write(_b64.b64decode(pdf_b64))
 
         con = get_db(); cur = con.cursor()
         cur.execute("""
-            INSERT INTO lab_doc_submissions (username, form_data, submitted_at, is_read)
-            VALUES (?, ?, ?, 0)
-        """, (username, form_data, now))
+            INSERT INTO lab_doc_submissions (username, form_data, submitted_at, is_read, pdf_path)
+            VALUES (?, ?, ?, 0, ?)
+        """, (username, form_data, now_str, pdf_path))
         con.commit(); con.close()
-        return JSONResponse({"ok": True, "submitted_at": now})
+        return JSONResponse({"ok": True, "submitted_at": now_str})
     except Exception as e:
         return JSONResponse({"ok": False, "msg": str(e)})
 
@@ -341,7 +427,7 @@ async def lab_docs_submissions(request: Request):
     con = get_db(); cur = con.cursor()
     try:
         cur.execute("""
-            SELECT id, username, submitted_at, is_read
+            SELECT id, username, submitted_at, is_read, pdf_path
             FROM lab_doc_submissions
             ORDER BY submitted_at DESC
         """)
@@ -353,19 +439,20 @@ async def lab_docs_submissions(request: Request):
 
     rows_html = ""
     for row in rows:
-        sub_id, uname, sub_at, is_read = row
+        sub_id, uname, sub_at, is_read, pdf_path = row
         badge = "" if is_read else '<span style="background:#ef4444;color:white;padding:2px 8px;border-radius:20px;font-size:11px;margin-right:6px">جديد</span>'
         dt = sub_at[:16].replace("T", " ") if sub_at else ""
+        has_pdf = pdf_path and os.path.exists(pdf_path)
+        view_btn = (
+            f'<a href="/web/lab-docs/view/{sub_id}" target="_blank" '
+            f'style="background:#1565C0;color:white;padding:6px 14px;border-radius:8px;'
+            f'text-decoration:none;font-size:13px;font-weight:700">📄 عرض PDF</a>'
+        ) if has_pdf else '<span style="color:#aaa;font-size:12px">لا يوجد PDF</span>'
         rows_html += f"""
         <tr style="{'background:#fff' if is_read else 'background:#FFF7ED'}">
           <td style="padding:10px 14px;direction:rtl">{badge}{uname}</td>
           <td style="padding:10px 14px;color:#666;font-size:13px">{dt}</td>
-          <td style="padding:10px 14px">
-            <a href="/web/lab-docs/view/{sub_id}" target="_blank"
-               style="background:#1565C0;color:white;padding:6px 14px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700">
-              عرض الملف
-            </a>
-          </td>
+          <td style="padding:10px 14px">{view_btn}</td>
         </tr>"""
 
     page = f"""<!DOCTYPE html>
@@ -397,7 +484,7 @@ async def lab_docs_submissions(request: Request):
     return HTMLResponse(page)
 
 
-@router.get("/web/lab-docs/view/{sub_id}", response_class=HTMLResponse)
+@router.get("/web/lab-docs/view/{sub_id}")
 async def lab_docs_view(sub_id: int, request: Request):
     user = _get_current_user(request)
     if not user:
@@ -413,7 +500,7 @@ async def lab_docs_view(sub_id: int, request: Request):
     con = get_db(); cur = con.cursor()
     try:
         cur.execute(
-            "SELECT username, form_data, submitted_at FROM lab_doc_submissions WHERE id = ?",
+            "SELECT username, pdf_path, submitted_at FROM lab_doc_submissions WHERE id = ?",
             (sub_id,)
         )
         row = cur.fetchone()
@@ -425,76 +512,25 @@ async def lab_docs_view(sub_id: int, request: Request):
                 "<a href='/web/lab-docs/submissions' style='color:#2da88a'>العودة للقائمة</a></body></html>",
                 status_code=404
             )
-        sub_username, form_data, submitted_at = row
-        # تحديد is_read = 1
+        sub_username, pdf_path, submitted_at = row
         cur.execute("UPDATE lab_doc_submissions SET is_read = 1 WHERE id = ?", (sub_id,))
         con.commit()
     finally:
         con.close()
 
-    html_path = os.path.join(BASE_DIR, "lab_docs.html")
-    try:
-        with open(html_path, "r", encoding="utf-8") as f:
-            html = f.read()
-    except FileNotFoundError:
+    if not pdf_path or not os.path.exists(pdf_path):
         return HTMLResponse(
-            "<html dir='rtl'><body style='text-align:center;padding:80px'>"
-            "<h2>⚠️ ملف lab_docs.html غير موجود</h2></body></html>",
-            status_code=500
+            "<html dir='rtl'><body style='font-family:Cairo,sans-serif;text-align:center;padding:80px'>"
+            f"<h2 style='color:#e24b4a'>⚠️ ملف PDF غير متوفر</h2>"
+            f"<p>أُرسل بواسطة: <b>{sub_username}</b></p>"
+            "<a href='/web/lab-docs/submissions' style='color:#2da88a'>العودة للقائمة</a></body></html>",
+            status_code=404
         )
 
-    dt_str = submitted_at[:16].replace("T", " ") if submitted_at else ""
-
-    # حقن السياق — وضع بيانات النموذج مباشرةً في localStorage ثم تحميلها
-    preload_script = f"""<script>
-window.__LAB_READONLY__ = true;
-window.__LAB_USER__ = {{ username: {json.dumps(sub_username)} }};
-/* تحميل البيانات مسبقاً في localStorage بمفتاح خاص بهذه الجلسة */
-(function(){{
-  var tempKey = 'lab_perf_data_v1___admin_preview_{sub_id}';
-  var origKey = 'lab_perf_data_v1';
-  var data = {json.dumps(form_data)};
-  localStorage.setItem(tempKey, data);
-  var gi = Storage.prototype.getItem;
-  var si = Storage.prototype.setItem;
-  Storage.prototype.getItem = function(k){{ return gi.call(this, k===origKey ? tempKey : k); }};
-  Storage.prototype.setItem = function(k,v){{ /* قراءة فقط — لا حفظ */ }};
-  Storage.prototype.removeItem = function(k){{ /* قراءة فقط — لا حذف */ }};
-}})();
-</script>"""
-
-    readonly_banner = f"""<script>
-window.addEventListener('load', function() {{
-  // إخفاء Google Drive
-  var gdb = document.getElementById('gdrive-bar');
-  if (gdb) {{ gdb.style.display = 'none'; document.body.style.paddingBottom = '0'; }}
-
-  // بانر القراءة فقط
-  var topbar = document.querySelector('.page-topbar');
-  if (topbar) {{
-    var banner = document.createElement('div');
-    banner.style.cssText = 'background:#1565C0;color:white;padding:8px 20px;font-size:13px;font-weight:700;text-align:right;font-family:Cairo,sans-serif;direction:rtl;display:flex;align-items:center;justify-content:space-between;gap:12px;';
-    banner.innerHTML = '<span>👁️ عرض شواهد الأداء — <strong>{sub_username}</strong> | أُرسل: {dt_str}</span>' +
-      '<a href="/web/lab-docs/submissions" style="color:#9ee8d4;font-weight:400;font-size:12px">← العودة للقائمة</a>';
-    topbar.insertAdjacentElement('afterend', banner);
-  }}
-
-  // تحميل البيانات من localStorage مباشرةً
-  if (typeof restoreAllData === 'function') restoreAllData();
-
-  // تعطيل أزرار الحفظ والمسح
-  document.querySelectorAll('button').forEach(function(b) {{
-    var t = b.textContent.trim();
-    if (t.includes('حفظ') || t.includes('مسح') || t.includes('حذف') || t.includes('Drive')) {{
-      b.disabled = true;
-      b.style.opacity = '0.4';
-      b.title = 'غير متاح في وضع العرض';
-    }}
-  }});
-}});
-</script>"""
-
-    html = html.replace('</head>', preload_script + '</head>', 1)
-    html = html.replace('</body>', readonly_banner + '</body>', 1)
-
-    return HTMLResponse(html)
+    dt_safe = (submitted_at or "")[:10]
+    fname = f"lab_perf_{sub_username}_{dt_safe}.pdf"
+    return FileResponse(
+        pdf_path,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{fname}"'}
+    )
