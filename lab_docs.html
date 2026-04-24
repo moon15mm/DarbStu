@@ -1,0 +1,2612 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>سجل توثيق شواهد الأداء الوظيفي لمحضر المختبر</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --teal: #2da88a;
+    --teal-dark: #1a8a70;
+    --teal-deeper: #0f6e56;
+    --navy: #1a3a4a;
+    --navy-dark: #0f2d3d;
+    --gold: #f4c542;
+    --gold-dark: #c8860a;
+    --bg: #f0f4f3;
+    --white: #ffffff;
+    --gray: #e8eceb;
+    --text: #1a2a24;
+    --text-muted: #5a7068;
+    --border: #cdd8d4;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Cairo', 'Tajawal', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* ===== MAGAZINE LAYOUT ===== */
+  .magazine {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    width: 220px;
+    flex-shrink: 0;
+    background: var(--navy);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    z-index: 10;
+  }
+
+  .sidebar-logo {
+    padding: 18px 14px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    text-align: center;
+  }
+  .sidebar-logo .dots {
+    display: grid;
+    grid-template-columns: repeat(5,7px);
+    gap: 2.5px;
+    margin: 0 auto 6px;
+    width: fit-content;
+  }
+  .sidebar-logo .dots span {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--teal);
+    display: block;
+  }
+  .sidebar-logo .dots span:nth-child(2n) { background: rgba(255,255,255,0.3); }
+  .sidebar-logo .brand { color: var(--teal); font-size: 13px; font-weight: 700; }
+  .sidebar-logo .brand-en { color: #7a9aaa; font-size: 9px; margin-top: 1px; }
+  .sidebar-logo .gov { color: rgba(255,255,255,0.8); font-size: 10px; line-height: 1.6; margin-top: 8px; }
+
+  .sidebar-title {
+    padding: 10px 14px;
+    background: var(--teal-deeper);
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    text-align: center;
+    letter-spacing: 0.5px;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 14px;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    transition: all 0.2s;
+    color: rgba(255,255,255,0.7);
+    font-size: 12px;
+  }
+  .nav-item:hover { background: rgba(45,168,138,0.15); color: #7ee8c8; }
+  .nav-item.active { background: var(--teal); color: white; font-weight: 700; }
+  .nav-item .nav-num {
+    background: rgba(255,255,255,0.15);
+    color: white;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .nav-item.active .nav-num { background: rgba(255,255,255,0.3); }
+  .nav-item .nav-pct {
+    margin-right: auto;
+    font-size: 10px;
+    color: var(--gold);
+    opacity: 0.8;
+  }
+
+  /* Main content */
+  .main {
+    flex: 1;
+    overflow-y: auto;
+    background: var(--bg);
+  }
+
+  /* Page header */
+  .page-topbar {
+    background: var(--navy-dark);
+    padding: 8px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+  .page-topbar .breadcrumb { color: #7a9aaa; font-size: 12px; }
+  .page-topbar .breadcrumb strong { color: white; }
+  .topbar-actions { display: flex; gap: 8px; }
+  .btn-print {
+    background: var(--teal);
+    color: white;
+    border: none;
+    padding: 6px 16px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    font-weight: 700;
+    transition: background 0.2s;
+  }
+  .btn-print:hover { background: var(--teal-dark); }
+  .btn-nav {
+    background: rgba(255,255,255,0.1);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.2);
+    padding: 6px 14px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .btn-nav:hover { background: rgba(255,255,255,0.2); }
+
+  /* Page */
+  .page { display: none; padding: 24px; max-width: 860px; }
+  .page.active { display: block; }
+
+  /* Cover page */
+  .cover-wrap {
+    min-height: calc(100vh - 80px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+  }
+  .cover-card {
+    background: var(--navy);
+    border-radius: 16px;
+    padding: 50px 60px;
+    width: 100%;
+    max-width: 600px;
+    text-align: center;
+    color: white;
+    position: relative;
+    overflow: hidden;
+  }
+  .cover-card::before {
+    content: '';
+    position: absolute;
+    top: -60px; right: -60px;
+    width: 200px; height: 200px;
+    background: var(--teal);
+    border-radius: 50%;
+    opacity: 0.1;
+  }
+  .cover-card::after {
+    content: '';
+    position: absolute;
+    bottom: -40px; left: -40px;
+    width: 150px; height: 150px;
+    background: var(--gold);
+    border-radius: 50%;
+    opacity: 0.08;
+  }
+  .cover-card .gov-info { font-size: 14px; opacity: 0.8; line-height: 2; margin-bottom: 20px; }
+  .cover-card .year-badge {
+    display: inline-block;
+    background: rgba(244,197,66,0.2);
+    border: 1px solid rgba(244,197,66,0.4);
+    color: var(--gold);
+    padding: 4px 16px;
+    border-radius: 20px;
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 24px;
+  }
+  .cover-card .divider {
+    width: 60px; height: 3px;
+    background: var(--teal);
+    margin: 20px auto;
+    border-radius: 2px;
+  }
+  .cover-card h1 { font-size: 28px; font-weight: 900; margin-bottom: 8px; }
+  .cover-card h2 { font-size: 18px; font-weight: 700; color: #9ee8d4; margin-bottom: 30px; }
+  .name-input-wrap {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 8px;
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .name-input-wrap label { color: var(--gold); font-size: 13px; font-weight: 700; white-space: nowrap; }
+  .name-input-wrap input {
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid rgba(255,255,255,0.3);
+    color: white;
+    font-size: 14px;
+    direction: rtl;
+    outline: none;
+    flex: 1;
+    font-family: inherit;
+  }
+  .name-input-wrap input::placeholder { color: rgba(255,255,255,0.3); }
+
+  /* Section headers */
+  .sec-header {
+    background: var(--teal);
+    color: white;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 700;
+    border-radius: 6px;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .sec-header .sec-icon {
+    background: rgba(255,255,255,0.2);
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 900;
+  }
+  .sec-header-dark {
+    background: var(--navy);
+    color: #9ee8d4;
+    padding: 8px 14px;
+    font-size: 12px;
+    font-weight: 700;
+    border-radius: 4px;
+    margin-bottom: 12px;
+  }
+
+  /* Tables */
+  .tbl { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 16px; }
+  .tbl th {
+    background: var(--teal);
+    color: white;
+    padding: 8px 10px;
+    text-align: center;
+    border: 1px solid var(--teal-dark);
+    font-size: 12px;
+  }
+  .tbl td {
+    border: 1px solid var(--border);
+    padding: 7px 10px;
+    text-align: center;
+    vertical-align: middle;
+    background: white;
+  }
+  .tbl tr:nth-child(even) td { background: #f8fbfa; }
+  .tbl .td-r { text-align: right; }
+  .tbl .td-gold { background: var(--gold) !important; font-weight: 700; text-align: right; color: #222; }
+  .tbl .td-lbl { background: var(--gold) !important; font-weight: 700; text-align: center; width: 130px; }
+  .tbl .td-lbl-t { background: var(--teal) !important; color: white; font-weight: 700; text-align: center; }
+  .tbl input {
+    border: none; width: 100%; font-size: 12px;
+    direction: rtl; background: transparent; outline: none;
+    font-family: inherit; color: var(--text);
+  }
+  .tbl input:focus { background: #e8f7f2; }
+  .tbl td.photo-cell {
+    width: 120px; height: 130px;
+    background: #f0f4f3 !important;
+    color: #9ab; font-size: 11px;
+    border: 2px dashed var(--border);
+  }
+
+  /* Score cells */
+  .sc {
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.12s;
+    font-weight: 700;
+    font-size: 14px;
+    width: 38px;
+  }
+  .sc:hover { background: #b2e8d8; }
+  .sc.sel { background: var(--teal) !important; color: white; }
+  .total-row td { background: #e0f5ee !important; font-weight: 700; }
+  .gen-row td { background: var(--navy) !important; color: white; font-weight: 700; font-size: 14px; padding: 10px; }
+
+  /* Indicator table */
+  .ind-tbl { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 16px; table-layout: fixed; }
+  .ind-tbl th { background: var(--teal); color: white; padding: 7px; text-align: center; border: 1px solid var(--teal-dark); }
+  .ind-tbl td { border: 1px solid var(--border); padding: 6px 8px; text-align: center; vertical-align: middle; background: white; }
+  .ind-tbl .highlight { background: #fff3cd !important; font-weight: 700; text-align: right; color: #5a3e00; }
+  .chk { cursor: pointer; user-select: none; font-size: 16px; color: #aaa; transition: color 0.15s; }
+  .chk.on { color: var(--teal); font-weight: 700; }
+  .ind-tbl input { border: none; width: 100%; font-size: 11px; direction: rtl; background: transparent; outline: none; font-family: inherit; color: var(--text); }
+
+  /* Evidence items */
+  .ev-item {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 14px;
+    overflow: hidden;
+  }
+  .ev-item-title {
+    background: #e8f5f0;
+    border-right: 5px solid var(--teal);
+    padding: 9px 14px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #0f5a3e;
+  }
+
+
+  /* Follow-up */
+  .fu-wrap { background: white; border: 2px solid var(--teal); border-radius: 8px; padding: 18px; margin-bottom: 18px; }
+  .fu-label { background: #6c757d; color: white; display: inline-block; padding: 4px 14px; border-radius: 4px; font-size: 12px; font-weight: 700; margin-bottom: 14px; }
+  .field-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+  .fi { display: flex; align-items: center; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; background: white; }
+  .fi-lbl { background: var(--teal); color: white; padding: 8px 12px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+  .fi input { flex: 1; border: none; padding: 8px; font-size: 12px; direction: rtl; outline: none; font-family: inherit; color: var(--text); }
+  .rec-box { border: 1px solid var(--teal); border-radius: 6px; padding: 16px 14px 12px; position: relative; margin-bottom: 14px; background: white; }
+  .rec-badge { background: var(--gold-dark); color: white; padding: 3px 12px; font-size: 11px; font-weight: 700; position: absolute; top: -1px; right: 12px; border-radius: 0 0 4px 4px; }
+  .rec-line { display: flex; align-items: flex-start; gap: 8px; margin-top: 12px; }
+  .rec-line span { color: var(--gold-dark); font-weight: 700; font-size: 15px; min-width: 18px; padding-top: 2px; }
+  .rec-line textarea { flex: 1; border: none; border-bottom: 1px solid #ddd; padding: 4px 6px; font-size: 12px; font-family: inherit; direction: rtl; resize: none; height: 30px; background: transparent; outline: none; color: var(--text); }
+  .sig-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+  .sig-box { border: 1px solid var(--border); border-radius: 4px; overflow: hidden; background: white; }
+  .sig-lbl { background: var(--teal); color: white; padding: 8px 12px; font-size: 12px; font-weight: 700; text-align: center; }
+  .sig-body { padding: 10px 12px; }
+  .sig-body input { border: none; border-bottom: 1px solid var(--border); width: 100%; font-size: 12px; direction: rtl; outline: none; margin-bottom: 8px; font-family: inherit; color: var(--text); }
+  .sig-line { font-size: 11px; color: #999; margin-top: 4px; }
+
+  /* Bio photo placeholder */
+  .photo-placeholder {
+    width: 100%; height: 120px;
+    background: #e8f0ee;
+    border: 2px dashed var(--border);
+    border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    color: #9ab; font-size: 12px;
+    cursor: pointer;
+  }
+
+  /* Eval page header */
+  .eval-pg-header {
+    background: linear-gradient(135deg, var(--navy) 0%, var(--teal-deeper) 100%);
+    color: white;
+    padding: 16px 20px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .eval-pg-header .pg-num {
+    background: var(--teal);
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; font-weight: 900;
+    flex-shrink: 0;
+  }
+  .eval-pg-header .pg-title { font-size: 16px; font-weight: 700; }
+  .eval-pg-header .pg-pct { margin-right: auto; background: var(--gold); color: #5a3e00; padding: 3px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+
+  /* Progress bar */
+  .score-progress {
+    background: var(--navy);
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .score-progress .label { color: #9ee8d4; font-size: 12px; }
+  .prog-bar-wrap { flex: 1; background: rgba(255,255,255,0.1); border-radius: 10px; height: 8px; }
+  .prog-bar { height: 8px; border-radius: 10px; background: var(--teal); transition: width 0.5s; }
+  .score-val { color: white; font-size: 20px; font-weight: 900; min-width: 50px; text-align: left; }
+  .rating-badge {
+    padding: 4px 14px; border-radius: 20px; font-size: 12px; font-weight: 700;
+    background: rgba(255,255,255,0.15); color: white;
+  }
+
+  /* ===== SUGGESTED EVIDENCE PANEL ===== */
+  .suggested-panel {
+    background: #f0faf7;
+    border: 1.5px dashed var(--teal);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+  }
+  .suggested-panel-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--teal-deeper);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .suggested-panel-title::before {
+    content: '💡';
+    font-size: 13px;
+  }
+  .chips-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+  }
+  .chip {
+    background: white;
+    border: 1.5px solid var(--teal);
+    color: var(--teal-deeper);
+    border-radius: 20px;
+    padding: 5px 13px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: grab;
+    user-select: none;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .chip:hover { background: var(--teal); color: white; }
+  .chip.dragging { opacity: 0.4; cursor: grabbing; }
+  .chip::before { content: '⠿'; font-size: 10px; opacity: 0.5; }
+  .chip.used { opacity: 0.35; border-style: dashed; cursor: default; }
+
+  /* Evidence item with photo */
+  .ev-item { background: white; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 14px; overflow: hidden; }
+  .ev-item-title { background: #e8f5f0; border-right: 5px solid var(--teal); padding: 9px 14px; font-size: 13px; font-weight: 700; color: #0f5a3e; }
+  .ev-3col { display: grid; grid-template-columns: 1fr 1fr 1fr; }
+  .ev-box { border-top: 1px solid var(--border); }
+  .ev-box:not(:last-child) { border-left: 1px solid var(--border); }
+  .ev-box-lbl { background: var(--teal); color: white; padding: 5px 12px; font-size: 11px; font-weight: 700; text-align: center; }
+  .ev-box textarea {
+    width: 100%; border: none; padding: 10px;
+    font-size: 12px; font-family: inherit; direction: rtl;
+    resize: none; min-height: 80px; outline: none;
+    background: transparent; color: var(--text);
+  }
+  .ev-box textarea:focus { background: #f0faf7; }
+
+  /* Drop zone for textarea */
+  .ev-box textarea.drag-over {
+    background: #d6f5eb !important;
+    border: 2px dashed var(--teal) !important;
+  }
+
+  /* Photo upload zone */
+  .photo-upload-zone {
+    padding: 10px;
+    min-height: 90px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    background: #fafafa;
+    transition: background 0.2s;
+  }
+  .photo-upload-zone:hover { background: #f0faf7; }
+  .photo-upload-zone.drag-over { background: #d6f5eb; border: 2px dashed var(--teal); }
+  .photo-upload-zone .upload-hint { font-size: 10px; color: #9ab; text-align: center; }
+  .photo-upload-zone .upload-icon { font-size: 22px; }
+  .photo-thumbs { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; padding: 6px; width: 100%; }
+  .photo-thumb-wrap { position: relative; width: 56px; height: 56px; }
+  .photo-thumb-wrap img { width: 56px; height: 56px; object-fit: cover; border-radius: 4px; border: 1px solid var(--border); }
+  .photo-thumb-wrap .del-photo {
+    position: absolute; top: -5px; left: -5px;
+    background: #e24b4a; color: white;
+    width: 16px; height: 16px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; cursor: pointer; font-weight: 900;
+    border: none; line-height: 1;
+  }
+  .add-photo-btn {
+    width: 56px; height: 56px; border-radius: 4px;
+    border: 2px dashed var(--teal);
+    background: white; color: var(--teal);
+    font-size: 20px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s;
+  }
+  .add-photo-btn:hover { background: #e8f5f0; }
+  .hidden-file-input { display: none; }
+
+  /* ===== FLIP BOOK MODAL ===== */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(10,20,30,0.92);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+  }
+  .modal-overlay.open { display: flex; }
+
+  /* Flip book */
+  .flipbook-wrap {
+    position: relative;
+    width: 820px;
+    height: 580px;
+    perspective: 2400px;
+  }
+  .flipbook-scene {
+    width: 100%; height: 100%;
+    position: relative;
+    transform-style: preserve-3d;
+  }
+  .flip-page {
+    position: absolute;
+    width: 50%;
+    height: 100%;
+    top: 0;
+    transform-origin: left center;
+    transform-style: preserve-3d;
+    transition: transform 0.7s cubic-bezier(.645,.045,.355,1);
+    cursor: pointer;
+  }
+  .flip-page.right-page { left: 50%; transform-origin: left center; }
+  .flip-page.left-page  { left: 0;   transform-origin: right center; }
+  .flip-face {
+    position: absolute;
+    inset: 0;
+    backface-visibility: hidden;
+    background: white;
+    overflow: hidden;
+    border-radius: 2px;
+  }
+  .flip-face.back { transform: rotateY(180deg); }
+  .flip-face iframe {
+    width: 200%; height: 100%;
+    border: none;
+    pointer-events: none;
+    transform-origin: top left;
+  }
+  .flip-face.right-face iframe { width: 200%; transform: translateX(-50%); }
+  .flip-shadow-left  { position:absolute; top:0; left:50%; width:12px; height:100%; background:linear-gradient(to right,rgba(0,0,0,.18),transparent); pointer-events:none; z-index:2; }
+  .flip-shadow-right { position:absolute; top:0; right:50%; width:12px; height:100%; background:linear-gradient(to left,rgba(0,0,0,.18),transparent); pointer-events:none; z-index:2; }
+
+  .flip-controls {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    margin-top: 18px;
+    color: white;
+  }
+  .flip-btn {
+    background: var(--teal);
+    color: white;
+    border: none;
+    padding: 10px 24px;
+    border-radius: 6px;
+    font-size: 15px;
+    font-family: inherit;
+    cursor: pointer;
+    font-weight: 700;
+    transition: background 0.2s;
+    min-width: 100px;
+  }
+  .flip-btn:hover { background: var(--teal-dark); }
+  .flip-btn:disabled { opacity: 0.35; cursor: default; }
+  .flip-page-counter { font-size: 13px; color: #9ee8d4; min-width: 100px; text-align: center; }
+  .modal-close {
+    position: absolute;
+    top: 16px; left: 16px;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.25);
+    color: white;
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    font-size: 18px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.2s;
+  }
+  .modal-close:hover { background: rgba(255,255,255,0.25); }
+
+  /* QR modal */
+  .qr-modal {
+    background: var(--navy);
+    border-radius: 14px;
+    padding: 32px 36px;
+    max-width: 520px;
+    width: 90%;
+    color: white;
+    position: relative;
+  }
+  .qr-modal h3 { font-size: 17px; font-weight: 700; color: #9ee8d4; margin-bottom: 6px; }
+  .qr-modal p  { font-size: 12px; color: #7a9aaa; margin-bottom: 18px; line-height: 1.7; }
+  .qr-input-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  .qr-input-row input {
+    flex: 1;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 6px;
+    padding: 9px 14px;
+    color: white;
+    font-size: 13px;
+    font-family: inherit;
+    direction: ltr;
+    outline: none;
+  }
+  .qr-input-row input::placeholder { color: rgba(255,255,255,0.3); }
+  .qr-input-row input:focus { border-color: var(--teal); }
+  .qr-gen-btn {
+    background: var(--teal);
+    color: white;
+    border: none;
+    padding: 9px 18px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    font-weight: 700;
+    white-space: nowrap;
+    transition: background 0.2s;
+  }
+  .qr-gen-btn:hover { background: var(--teal-dark); }
+  .qr-results {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .qr-card {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 10px;
+    padding: 16px;
+    text-align: center;
+    display: none;
+  }
+  .qr-card.visible { display: block; }
+  .qr-card-title { font-size: 12px; font-weight: 700; color: var(--gold); margin-bottom: 10px; }
+  .qr-card canvas { border-radius: 6px; background: white; padding: 6px; display: block; margin: 0 auto 10px; }
+  .qr-dl-btn {
+    background: var(--teal);
+    color: white;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-family: inherit;
+    cursor: pointer;
+    font-weight: 700;
+    transition: background 0.2s;
+    width: 100%;
+  }
+  .qr-dl-btn:hover { background: var(--teal-dark); }
+  .qr-hint { font-size: 11px; color: #7a9aaa; margin-top: 14px; text-align: center; line-height: 1.6; }
+
+  /* Topbar extra buttons */
+  .btn-gold {
+    background: var(--gold-dark);
+    color: white;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    font-weight: 700;
+    transition: background 0.2s;
+  }
+  .btn-gold:hover { background: #a06c08; }
+  .btn-purple {
+    background: #5c3fa0;
+    color: white;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    font-weight: 700;
+    transition: background 0.2s;
+  }
+  .btn-purple:hover { background: #4a3080; }
+
+  /* ===== PRINT STYLES ===== */
+  @media print {
+    body { background: white; }
+    .magazine { display: block; height: auto; overflow: visible; }
+    .sidebar { display: none; }
+    .main { overflow: visible; }
+    .page-topbar { display: none; }
+    .page { display: block !important; padding: 15px; max-width: 100%; page-break-after: always; }
+    .page.cover-p { page-break-after: always; }
+    .cover-card { background: var(--navy) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .sec-header, .tbl th, .ind-tbl th, .ev-box-lbl, .eval-pg-header, .sig-lbl, .fu-label, .fi-lbl, .rec-badge {
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+    .ev-box textarea, .fi input, .rec-line textarea, .sig-body input, .tbl input { border-bottom: 1px solid #ccc; }
+    .sidebar-title, .page-topbar, .btn-print, .topbar-actions { display: none !important; }
+    @page { margin: 1.2cm; size: A4; }
+  }
+</style>
+
+<style>
+  /* Checkbox buttons */
+  .chk-btn {
+    background: none;
+    border: 2px solid var(--border);
+    border-radius: 4px;
+    width: 32px;
+    height: 32px;
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+    transition: all 0.15s;
+    color: #aaa;
+    line-height: 1;
+    padding: 0;
+  }
+  .chk-btn:hover { border-color: var(--teal); }
+  .chk-btn.on {
+    background: var(--teal);
+    border-color: var(--teal);
+    color: white;
+  }
+
+  /* Cover editable fields */
+  .cover-fields {
+    margin-bottom: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .cover-field-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 6px;
+    padding: 7px 14px;
+  }
+  .cover-field-lbl {
+    color: var(--gold);
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+    min-width: 60px;
+  }
+  .cover-field-input {
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid rgba(255,255,255,0.3);
+    color: white;
+    font-size: 13px;
+    direction: rtl;
+    outline: none;
+    flex: 1;
+    font-family: inherit;
+  }
+  .cover-field-input::placeholder { color: rgba(255,255,255,0.35); }
+
+  /* Mobile responsive */
+  @media (max-width: 700px) {
+    .magazine { flex-direction: column; height: auto; overflow: visible; }
+    .sidebar { width: 100%; height: auto; overflow: visible; }
+    .sidebar-logo { display: none; }
+    .sidebar-title { text-align: center; }
+    #sidebarNav { display: flex; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .nav-item { flex-shrink: 0; padding: 8px 10px; font-size: 11px; border-bottom: none; border-left: 1px solid rgba(255,255,255,0.05); }
+    .nav-item .nav-pct { display: none; }
+    .main { overflow: visible; }
+    .page { padding: 12px; }
+    .page-topbar { flex-wrap: wrap; gap: 6px; padding: 8px 12px; }
+    .topbar-actions { flex-wrap: wrap; gap: 4px; }
+    .btn-nav, .btn-print, .btn-gold, .btn-purple { font-size: 11px; padding: 5px 10px; }
+    .cover-card { padding: 24px 16px; }
+    .cover-card h1 { font-size: 20px; }
+    .cover-card h2 { font-size: 14px; }
+    .tbl { font-size: 11px; }
+    .tbl th, .tbl td { padding: 5px 6px; }
+    .bio-scroll-tbl { display: block; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
+    .ev-3col { grid-template-columns: 1fr; }
+    .field-pair { grid-template-columns: 1fr; }
+    .sig-pair { grid-template-columns: 1fr; }
+    .score-progress { flex-wrap: wrap; gap: 8px; }
+    #gdrive-bar { flex-wrap: wrap; gap: 6px; font-size: 11px; padding: 6px 10px; }
+    .btn-gdrive { font-size: 11px; padding: 4px 10px; }
+    .qr-results { grid-template-columns: 1fr; }
+    .eval-pg-header { flex-wrap: wrap; }
+  }
+</style>
+
+<!-- Google Drive Sync Bar -->
+<style>
+  #gdrive-bar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--navy-dark);
+    border-top: 2px solid var(--teal);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 18px;
+    z-index: 9999;
+    font-size: 12px;
+    color: white;
+    font-family: 'Cairo', sans-serif;
+  }
+  #gdrive-bar .gd-status {
+    flex: 1;
+    color: #9ee8d4;
+    font-size: 11px;
+  }
+  #gdrive-bar .gd-status.error { color: #ff9090; }
+  #gdrive-bar .gd-status.saving { color: var(--gold); }
+  #gdrive-bar .gd-status.saved  { color: #7ee8c8; }
+  .btn-gdrive {
+    background: #fff;
+    color: #1a3a4a;
+    border: none;
+    padding: 5px 14px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: opacity 0.2s;
+  }
+  .btn-gdrive:hover { opacity: 0.85; }
+  .btn-gdrive:disabled { opacity: 0.4; cursor: default; }
+  .btn-gdrive.teal { background: var(--teal); color: white; }
+  .btn-gdrive.gold { background: var(--gold-dark); color: white; }
+  body { padding-bottom: 46px; }
+
+  /* Setup modal */
+  #setup-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+  }
+  #setup-modal.open { display: flex; }
+  .setup-box {
+    background: var(--navy);
+    color: white;
+    border-radius: 14px;
+    padding: 32px 36px;
+    max-width: 500px;
+    width: 90%;
+    font-family: 'Cairo', sans-serif;
+    direction: rtl;
+  }
+  .setup-box h3 { color: var(--teal); font-size: 18px; margin-bottom: 8px; }
+  .setup-box p  { color: #9ab; font-size: 12px; line-height: 1.8; margin-bottom: 16px; }
+  .setup-box ol { color: #ccc; font-size: 12px; line-height: 2.2; padding-right: 18px; margin-bottom: 20px; }
+  .setup-box ol li a { color: var(--teal); }
+  .setup-input {
+    display: flex; gap: 8px; margin-bottom: 16px;
+  }
+  .setup-input input {
+    flex: 1;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 6px;
+    padding: 9px 14px;
+    color: white;
+    font-size: 13px;
+    font-family: inherit;
+    direction: ltr;
+    outline: none;
+  }
+  .setup-input input:focus { border-color: var(--teal); }
+  .setup-save-btn {
+    background: var(--teal); color: white; border: none;
+    padding: 9px 22px; border-radius: 6px; font-size: 13px;
+    font-family: inherit; cursor: pointer; font-weight: 700;
+  }
+  .setup-close-btn {
+    background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2);
+    padding: 9px 22px; border-radius: 6px; font-size: 13px;
+    font-family: inherit; cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<div class="magazine">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-logo">
+      <div class="dots">
+        <span></span><span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span><span></span>
+      </div>
+      <div class="brand">وزارة التـعـلـيـم</div>
+      <div class="brand-en">Ministry of Education</div>
+      <div class="gov">المملكة العربية السعودية<br>وزارة التعليم</div>
+    </div>
+    <div class="sidebar-title">ملف توثيق محضر المختبر</div>
+    <div id="sidebarNav"></div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main" id="mainContent">
+    <div class="page-topbar">
+      <div class="breadcrumb">سجل توثيق &rsaquo; <strong id="currentPageTitle">الغلاف</strong></div>
+      <div class="topbar-actions">
+        <button class="btn-nav" onclick="prevPage()">&#8592; السابق</button>
+        <button class="btn-nav" onclick="nextPage()">التالي &#8594;</button>
+        <button class="btn-gold" onclick="openFlipbook()">📖 مجلة تفاعلية</button>
+        <button class="btn-purple" onclick="openQR()">📲 QR Code</button>
+        <button class="btn-print" onclick="window.print()">&#128438; طباعة / PDF</button>
+        <button class="btn-nav" onclick="clearAllData()" style="border-color:rgba(255,100,100,0.4);color:#ffaaaa;" title="مسح جميع البيانات المحفوظة">🗑 مسح</button>
+      </div>
+    </div>
+    <div id="pagesContainer"></div>
+  </div>
+</div>
+
+<!-- GOOGLE DRIVE BAR -->
+<div id="gdrive-bar">
+  <span>☁️</span>
+  <span id="gd-status-text" class="gd-status">جاري التحميل...</span>
+  <button class="btn-gdrive" id="btn-gd-login" onclick="gdSignIn()" style="display:none">
+    <img src="https://www.google.com/favicon.ico" width="14" height="14"> تسجيل الدخول بـ Google
+  </button>
+  <button class="btn-gdrive teal" id="btn-gd-save" onclick="gdSaveNow()" style="display:none" disabled>
+    💾 حفظ الآن
+  </button>
+  <button class="btn-gdrive gold" id="btn-gd-load" onclick="gdLoadNow()" style="display:none" disabled>
+    📂 تحميل البيانات
+  </button>
+  <button class="btn-gdrive" id="btn-gd-logout" onclick="gdSignOut()" style="display:none">
+    خروج
+  </button>
+  <button class="btn-gdrive" onclick="openSetupModal()" title="إعدادات Google Drive" style="background:rgba(255,255,255,0.1);color:white;font-size:14px;padding:5px 10px;">⚙️</button>
+</div>
+
+<!-- SETUP MODAL -->
+<div id="setup-modal">
+  <div class="setup-box">
+    <h3>⚙️ إعداد Google Drive</h3>
+    <p>لحفظ البيانات على Google Drive تحتاج <strong>Client ID</strong> مجاني من Google Cloud Console.</p>
+    <ol>
+      <li>افتح: <a href="https://console.cloud.google.com/" target="_blank">console.cloud.google.com</a></li>
+      <li>أنشئ مشروعاً جديداً (New Project)</li>
+      <li>من القائمة: <strong>APIs & Services → OAuth consent screen</strong> → اختر External → احفظ</li>
+      <li>من القائمة: <strong>APIs & Services → Credentials → Create Credentials → OAuth Client ID</strong></li>
+      <li>اختر <strong>Web application</strong></li>
+      <li>في <strong>Authorized JavaScript origins</strong> أضف رابط موقعك (مثلاً https://yoursite.netlify.app)</li>
+      <li>انسخ الـ <strong>Client ID</strong> والصقه هنا:</li>
+    </ol>
+    <div class="setup-input">
+      <input type="text" id="clientid-input" placeholder="xxxxxxxxxx.apps.googleusercontent.com" dir="ltr">
+    </div>
+    <div style="display:flex;gap:10px;">
+      <button class="setup-save-btn" onclick="saveClientId()">حفظ والمتابعة</button>
+      <button class="setup-close-btn" onclick="closeSetupModal()">إغلاق</button>
+    </div>
+  </div>
+</div>
+
+
+<div class="modal-overlay" id="flipbookModal">
+  <button class="modal-close" onclick="closeFlipbook()" title="إغلاق">✕</button>
+
+  <!-- mode toggle -->
+  <div id="modeToggleBar" style="display:flex;gap:8px;margin-bottom:14px;z-index:10;">
+    <button id="btnModeFlip"   onclick="setViewMode('flip')"   style="background:var(--teal);color:white;border:none;padding:7px 20px;border-radius:20px;font-size:12px;font-family:inherit;cursor:pointer;font-weight:700;">📖 تقليب الصفحات</button>
+    <button id="btnModeScroll" onclick="setViewMode('scroll')" style="background:rgba(255,255,255,0.12);color:white;border:1px solid rgba(255,255,255,0.25);padding:7px 20px;border-radius:20px;font-size:12px;font-family:inherit;cursor:pointer;font-weight:700;">📜 تمرير كامل</button>
+  </div>
+
+  <!-- FLIP mode -->
+  <div id="flipModeWrap">
+    <div class="flipbook-wrap" id="flipbookWrap">
+      <div class="flipbook-scene" id="flipScene">
+        <div class="flip-shadow-left"></div>
+        <div class="flip-shadow-right"></div>
+      </div>
+    </div>
+    <div class="flip-controls">
+      <button class="flip-btn" id="flipPrev" onclick="flipPrev()">&#8594; السابق</button>
+      <div class="flip-page-counter" id="flipCounter">—</div>
+      <button class="flip-btn" id="flipNext" onclick="flipNext()">التالي &#8592;</button>
+    </div>
+  </div>
+
+  <!-- SCROLL mode -->
+  <div id="scrollModeWrap" style="display:none;width:860px;max-height:80vh;overflow-y:auto;border-radius:8px;background:#1a2a24;padding:0;">
+    <div id="scrollPagesInner"></div>
+  </div>
+</div>
+
+<!-- QR MODAL -->
+<div class="modal-overlay" id="qrModal">
+  <button class="modal-close" onclick="closeQR()" title="إغلاق">✕</button>
+  <div class="qr-modal">
+    <h3>📲 توليد QR Code</h3>
+    <p>أدخل الرابط وسيتم توليد باركود جاهز للتحميل والطباعة — يعمل بدون إنترنت.</p>
+
+    <div style="margin-bottom:10px;">
+      <div style="font-size:11px;color:#9ee8d4;margin-bottom:5px;font-weight:700;">🌐 رابط المجلة التفاعلية (HTML)</div>
+      <div class="qr-input-row">
+        <input type="url" id="qrUrlMag" placeholder="https://your-site.com/magazine.html" oninput="liveQR('mag')">
+      </div>
+    </div>
+
+    <div style="margin-bottom:18px;">
+      <div style="font-size:11px;color:#9ee8d4;margin-bottom:5px;font-weight:700;">📄 رابط ملف PDF</div>
+      <div class="qr-input-row">
+        <input type="url" id="qrUrlPdf" placeholder="https://your-site.com/file.pdf" oninput="liveQR('pdf')">
+      </div>
+    </div>
+
+    <div class="qr-results">
+      <div class="qr-card" id="qrCardMag">
+        <div class="qr-card-title">📖 QR المجلة التفاعلية</div>
+        <canvas id="qrCanvasMag" width="180" height="180" style="border-radius:6px;background:white;padding:8px;display:block;margin:0 auto 10px;"></canvas>
+        <div id="qrUrlLabelMag" style="font-size:9px;color:#7a9aaa;word-break:break-all;margin-bottom:8px;direction:ltr;text-align:center;"></div>
+        <button class="qr-dl-btn" onclick="downloadQR('mag')">⬇ تحميل الصورة</button>
+      </div>
+      <div class="qr-card" id="qrCardPdf">
+        <div class="qr-card-title">📄 QR ملف PDF</div>
+        <canvas id="qrCanvasPdf" width="180" height="180" style="border-radius:6px;background:white;padding:8px;display:block;margin:0 auto 10px;"></canvas>
+        <div id="qrUrlLabelPdf" style="font-size:9px;color:#7a9aaa;word-break:break-all;margin-bottom:8px;direction:ltr;text-align:center;"></div>
+        <button class="qr-dl-btn" onclick="downloadQR('pdf')">⬇ تحميل الصورة</button>
+      </div>
+    </div>
+
+    <div class="qr-hint">
+      💡 لرفع الملف مجاناً: <strong>netlify.com/drop</strong> — اسحب الملف وأفلته وستحصل على رابط فوري
+    </div>
+  </div>
+</div>
+
+<script>
+const pages = [
+  {id:'cover',    label:'الغلاف',                  type:'cover'},
+  {id:'bio',      label:'السيرة الذاتية',           type:'bio'},
+  {id:'eval',     label:'نموذج التقييم',            type:'eval'},
+  {id:'p1',  label:'١- الواجبات الوطنية',       num:'١',  pct:'١٠%', items:[
+    'التقدير بالدوام الرسمي',
+    'المشاركة في الإشراف والمناوبة وحصص الانتظار',
+    'إعداد السجلات وفق ما جاء في الدليل الإجرائي والتنظيمي',
+    'تعزيز قيم المواطنة لدى الطلاب من خلال الأنشطة والمناسبات العامة'
+  ]},
+  {id:'p2',  label:'٢- التفاعل المجتمعي',       num:'٢',  pct:'١٠%', items:[
+    'المشاركة في الفعاليات الوطنية مثل الأعياد والمناسبات العامة',
+    'تعزيز قيم المواطنة لدى الطلاب من خلال الأنشطة الصفية واللاصفية',
+    'التعاون مع المؤسسات الحكومية في المبادرات الوطنية',
+    'تنظيم أنشطة توعوية حول أهمية الانتماء الوطني'
+  ]},
+  {id:'p3',  label:'٣- أولياء الأمور',           num:'٣',  pct:'١٠%', items:[
+    'التواصل الدوري مع أولياء الأمور لإبلاغهم بسير عمل المختبر',
+    'الاستجابة لاستفسارات أولياء الأمور في الوقت المناسب',
+    'المشاركة في اجتماعات أولياء الأمور',
+    'توثيق التواصل مع أولياء الأمور'
+  ]},
+  {id:'p4',  label:'٤- استراتيجيات التدريس',    num:'٤',  pct:'١٠%', items:[
+    'توظيف أساليب تدريسية متنوعة ومناسبة داخل المختبر',
+    'استخدام التقنية في تعزيز التجارب العلمية',
+    'تنويع أنشطة المختبر لتلائم أنماط التعلم المختلفة',
+    'ربط التجارب بالمحتوى الدراسي المقرر'
+  ]},
+  {id:'p5',  label:'٥- نتائج المتعلمين',         num:'٥',  pct:'١٠%', items:[
+    'رصد مستويات الطلاب وتقديم الدعم المناسب',
+    'تطوير مهارات التفكير العلمي لدى الطلاب',
+    'توثيق نتائج التجارب وتحليلها',
+    'تعزيز مشاركة الطلاب في المسابقات العلمية'
+  ]},
+  {id:'p6',  label:'٦- الخطة اليومية',           num:'٦',  pct:'٥%', items:[
+    'إعداد خطة يومية واضحة لأنشطة المختبر',
+    'توثيق الخطة اليومية وأرشفتها',
+    'الالتزام بتنفيذ الخطة اليومية',
+    'مراجعة الخطة وتطويرها باستمرار'
+  ]},
+  {id:'p7',  label:'٧- المعرفة الفنية',          num:'٧',  pct:'٥%', items:[
+    'الإلمام بالأسس والمفاهيم الفنية للمختبر',
+    'التحديث المستمر للمعرفة العلمية والتقنية',
+    'توظيف المعرفة الفنية في حل مشكلات المختبر',
+    'مشاركة المعرفة الفنية مع المعلمين'
+  ]},
+  {id:'p8',  label:'٨- المستلزمات العلمية',      num:'٨',  pct:'٥%', items:[
+    'توفير المستلزمات اللازمة لأداء التجارب العلمية في الوقت المناسب',
+    'جرد المستلزمات بصفة دورية',
+    'صيانة المواد والأدوات والحفاظ عليها',
+    'طلب الاحتياجات مسبقاً ووفق خطة واضحة'
+  ]},
+  {id:'p9',  label:'٩- السلامة المهنية',         num:'٩',  pct:'٥%', items:[
+    'الالتزام بسياسات وإجراءات السلامة المهنية',
+    'تدريب الطلاب على قواعد السلامة قبل كل تجربة',
+    'توفير معدات السلامة والتحقق من صلاحيتها',
+    'توثيق إجراءات السلامة المتبعة'
+  ]},
+  {id:'p10', label:'١٠- تجهيز المختبر',          num:'١٠', pct:'٥%', items:[
+    'إعداد المختبر وتجهيزه قبل كل حصة',
+    'ترتيب الأجهزة والأدوات بصورة منظمة',
+    'إعادة الأجهزة والأدوات لأماكنها بعد انتهاء الحصة',
+    'الحرص على نظافة المختبر وصيانته'
+  ]},
+  {id:'p11', label:'١١- تسليم الأجهزة',          num:'١١', pct:'٥%', items:[
+    'تهيئة الأجهزة المطلوبة للمعلمين قبل موعد الحصة',
+    'استلام الأجهزة من المعلمين بعد الانتهاء وتفقدها',
+    'تخزين الأجهزة بطريقة سليمة تحافظ عليها',
+    'توثيق حركة الأجهزة الداخلة والخارجة من المختبر'
+  ]},
+  {id:'p12', label:'١٢- التقرير الأسبوعي',       num:'١٢', pct:'١٠%', items:[
+    'إعداد تقرير أسبوعي شامل لأنشطة ومهام المختبر',
+    'رفع التقرير الأسبوعي في الوقت المحدد',
+    'تضمين التقرير الإنجازات والتحديات والتوصيات',
+    'أرشفة التقارير الأسبوعية بصورة منتظمة'
+  ]},
+  {id:'p13', label:'١٣- تقارير الأجهزة',         num:'١٣', pct:'١٠%', items:[
+    'إعداد تقارير دورية توضح حالة الأدوات والأجهزة والمعدات',
+    'تحديد مدى حاجة الأدوات والأجهزة للصيانة ورفعه للمختص ومتابعتها'
+  ]},
+  {id:'followup', label:'متابعة التوثيق',         type:'followup'}
+];
+
+const evalItems = [
+  {num:'١',  name:'أداء الواجبات الوطنية',                                    w:10},
+  {num:'٢',  name:'التفاعل مع المجتمع المهني',                                w:10},
+  {num:'٣',  name:'التفاعل مع أولياء الأمور',                                 w:10},
+  {num:'٤',  name:'التنويع في استراتيجيات التدريس',                           w:10},
+  {num:'٥',  name:'تحسين نتائج المتعلمين',                                    w:10},
+  {num:'٦',  name:'أعداد خطة يومية لأنشطة المختبر',                          w:5},
+  {num:'٧',  name:'المعرفة بالأسس والمفاهيم الفنية',                         w:5},
+  {num:'٨',  name:'يوفر المستلزمات اللازمة لأداء التجارب العلمية',           w:5},
+  {num:'٩',  name:'يلتزم بسياسات وإجراءات السلامة المهنية',                  w:5},
+  {num:'١٠', name:'يحضر ويجهز المختبر',                                       w:5},
+  {num:'١١', name:'تهيئة وتسليم الأجهزة المطلوبة للمعلمين وتخزينها بطريقة سليمة', w:5},
+  {num:'١٢', name:'يعد تقرير أنشطة ومهام المختبر الأسبوعية',                 w:10},
+  {num:'١٣', name:'يعد تقارير دورية عن حالة الأجهزة والمعدات',               w:10},
+];
+
+const scores = {};
+let currentIdx = 0;
+
+function buildPage(p) {
+  if(p.type==='cover')    return buildCover();
+  if(p.type==='bio')      return buildBio();
+  if(p.type==='eval')     return buildEval();
+  if(p.type==='followup') return buildFollowup();
+  return buildEvidence(p);
+}
+
+function buildCover() {
+  return `<div class="cover-wrap">
+    <div class="cover-card">
+      <div class="gov-info">
+        المملكة العربية السعودية — وزارة التعليم
+      </div>
+      <div class="cover-fields">
+        <div class="cover-field-row">
+          <label class="cover-field-lbl">الإدارة:</label>
+          <input type="text" class="cover-field-input" placeholder="الإدارة العامة للتعليم بمنطقة ...">
+        </div>
+        <div class="cover-field-row">
+          <label class="cover-field-lbl">المدرسة:</label>
+          <input type="text" class="cover-field-input" placeholder="اسم المدرسة">
+        </div>
+      </div>
+      <div class="year-badge">١٤٤٧هـ</div>
+      <div class="divider"></div>
+      <h1>سجـل توثيـق</h1>
+      <h2>شواهد الأداء الوظيفي لمحضر المختبر</h2>
+      <div class="name-input-wrap">
+        <label>الاسم:</label>
+        <input type="text" placeholder="أدخل اسم محضر المختبر ...">
+      </div>
+    </div>
+  </div>`;
+}
+
+function buildBio() {
+  const row = (lbl, input) =>
+    `<tr><td class="td-lbl">${lbl}</td><td>${input}</td></tr>`;
+  return `
+  <div class="sec-header"><div class="sec-icon">ذ</div>السيرة الذاتية</div>
+  <table class="tbl" style="margin-bottom:14px">
+    <tr>
+      <td rowspan="7" class="photo-cell" style="width:120px;padding:8px;">
+        <input type="file" accept="image/*" id="bio-photo-input" style="display:none" onchange="setBioPhoto(event)">
+        <div id="bio-photo-wrap" onclick="document.getElementById('bio-photo-input').click()" style="cursor:pointer;width:100%;height:120px;display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px dashed var(--border);border-radius:6px;background:#f0f4f3;overflow:hidden;">
+          <img id="bio-photo-img" src="" alt="" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:4px;">
+          <div id="bio-photo-hint" style="text-align:center;color:#9ab;font-size:11px;padding:6px;">
+            📷<br>اضغط لرفع<br>الصورة
+          </div>
+        </div>
+      </td>
+      <td class="td-lbl-t" colspan="2">البيانات الشخصية</td>
+    </tr>
+    ${row('رقم الهوية','<input type="text" placeholder="رقم الهوية الوطنية">')}
+    ${row('الاسم:','<input type="text" placeholder="الاسم الرباعي">')}
+    ${row('تاريخ الميلاد:','<input type="date">')}
+    ${row('العنوان:','<input type="text" placeholder="العنوان التفصيلي">')}
+    ${row('الهاتف:','<input type="tel" placeholder="05xxxxxxxx">')}
+    ${row('البريد الإلكتروني','<input type="email" placeholder="example@edu.sa">')}
+  </table>
+  <table class="tbl" style="margin-bottom:16px">
+    ${row('لمنصة مدرستي','<input type="text" placeholder="رابط أو اسم المستخدم">')}
+  </table>
+  <div class="sec-header"><div class="sec-icon">ع</div>البيانات العلمية</div>
+  <table class="tbl bio-scroll-tbl" style="margin-bottom:16px">
+    <tr><th style="width:30px">م</th><th>التحصيل العلمي</th><th>المؤهل</th><th>جهة الإصدار</th><th>التخصص</th><th>التقدير</th><th style="width:90px">تاريخه</th></tr>
+    ${[1,2,3].map(i=>`<tr><td>${i}</td>${['','','','',''].map(()=>'<td><input type="text"></td>').join('')}<td><input type="date"></td></tr>`).join('')}
+  </table>
+  <div class="sec-header"><div class="sec-icon">و</div>البيانات الوظيفية</div>
+  <table class="tbl bio-scroll-tbl">
+    <tr><th style="width:30px">م</th><th>مسمى الوظيفة</th><th>المستوى / الدرجة</th><th>تاريخ المباشرة</th><th>المرحلة الدراسية</th></tr>
+    ${[1,2,3,4,5].map(i=>`<tr><td>${i}</td><td><input type="text"></td><td><input type="text"></td><td><input type="date"></td><td><input type="text"></td></tr>`).join('')}
+  </table>`;
+}
+
+function buildEval() {
+  const rows = evalItems.map((item, i) => {
+    const scs = [1,2,3,4,5].map(s =>
+      `<td class="sc" id="sc-${i}-${s}" onclick="selScore(${i},${s})">${s}</td>`).join('');
+    return `<tr><td>${item.num}</td><td class="td-r" style="padding:7px 12px;font-size:12px">${item.name}</td><td>%${item.w}</td>${scs}</tr>`;
+  }).join('');
+  return `
+  <div class="sec-header"><div class="sec-icon">ت</div>نموذج عناصر تقييم الأداء الوظيفي محضر المختبر</div>
+  <div class="score-progress">
+    <span class="label">التقدير الإجمالي</span>
+    <div class="prog-bar-wrap"><div class="prog-bar" id="progBar" style="width:0%"></div></div>
+    <span class="score-val" id="scoreVal">—</span>
+    <span class="rating-badge" id="ratingBadge">لم يُقيَّم بعد</span>
+  </div>
+  <table class="tbl">
+    <thead>
+      <tr>
+        <th style="width:34px">م</th><th>عناصر التقييم</th>
+        <th style="width:60px">الوزن%</th>
+        <th style="width:38px">١</th><th style="width:38px">٢</th><th style="width:38px">٣</th><th style="width:38px">٤</th><th style="width:38px">٥</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+    <tfoot>
+      <tr class="total-row"><td colspan="2" style="text-align:right;padding:7px 12px">مجموع الدرجات</td><td>%100</td><td colspan="5" id="totalScore" style="font-size:15px;font-weight:900">—</td></tr>
+      <tr><td colspan="8" class="gen-row">التقدير العام للأداء: <span id="genRating">لم يُقيَّم بعد</span></td></tr>
+    </tfoot>
+  </table>
+  <div style="font-size:11px;color:#9ab;margin-top:8px;text-align:right">انقر على الدرجة لاختيارها &nbsp;|&nbsp; ١=ضعيف &nbsp; ٢=مقبول &nbsp; ٣=جيد &nbsp; ٤=جيد جداً &nbsp; ٥=ممتاز</div>`;
+}
+
+function selScore(row, score) {
+  scores[row] = score;
+  for(let s=1;s<=5;s++){
+    const el = document.getElementById('sc-'+row+'-'+s);
+    if(el) el.classList.toggle('sel', s===score);
+  }
+  let total = 0;
+  evalItems.forEach((_,i) => { if(scores[i]) total += (scores[i]/5)*evalItems[i].w; });
+  const filled = Object.keys(scores).length;
+  const t = Math.round(total);
+  const ts = document.getElementById('totalScore');
+  const gr = document.getElementById('genRating');
+  const pbar = document.getElementById('progBar');
+  const sv = document.getElementById('scoreVal');
+  const rb = document.getElementById('ratingBadge');
+  if(filled > 0) {
+    const r = t>=90?'ممتاز':t>=75?'جيد جداً':t>=60?'جيد':t>=50?'مقبول':'ضعيف';
+    if(ts) ts.textContent = t;
+    if(gr) gr.textContent = r;
+    if(pbar) pbar.style.width = t+'%';
+    if(sv) sv.textContent = t;
+    if(rb) { rb.textContent = r; rb.style.background = t>=90?'#2da88a':t>=75?'#4a90d9':t>=60?'#f4c542':t>=50?'#f09020':'#e24b4a'; }
+  }
+}
+
+const suggestedEvidence = {
+  'p1':  ['سجل الحضور والانصراف','شهادة المشرف المباشر','تقارير الزيارات الإشرافية','دفتر يومية الأعمال (log book)','نتائج المتابعة الميدانية','قرار التكليف الرسمي'],
+  'p2':  ['شهادات المشاركة في ورش العمل','عضوية في مجموعات مهنية','محاضر اجتماعات المعلمين','توثيق المساهمات في الفعاليات','رسائل توصية من الزملاء','صور من الفعاليات المشترك فيها'],
+  'p3':  ['سجل اجتماعات أولياء الأمور','رسائل إيجابية من الأولياء','توثيق حضور الأبواب المفتوحة','نماذج رضا أولياء الأمور','لقطات شاشة التواصل الإلكتروني','شهادة مدير المدرسة'],
+  'p4':  ['خطط الدروس بأساليب متنوعة','صور للتجارب العملية','نماذج أوراق عمل متنوعة','ملاحظات المشرف على التنوع','بطاقات ملاحظة التدريس','مقاطع فيديو للأنشطة المختبرية'],
+  'p5':  ['كشوف درجات قبل وبعد','تقارير نتائج الاختبارات','ملفات إنجاز الطلاب (Portfolio)','تقارير تحليل الأداء','شواهد متابعة الطلاب ضعيفي الأداء','جوائز أو شهادات الطلاب'],
+  'p6':  ['نسخ الخطط اليومية الموقعة','جداول الحصص المختبرية','سجل توزيع استخدام المختبر','ملفات تحضير المادة (prep sheets)','اعتماد الخطط من المشرف','خطة الفصل الدراسي كاملة'],
+  'p7':  ['شهادات الدورات التخصصية','نتائج اختبارات الكفاءة المهنية','شهادات ورش متخصصة','أبحاث أو مقالات أعدها المحضر','تقييم المشرف للمعرفة الفنية','سجل التطوير المهني الذاتي'],
+  'p8':  ['قوائم جرد المواد والأجهزة','طلبات صرف المواد الموثقة','سجل الاستخدام الشهري للمواد','شهادة المعلم بجاهزية المختبر','صور لمواد الجلسات المُعدة','نماذج طلب المستلزمات'],
+  'p9':  ['شهادة دورة السلامة المختبرية','بطاقة الإجراءات المُعلقة','سجل فحص معدات السلامة','تقرير المشرف على الامتثال','صور لمخرج الطوارئ وأدوات السلامة','سجل الحوادث (صفر حوادث)'],
+  'p10': ['صور للمختبر قبل وبعد الجلسة','قائمة تجهيز يومية (checklist)','شهادة المعلم بجاهزية المختبر','سجل يومي لأوقات التجهيز','تقرير المشرف الميداني','صور الترتيب والتنظيم'],
+  'p11': ['سجل استلام وتسليم الأجهزة','صور لطريقة التخزين المنظمة','قائمة الجرد الفصلي للأجهزة','تقرير سلامة الأجهزة بعد الاستخدام','ملاحظات صيانة الأجهزة','توقيع المعلمين على سجل الاستلام'],
+  'p12': ['نسخ التقارير الأسبوعية الموقعة','إيصالات استلام التقارير','بريد إلكتروني بإرسال التقارير','اعتماد التقارير من المشرف','أرشيف تقارير الفصل الدراسي','ملخص إنجازات أسبوعي'],
+  'p13': ['تقارير الجرد الدورية الشاملة','تقارير الصيانة ومتابعة الأعطال','طلبات الإصلاح الموثقة','سجل حالة الأجهزة (سليمة/متضررة)','توقيع الإدارة على التقارير','صور الأجهزة قبل وبعد الصيانة'],
+};
+
+function buildEvidence(p) {
+  const chips = (suggestedEvidence[p.id] || []).map((ev, ci) =>
+    `<div class="chip" draggable="true" data-text="${ev}" data-ci="${p.id}-${ci}" ondragstart="onChipDragStart(event,this)" ondragend="onChipDragEnd(event,this)">${ev}</div>`
+  ).join('');
+
+  const indRows = p.items.map((item, i) => `
+    <tr>
+      <td><input type="text" style="width:75px;font-size:11px;direction:rtl;border:none;background:transparent;color:var(--text)" placeholder="نوع الشاهد"></td>
+      <td style="text-align:center;padding:4px;"><button type="button" class="chk-btn" onclick="toggleChkBtn(this)">☐</button></td>
+      <td style="text-align:center;padding:4px;"><button type="button" class="chk-btn" onclick="toggleChkBtn(this)">☐</button></td>
+      <td class="td-r" style="font-size:12px">${i+1}. ${item}</td>
+    </tr>`).join('');
+
+  const evBoxes = p.items.map((item, i) => {
+    const uid = p.id + '-' + i;
+    return `
+    <div class="ev-item">
+      <div class="ev-item-title">${i+1} &nbsp;&nbsp; ${item}</div>
+      <div class="ev-3col">
+        <div class="ev-box">
+          <div class="ev-box-lbl">الوصف</div>
+          <textarea placeholder="اكتب الوصف التفصيلي هنا..." ondragover="onTADragOver(event)" ondragleave="onTADragLeave(event)" ondrop="onTADrop(event)"></textarea>
+        </div>
+        <div class="ev-box">
+          <div class="ev-box-lbl">الشاهد والدليل</div>
+          <textarea placeholder="اسحب شاهداً من الأعلى، أو اكتب هنا..." ondragover="onTADragOver(event)" ondragleave="onTADragLeave(event)" ondrop="onTADrop(event)"></textarea>
+        </div>
+        <div class="ev-box">
+          <div class="ev-box-lbl">📸 الصور والمرفقات</div>
+          <input type="file" accept="image/*" multiple class="hidden-file-input" id="fi-${uid}" onchange="onFileInput(event,'${uid}')">
+          <div class="photo-upload-zone" id="pz-${uid}"
+            onclick="document.getElementById('fi-${uid}').click()"
+            ondragover="onPhotoZoneDragOver(event)"
+            ondragleave="onPhotoZoneDragLeave(event)"
+            ondrop="onPhotoZoneDrop(event,'${uid}')">
+            <div class="photo-thumbs" id="thumbs-${uid}"></div>
+            <div class="upload-icon" id="hint-icon-${uid}">📎</div>
+            <div class="upload-hint" id="hint-text-${uid}">اضغط لإرفاق صورة<br>أو اسحبها وأفلتها هنا</div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  return `
+  <div class="eval-pg-header">
+    <div class="pg-num">${p.num}</div>
+    <div class="pg-title">${p.label}</div>
+    <div class="pg-pct">${p.pct}</div>
+  </div>
+  <div class="suggested-panel">
+    <div class="suggested-panel-title">الشواهد المقترحة — اسحب أي شاهد وأفلته في خانة "الشاهد والدليل"</div>
+    <div class="chips-row" id="chips-${p.id}">${chips}</div>
+  </div>
+  <div class="sec-header-dark">جدول مؤشرات توفر الشواهد والأدلة</div>
+  <table class="ind-tbl">
+    <thead>
+      <tr>
+        <th colspan="3" style="width:200px">توفر الشاهد والدليل</th>
+        <th>الفقرة</th>
+      </tr>
+      <tr>
+        <th style="width:85px">نوع الشاهد</th>
+        <th style="width:55px">غير متوفر</th>
+        <th style="width:55px">متوفر</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td colspan="4" class="highlight">${p.label} (${p.pct}):</td></tr>
+      ${indRows}
+    </tbody>
+  </table>
+  <div class="sec-header-dark">تفاصيل الشواهد والأدلة لكل فقرة</div>
+  ${evBoxes}`;
+}
+
+function buildFollowup() {
+  const section = (label) => `
+  <div class="fu-wrap">
+    <div class="fu-label">${label}</div>
+    <div class="field-pair">
+      <div class="fi"><div class="fi-lbl">اليوم</div><input type="text" placeholder="الأحد / الاثنين ..."></div>
+      <div class="fi"><div class="fi-lbl">التاريخ</div><input type="date"></div>
+    </div>
+    <div class="rec-box">
+      <div class="rec-badge">التوصيات</div>
+      ${[1,2,3,4,5].map(n=>`<div class="rec-line"><span>${n}(</span><textarea placeholder="التوصية رقم ${n}..."></textarea></div>`).join('')}
+    </div>
+    <div class="sig-pair">
+      <div class="sig-box"><div class="sig-lbl">الوكيل للشؤون التعلمية</div><div class="sig-body"><input type="text" placeholder="الاسم"><div class="sig-line">التوقيع: ___________________</div></div></div>
+      <div class="sig-box"><div class="sig-lbl">مدير المدرسة</div><div class="sig-body"><input type="text" placeholder="الاسم"><div class="sig-line">التوقيع: ___________________</div></div></div>
+    </div>
+  </div>`;
+  return `
+  <div class="sec-header"><div class="sec-icon">م</div>متابعـة التوثيـق</div>
+  ${section('المتابعة الأولى')}
+  ${section('المتابعة الثانية')}
+  ${section('المتابعة الثالثة')}`;
+}
+
+function toggleChk(el) {
+  el.classList.toggle('on');
+  el.innerHTML = el.classList.contains('on') ? '&#9745;' : '&#9744;';
+}
+
+function switchPage(idx) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('pg-'+idx).classList.add('active');
+  document.getElementById('navitem-'+idx).classList.add('active');
+  document.getElementById('currentPageTitle').textContent = pages[idx].label;
+  document.getElementById('mainContent').scrollTop = 0;
+  currentIdx = idx;
+}
+
+// ===== CHK BUTTONS =====
+function toggleChkBtn(el) {
+  el.classList.toggle('on');
+  el.textContent = el.classList.contains('on') ? '✓' : '☐';
+  debounce(saveAllData, 300)();
+}
+
+// ===== BIO PHOTO =====
+let bioPhotoData = null;
+
+function setBioPhoto(e) {
+  const file = e.target.files[0];
+  if (!file || !file.type.startsWith('image/')) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    bioPhotoData = ev.target.result;
+    applyBioPhoto(bioPhotoData);
+    setTimeout(saveAllData, 500);
+  };
+  reader.readAsDataURL(file);
+}
+
+function applyBioPhoto(src) {
+  const img = document.getElementById('bio-photo-img');
+  const hint = document.getElementById('bio-photo-hint');
+  if (!img || !src) return;
+  img.src = src;
+  img.style.display = 'block';
+  if (hint) hint.style.display = 'none';
+}
+
+function nextPage() {
+  if(currentIdx < pages.length-1) switchPage(currentIdx+1);
+}
+function prevPage() {
+  if(currentIdx > 0) switchPage(currentIdx-1);
+}
+
+// Keyboard navigation
+document.addEventListener('keydown', e => {
+  if(e.key==='ArrowLeft') nextPage();
+  if(e.key==='ArrowRight') prevPage();
+});
+
+// ===== DRAG & DROP: CHIPS → TEXTAREA =====
+let dragText = '';
+let dragChipEl = null;
+
+function onChipDragStart(e, el) {
+  dragText = el.dataset.text;
+  dragChipEl = el;
+  el.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'copy';
+  e.dataTransfer.setData('text/plain', dragText);
+}
+function onChipDragEnd(e, el) {
+  el.classList.remove('dragging');
+}
+function onTADragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'copy';
+  e.currentTarget.classList.add('drag-over');
+}
+function onTADragLeave(e) {
+  e.currentTarget.classList.remove('drag-over');
+}
+function onTADrop(e) {
+  e.preventDefault();
+  const ta = e.currentTarget;
+  ta.classList.remove('drag-over');
+  const dropped = e.dataTransfer.getData('text/plain') || dragText;
+  if (!dropped) return;
+  const cur = ta.value.trim();
+  ta.value = cur ? cur + '\n• ' + dropped : '• ' + dropped;
+  ta.dispatchEvent(new Event('input'));
+  // Mark chip as used
+  if (dragChipEl) {
+    dragChipEl.classList.add('used');
+    dragChipEl.draggable = false;
+  }
+  dragText = '';
+  dragChipEl = null;
+}
+
+// ===== PHOTO UPLOAD =====
+const photoStore = {};
+
+function renderThumbs(uid) {
+  const thumbsEl = document.getElementById('thumbs-' + uid);
+  const hintIcon = document.getElementById('hint-icon-' + uid);
+  const hintText = document.getElementById('hint-text-' + uid);
+  if (!thumbsEl) return;
+  const photos = photoStore[uid] || [];
+  thumbsEl.innerHTML = photos.map((src, idx) => `
+    <div class="photo-thumb-wrap">
+      <img src="${src}" alt="صورة ${idx+1}">
+      <button class="del-photo" onclick="deletePhoto('${uid}',${idx}); event.stopPropagation();" title="حذف">✕</button>
+    </div>
+  `).join('') + `<button class="add-photo-btn" onclick="document.getElementById('fi-${uid}').click(); event.stopPropagation();" title="إضافة صورة">＋</button>`;
+  if (photos.length > 0) {
+    hintIcon.style.display = 'none';
+    hintText.style.display = 'none';
+  } else {
+    hintIcon.style.display = '';
+    hintText.style.display = '';
+  }
+}
+
+function addPhotos(uid, files) {
+  if (!photoStore[uid]) photoStore[uid] = [];
+  Array.from(files).forEach(file => {
+    if (!file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      photoStore[uid].push(ev.target.result);
+      renderThumbs(uid);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function deletePhoto(uid, idx) {
+  if (photoStore[uid]) {
+    photoStore[uid].splice(idx, 1);
+    renderThumbs(uid);
+  }
+}
+
+function onFileInput(e, uid) {
+  addPhotos(uid, e.target.files);
+  e.target.value = '';
+}
+
+function onPhotoZoneDragOver(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  e.currentTarget.classList.add('drag-over');
+}
+function onPhotoZoneDragLeave(e) {
+  e.currentTarget.classList.remove('drag-over');
+}
+function onPhotoZoneDrop(e, uid) {
+  e.preventDefault();
+  e.stopPropagation();
+  e.currentTarget.classList.remove('drag-over');
+  if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+    addPhotos(uid, e.dataTransfer.files);
+  }
+}
+
+// ===== INIT — runs after all functions are declared =====
+document.addEventListener('DOMContentLoaded', function() {
+  // Build sidebar
+  const nav = document.getElementById('sidebarNav');
+  pages.forEach((p, i) => {
+    const d = document.createElement('div');
+    d.className = 'nav-item' + (i===0?' active':'');
+    d.id = 'navitem-'+i;
+    d.onclick = () => switchPage(i);
+    let inner = '';
+    if(p.num) inner = `<span class="nav-num">${p.num}</span>`;
+    else inner = `<span class="nav-num" style="font-size:9px;">${i+1}</span>`;
+    inner += `<span>${p.label}</span>`;
+    if(p.pct) inner += `<span class="nav-pct">${p.pct}</span>`;
+    d.innerHTML = inner;
+    nav.appendChild(d);
+  });
+
+  // Build pages
+  const container = document.getElementById('pagesContainer');
+  pages.forEach((p, i) => {
+    const div = document.createElement('div');
+    div.className = 'page' + (i===0?' active':'');
+    div.id = 'pg-'+i;
+    div.innerHTML = buildPage(p);
+    container.appendChild(div);
+  });
+
+  // ===== LOCALSTORAGE: RESTORE SAVED DATA =====
+  restoreAllData();
+
+  // ===== LOCALSTORAGE: ATTACH AUTO-SAVE LISTENERS =====
+  attachSaveListeners();
+});
+
+// ===================================================
+// LOCAL STORAGE — حفظ واسترجاع البيانات تلقائياً
+// ===================================================
+const LS_KEY = 'lab_perf_data_v1';
+
+function saveAllData() {
+  try {
+    const data = {};
+
+    // text inputs & textareas
+    document.querySelectorAll('#pagesContainer input[type=text], #pagesContainer input[type=tel], #pagesContainer input[type=email], #pagesContainer input[type=date], #pagesContainer input[type=url], #pagesContainer textarea').forEach((el, idx) => {
+      const key = el.dataset.sid || assignSID(el, idx);
+      data[key] = el.value;
+    });
+
+    // cover name input (outside pagesContainer in some builds — catch all)
+    document.querySelectorAll('input[type=text]').forEach((el, idx) => {
+      if (!el.dataset.sid) return;
+      data[el.dataset.sid] = el.value;
+    });
+
+    // checkbox-like chk cells
+    document.querySelectorAll('.chk').forEach((el, idx) => {
+      const key = 'chk_' + idx;
+      data[key] = el.classList.contains('on') ? '1' : '0';
+    });
+    // new chk-btn buttons
+    document.querySelectorAll('.chk-btn').forEach((el, idx) => {
+      data['chkbtn_' + idx] = el.classList.contains('on') ? '1' : '0';
+    });
+
+    // eval scores
+    data['__scores__'] = JSON.stringify(scores);
+
+    // photos (base64)
+    data['__photos__'] = JSON.stringify(photoStore);
+
+    // bio photo
+    if (bioPhotoData) data['__bio_photo__'] = bioPhotoData;
+
+    localStorage.setItem(LS_KEY, JSON.stringify(data));
+  } catch(e) {
+    // storage full or unavailable — silently ignore
+  }
+}
+
+function assignSID(el, fallbackIdx) {
+  // generate a stable key based on position in DOM
+  const sid = 'f_' + fallbackIdx;
+  el.dataset.sid = sid;
+  return sid;
+}
+
+function restoreAllData() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+
+    // Assign SIDs first (same order as save)
+    document.querySelectorAll('#pagesContainer input[type=text], #pagesContainer input[type=tel], #pagesContainer input[type=email], #pagesContainer input[type=date], #pagesContainer input[type=url], #pagesContainer textarea').forEach((el, idx) => {
+      assignSID(el, idx);
+      const key = el.dataset.sid;
+      if (data[key] !== undefined) el.value = data[key];
+    });
+
+    // chk cells
+    document.querySelectorAll('.chk').forEach((el, idx) => {
+      const key = 'chk_' + idx;
+      if (data[key] === '1') {
+        el.classList.add('on');
+        el.innerHTML = '&#9745;';
+      } else {
+        el.classList.remove('on');
+        el.innerHTML = '&#9744;';
+      }
+    });
+    // new chk-btn buttons
+    document.querySelectorAll('.chk-btn').forEach((el, idx) => {
+      if (data['chkbtn_' + idx] === '1') {
+        el.classList.add('on');
+        el.textContent = '✓';
+      } else {
+        el.classList.remove('on');
+        el.textContent = '☐';
+      }
+    });
+
+    // eval scores
+    if (data['__scores__']) {
+      const saved = JSON.parse(data['__scores__']);
+      Object.entries(saved).forEach(([row, score]) => {
+        scores[parseInt(row)] = score;
+        selScore(parseInt(row), score);
+      });
+    }
+
+    // photos
+    if (data['__photos__']) {
+      const savedPhotos = JSON.parse(data['__photos__']);
+      Object.entries(savedPhotos).forEach(([uid, arr]) => {
+        photoStore[uid] = arr;
+        renderThumbs(uid);
+      });
+    }
+
+    // bio photo
+    if (data['__bio_photo__']) {
+      bioPhotoData = data['__bio_photo__'];
+      applyBioPhoto(bioPhotoData);
+    }
+  } catch(e) {
+    // corrupted data — ignore
+  }
+}
+
+function attachSaveListeners() {
+  // Auto-save on any input change
+  document.getElementById('pagesContainer').addEventListener('input', debounce(saveAllData, 600));
+  document.getElementById('pagesContainer').addEventListener('change', debounce(saveAllData, 600));
+}
+
+function debounce(fn, delay) {
+  let t;
+  return function(...args) {
+    clearTimeout(t);
+    t = setTimeout(() => fn.apply(this, args), delay);
+  };
+}
+
+// Override toggleChk to also save
+const _origToggleChk = toggleChk;
+function toggleChk(el) {
+  _origToggleChk(el);
+  debounce(saveAllData, 300)();
+}
+
+// Override selScore to also save
+const _origSelScore = selScore;
+function selScore(row, score) {
+  _origSelScore(row, score);
+  debounce(saveAllData, 300)();
+}
+
+// Save after photo changes too
+const _origAddPhotos = addPhotos;
+function addPhotos(uid, files) {
+  _origAddPhotos(uid, files);
+  // photos are saved after FileReader async, so delay a bit
+  setTimeout(saveAllData, 800);
+}
+
+const _origDeletePhoto = deletePhoto;
+function deletePhoto(uid, idx) {
+  _origDeletePhoto(uid, idx);
+  saveAllData();
+}
+
+// ===== زر مسح البيانات =====
+function clearAllData() {
+  if (!confirm('هل أنت متأكد من مسح جميع البيانات المحفوظة؟ لا يمكن التراجع عن هذه العملية.')) return;
+  localStorage.removeItem(LS_KEY);
+  location.reload();
+}
+</script>
+<script>
+// ===================================================
+// VIEW MODE (flip / scroll)
+// ===================================================
+let currentViewMode = 'flip';
+
+function setViewMode(mode) {
+  currentViewMode = mode;
+  document.getElementById('flipModeWrap').style.display   = mode === 'flip'   ? '' : 'none';
+  document.getElementById('scrollModeWrap').style.display = mode === 'scroll' ? '' : 'none';
+
+  const btnFlip   = document.getElementById('btnModeFlip');
+  const btnScroll = document.getElementById('btnModeScroll');
+  if (mode === 'flip') {
+    btnFlip.style.background   = 'var(--teal)'; btnFlip.style.border = 'none';
+    btnScroll.style.background = 'rgba(255,255,255,0.12)'; btnScroll.style.border = '1px solid rgba(255,255,255,0.25)';
+  } else {
+    btnScroll.style.background = 'var(--teal)'; btnScroll.style.border = 'none';
+    btnFlip.style.background   = 'rgba(255,255,255,0.12)'; btnFlip.style.border = '1px solid rgba(255,255,255,0.25)';
+    buildScrollMode();
+  }
+}
+
+// ===================================================
+// FLIP BOOK
+// ===================================================
+let flipCurrent = 0;
+let flipPages   = [];
+let flipBuilt   = false;
+let isFlipping  = false;
+
+function collectFlipPages() {
+  flipPages = [];
+  document.querySelectorAll('#pagesContainer .page').forEach(div => {
+    flipPages.push(div.innerHTML);
+  });
+}
+
+function openFlipbook() {
+  if (!flipBuilt) {
+    collectFlipPages();
+    buildSpread(0);
+    flipBuilt = true;
+  }
+  document.getElementById('flipbookModal').classList.add('open');
+  updateFlipUI();
+}
+function closeFlipbook() {
+  document.getElementById('flipbookModal').classList.remove('open');
+}
+document.getElementById('flipbookModal').addEventListener('click', function(e) {
+  if (e.target === this) closeFlipbook();
+});
+
+function buildSpread(spreadIdx) {
+  const scene = document.getElementById('flipScene');
+  scene.querySelectorAll('.flip-page').forEach(el => el.remove());
+
+  const leftIdx  = spreadIdx * 2;
+  const rightIdx = spreadIdx * 2 + 1;
+  const leftHtml  = flipPages[leftIdx]  || '';
+  const rightHtml = flipPages[rightIdx] || '';
+
+  // Left page (right side of book in RTL — the "front" page)
+  const lp = mkFlipPageEl(leftHtml, 'left');
+  scene.appendChild(lp);
+
+  // Right page
+  const rp = mkFlipPageEl(rightHtml, 'right');
+  scene.appendChild(rp);
+
+  flipCurrent = spreadIdx;
+  updateFlipUI();
+}
+
+function mkFlipPageEl(html, side) {
+  const el = document.createElement('div');
+  el.className = 'flip-page ' + (side === 'left' ? 'left-page' : 'right-page');
+
+  const scale = 0.41;
+  const inner = html
+    ? `<div style="
+        font-family:'Cairo','Tajawal',sans-serif;
+        direction:rtl;
+        transform:scale(${scale});
+        transform-origin:top ${side==='left'?'right':'left'};
+        width:860px;
+        min-height:1380px;
+        padding:18px 22px;
+        box-sizing:border-box;
+        background:white;
+        overflow:hidden;
+        pointer-events:none;
+      ">${html}</div>`
+    : `<div style="height:100%;display:flex;align-items:center;justify-content:center;color:#ddd;font-size:28px;background:#f8f8f8;">—</div>`;
+
+  el.innerHTML = `<div class="flip-face front" style="box-shadow:${side==='left'?'inset -4px 0 12px rgba(0,0,0,0.08)':'inset 4px 0 12px rgba(0,0,0,0.08)'};">${inner}</div>`;
+  return el;
+}
+
+function flipNext() {
+  const max = Math.ceil(flipPages.length / 2) - 1;
+  if (isFlipping || flipCurrent >= max) return;
+  animateFlip('next', () => buildSpread(flipCurrent + 1));
+}
+function flipPrev() {
+  if (isFlipping || flipCurrent <= 0) return;
+  animateFlip('prev', () => buildSpread(flipCurrent - 1));
+}
+
+function animateFlip(dir, callback) {
+  isFlipping = true;
+  const scene = document.getElementById('flipScene');
+  const pgs = scene.querySelectorAll('.flip-page');
+  const turning = dir === 'next' ? pgs[1] : pgs[0];
+  if (turning) {
+    const angle = dir === 'next' ? '-160deg' : '160deg';
+    turning.style.transition = 'transform 0.5s cubic-bezier(.645,.045,.355,1)';
+    turning.style.transform  = `rotateY(${angle})`;
+    turning.style.zIndex     = '9';
+    turning.style.opacity    = '0.6';
+  }
+  setTimeout(() => {
+    isFlipping = false;
+    if (turning) { turning.style.transition=''; turning.style.transform=''; turning.style.zIndex=''; turning.style.opacity=''; }
+    callback();
+  }, 480);
+}
+
+function updateFlipUI() {
+  const max = Math.ceil(flipPages.length / 2) - 1;
+  document.getElementById('flipPrev').disabled = flipCurrent === 0;
+  document.getElementById('flipNext').disabled = flipCurrent >= max;
+  const lp = flipCurrent * 2 + 1;
+  const rp = Math.min(flipCurrent * 2 + 2, flipPages.length);
+  document.getElementById('flipCounter').textContent = `صفحة ${lp}–${rp} من ${flipPages.length}`;
+}
+
+// Keyboard in flipbook
+document.addEventListener('keydown', e => {
+  if (!document.getElementById('flipbookModal').classList.contains('open')) return;
+  if (e.key === 'ArrowLeft')  flipNext();
+  if (e.key === 'ArrowRight') flipPrev();
+  if (e.key === 'Escape')     closeFlipbook();
+});
+
+// ===================================================
+// SCROLL MODE
+// ===================================================
+let scrollBuilt = false;
+function buildScrollMode() {
+  if (scrollBuilt) return;
+  const inner = document.getElementById('scrollPagesInner');
+  inner.innerHTML = '';
+  flipPages.forEach((html, i) => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:relative;margin:0 auto 18px;width:820px;background:white;border-radius:4px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.4);';
+    const pageNum = document.createElement('div');
+    pageNum.style.cssText = 'position:absolute;top:8px;left:12px;background:var(--teal);color:white;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;z-index:2;font-family:Cairo,sans-serif;';
+    pageNum.textContent = `صفحة ${i+1}`;
+    const content = document.createElement('div');
+    content.style.cssText = 'font-family:Cairo,Tajawal,sans-serif;direction:rtl;padding:24px 28px;min-height:300px;';
+    content.innerHTML = html;
+    wrap.appendChild(pageNum);
+    wrap.appendChild(content);
+    inner.appendChild(wrap);
+  });
+  scrollBuilt = true;
+}
+
+// ===================================================
+// QR CODE — pure JS encoder (no external lib needed)
+// ===================================================
+// Minimal QR data matrix builder using the qr-image algorithm
+// We embed a small standalone QR encoder directly
+
+const QRGen = (function() {
+  // Reed-Solomon GF(256) with prime 285
+  const GF_EXP = new Uint8Array(512);
+  const GF_LOG  = new Uint8Array(256);
+  (function(){
+    let x = 1;
+    for (let i = 0; i < 255; i++) {
+      GF_EXP[i] = x; GF_LOG[x] = i;
+      x <<= 1; if (x & 256) x ^= 285;
+    }
+    for (let i = 255; i < 512; i++) GF_EXP[i] = GF_EXP[i - 255];
+  })();
+
+  function gfMul(a, b) { return (a === 0 || b === 0) ? 0 : GF_EXP[GF_LOG[a] + GF_LOG[b]]; }
+  function gfPoly(e) {
+    let p = [1];
+    for (let i = 0; i < e; i++) {
+      const np = new Array(p.length + 1).fill(0);
+      for (let j = 0; j < p.length; j++) { np[j] ^= p[j]; np[j+1] ^= gfMul(p[j], GF_EXP[i]); }
+      p = np;
+    }
+    return p;
+  }
+  function rsEc(data, e) {
+    const gen = gfPoly(e);
+    const rem = [...data, ...new Array(e).fill(0)];
+    for (let i = 0; i < data.length; i++) {
+      const c = rem[i];
+      if (c) for (let j = 0; j < gen.length; j++) rem[i+j] ^= gfMul(gen[j], c);
+    }
+    return rem.slice(data.length);
+  }
+
+  // Version 2-M: 25x25, 16 data codewords, 10 EC codewords
+  const VERSION = 2, SIZE = 25;
+  const ALIGN = [6, 18]; // alignment pattern positions
+  const EC_CODEWORDS = 10, DATA_CODEWORDS = 16;
+
+  function encodeData(text) {
+    // Byte mode
+    const bytes = [];
+    for (let i = 0; i < text.length; i++) {
+      const c = text.charCodeAt(i);
+      if (c > 255) throw new Error('non-latin');
+      bytes.push(c);
+    }
+    // mode indicator (0100 = byte) + length (8 bits) + data + terminator
+    const bits = [];
+    const push = (v, n) => { for (let i = n-1; i >= 0; i--) bits.push((v >> i) & 1); };
+    push(4, 4); push(bytes.length, 8);
+    bytes.forEach(b => push(b, 8));
+    // terminator + padding to fill 128 bits (16 codewords × 8)
+    while (bits.length < 128) bits.push(0);
+    bits.length = 128;
+    const cw = [];
+    for (let i = 0; i < 16; i++) {
+      let v = 0; for (let b = 0; b < 8; b++) v = (v<<1)|bits[i*8+b]; cw.push(v);
+    }
+    return cw;
+  }
+
+  function makeMatrix() {
+    const m = Array.from({length:SIZE}, () => new Array(SIZE).fill(-1)); // -1 = unset
+    // Finder patterns
+    function finder(r, c) {
+      for (let i = 0; i < 7; i++) for (let j = 0; j < 7; j++)
+        m[r+i][c+j] = (i===0||i===6||j===0||j===6) ? 1 : (i>=2&&i<=4&&j>=2&&j<=4) ? 1 : 0;
+    }
+    finder(0,0); finder(0,SIZE-7); finder(SIZE-7,0);
+    // Separators (already covered by finder size), format info area
+    // Timing patterns
+    for (let i = 8; i < SIZE-8; i++) { m[6][i] = m[i][6] = i%2===0?1:0; }
+    // Alignment pattern
+    function align(r,c){ for(let i=-2;i<=2;i++) for(let j=-2;j<=2;j++) m[r+i][c+j]=(i===-2||i===2||j===-2||j===2||(!i&&!j))?1:0; }
+    align(ALIGN[1],ALIGN[1]);
+    // Dark module
+    m[4*VERSION+9][8] = 1;
+    return m;
+  }
+
+  function placeData(m, codewords) {
+    const bits = [];
+    codewords.forEach(cw => { for(let i=7;i>=0;i--) bits.push((cw>>i)&1); });
+    let bi = 0, up = true;
+    for (let col = SIZE-1; col >= 0; col -= 2) {
+      if (col === 6) col--;
+      for (let delta = 0; delta < SIZE; delta++) {
+        const row = up ? SIZE-1-delta : delta;
+        for (let dc = 0; dc < 2; dc++) {
+          const c = col - dc;
+          if (m[row][c] === -1 && bi < bits.length) { m[row][c] = bits[bi++]; }
+        }
+      }
+      up = !up;
+    }
+  }
+
+  function applyMask(m, mask) {
+    const out = m.map(r => [...r]);
+    for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) {
+      if (out[r][c] !== -1 && isData(m, r, c)) {
+        let flip = false;
+        if (mask===0) flip=(r+c)%2===0;
+        else if(mask===1) flip=r%2===0;
+        else if(mask===2) flip=c%3===0;
+        else if(mask===3) flip=(r+c)%3===0;
+        else if(mask===4) flip=(Math.floor(r/2)+Math.floor(c/3))%2===0;
+        else if(mask===5) flip=(r*c)%2+(r*c)%3===0;
+        else if(mask===6) flip=((r*c)%2+(r*c)%3)%2===0;
+        else              flip=((r+c)%2+(r*c)%3)%2===0;
+        if (flip) out[r][c] ^= 1;
+      }
+    }
+    return out;
+  }
+
+  function isData(m, r, c) {
+    // Function pattern areas
+    if (r < 9 && c < 9) return false;
+    if (r < 9 && c >= SIZE-8) return false;
+    if (r >= SIZE-8 && c < 9) return false;
+    if (r === 6 || c === 6) return false;
+    if (r >= ALIGN[1]-2 && r <= ALIGN[1]+2 && c >= ALIGN[1]-2 && c <= ALIGN[1]+2) return false;
+    if (r===4*VERSION+9 && c===8) return false;
+    return true;
+  }
+
+  function formatInfo(mask) {
+    // Error correction level M (01) + mask
+    const data = (0b01 << 3) | mask;
+    let rem = data;
+    const gen = 0b10100110111;
+    for (let i = 0; i < 10; i++) rem = ((rem<<1) ^ ((rem>>9)?gen:0)) & 0x3FF;
+    const fmt = ((data<<10)|rem) ^ 0b101010000010010;
+    return fmt;
+  }
+
+  function placeFormat(m, mask) {
+    const fmt = formatInfo(mask);
+    const places = [
+      [8,0],[8,1],[8,2],[8,3],[8,4],[8,5],[8,7],[8,8],
+      [7,8],[5,8],[4,8],[3,8],[2,8],[1,8],[0,8]
+    ];
+    const mirrorR = [SIZE-1,SIZE-2,SIZE-3,SIZE-4,SIZE-5,SIZE-6,SIZE-7,8];
+    const mirrorC = [SIZE-8,SIZE-7,SIZE-6,SIZE-5,SIZE-4,SIZE-3,SIZE-2,SIZE-1];
+    for (let i = 0; i < 15; i++) {
+      const bit = (fmt >> (14-i)) & 1;
+      const [r,c] = places[i];
+      m[r][c] = bit;
+      // mirror
+      if (i < 8) { m[SIZE-1-i][8] = bit; }
+      else        { m[8][SIZE-15+i] = bit; }
+    }
+  }
+
+  function generate(text) {
+    try {
+      const data = encodeData(text);
+      const ec   = rsEc(data, EC_CODEWORDS);
+      const all  = [...data, ...ec];
+      const base = makeMatrix();
+      placeData(base, all);
+      // Use mask 2 (good general-purpose)
+      const MASK = 2;
+      const masked = applyMask(base, MASK);
+      placeFormat(masked, MASK);
+      return masked;
+    } catch(e) { return null; }
+  }
+
+  function drawOnCanvas(canvas, text, darkColor, lightColor) {
+    const matrix = generate(text);
+    if (!matrix) return false;
+    const sz = canvas.width;
+    const modules = matrix.length;
+    const quiet = 2;
+    const cell = sz / (modules + quiet * 2);
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, sz, sz);
+    ctx.fillStyle = lightColor || '#ffffff';
+    ctx.fillRect(0, 0, sz, sz);
+    ctx.fillStyle = darkColor || '#000000';
+    for (let r = 0; r < modules; r++) {
+      for (let c = 0; c < modules; c++) {
+        if (matrix[r][c] === 1) {
+          ctx.fillRect(
+            Math.round((c + quiet) * cell),
+            Math.round((r + quiet) * cell),
+            Math.ceil(cell), Math.ceil(cell)
+          );
+        }
+      }
+    }
+    return true;
+  }
+
+  return { drawOnCanvas };
+})();
+
+// QR modal logic
+function openQR() { document.getElementById('qrModal').classList.add('open'); }
+function closeQR() { document.getElementById('qrModal').classList.remove('open'); }
+document.getElementById('qrModal').addEventListener('click', function(e) {
+  if (e.target === this) closeQR();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('qrModal').classList.contains('open')) closeQR();
+});
+
+function liveQR(type) {
+  const url = document.getElementById(type==='mag'?'qrUrlMag':'qrUrlPdf').value.trim();
+  if (!url) {
+    document.getElementById(type==='mag'?'qrCardMag':'qrCardPdf').classList.remove('visible');
+    return;
+  }
+  const card   = document.getElementById(type==='mag'?'qrCardMag':'qrCardPdf');
+  const canvas = document.getElementById(type==='mag'?'qrCanvasMag':'qrCanvasPdf');
+  const label  = document.getElementById(type==='mag'?'qrUrlLabelMag':'qrUrlLabelPdf');
+  const dark   = type==='mag' ? '#0f6e56' : '#1a3a4a';
+
+  const ok = QRGen.drawOnCanvas(canvas, url, dark, '#ffffff');
+  if (ok) {
+    card.classList.add('visible');
+    label.textContent = url.length > 55 ? url.substring(0,52)+'…' : url;
+  } else {
+    // URL too long for v2 — show message
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0,0,180,180);
+    ctx.fillStyle='#fff3cd';ctx.fillRect(0,0,180,180);
+    ctx.fillStyle='#7a5200';ctx.font='11px Cairo';ctx.textAlign='center';
+    ctx.fillText('الرابط طويل جداً',90,80);ctx.fillText('اختصره أولاً',90,100);
+    card.classList.add('visible');
+    label.textContent = '';
+  }
+}
+
+function downloadQR(type) {
+  const canvas = document.getElementById(type==='mag'?'qrCanvasMag':'qrCanvasPdf');
+  const fname  = type==='mag' ? 'QR_المجلة_التفاعلية.png' : 'QR_ملف_PDF.png';
+  // Draw a larger version for download (400×400)
+  const url = document.getElementById(type==='mag'?'qrUrlMag':'qrUrlPdf').value.trim();
+  if (!url) return;
+  const big = document.createElement('canvas');
+  big.width = big.height = 400;
+  const dark = type==='mag' ? '#0f6e56' : '#1a3a4a';
+  QRGen.drawOnCanvas(big, url, dark, '#ffffff');
+  const a = document.createElement('a');
+  a.href = big.toDataURL('image/png');
+  a.download = fname;
+  a.click();
+}
+</script>
+<!-- Google Identity Services -->
+<script src="https://accounts.google.com/gsi/client" async></script>
+<script>
+// ===================================================
+// GOOGLE DRIVE SYNC
+// ===================================================
+const GD_FILE_NAME  = 'lab_performance_data.json';
+const GD_SCOPE      = 'https://www.googleapis.com/auth/drive.file';
+const LS_CLIENT_KEY = 'gd_client_id';
+const LS_TOKEN_KEY  = 'gd_access_token';
+const DEFAULT_CLIENT_ID = '65171899780-rb6kki2n4ip1s1uebereeqr9qio77tuu.apps.googleusercontent.com';
+
+let gdToken       = null;
+let gdFileId      = null;
+let gdSaveTimer   = null;
+let gdReady       = false;
+
+// ---- UI helpers ----
+function gdSetStatus(msg, cls) {
+  const el = document.getElementById('gd-status-text');
+  el.textContent = msg;
+  el.className = 'gd-status' + (cls ? ' ' + cls : '');
+}
+function gdShow(id)  { const e = document.getElementById(id); if(e) e.style.display = ''; }
+function gdHide(id)  { const e = document.getElementById(id); if(e) e.style.display = 'none'; }
+function gdEnable(id){ const e = document.getElementById(id); if(e) e.disabled = false; }
+function gdDisable(id){ const e = document.getElementById(id); if(e) e.disabled = true; }
+
+// ---- Setup modal ----
+function openSetupModal() {
+  const saved = localStorage.getItem(LS_CLIENT_KEY) || '';
+  document.getElementById('clientid-input').value = saved;
+  document.getElementById('setup-modal').classList.add('open');
+}
+function closeSetupModal() {
+  document.getElementById('setup-modal').classList.remove('open');
+}
+function saveClientId() {
+  const val = document.getElementById('clientid-input').value.trim();
+  if (!val) { alert('الرجاء إدخال Client ID'); return; }
+  localStorage.setItem(LS_CLIENT_KEY, val);
+  closeSetupModal();
+  initGDrive();
+}
+
+// ---- Init ----
+function getClientId() {
+  return localStorage.getItem(LS_CLIENT_KEY) || DEFAULT_CLIENT_ID;
+}
+
+function initGDrive() {
+  const clientId = getClientId();
+  if (!clientId) {
+    gdSetStatus('⚙️ اضغط على ⚙️ لإعداد Google Drive');
+    return;
+  }
+
+  // Try restoring token from localStorage
+  const saved = localStorage.getItem(LS_TOKEN_KEY);
+  if (saved) {
+    try {
+      const obj = JSON.parse(saved);
+      if (obj.expires > Date.now()) {
+        gdToken = obj.token;
+        onGDSignedIn();
+        return;
+      }
+    } catch(e) {}
+    localStorage.removeItem(LS_TOKEN_KEY);
+  }
+
+  gdSetStatus('اضغط لتسجيل الدخول بـ Google');
+  gdShow('btn-gd-login');
+}
+
+function gdSignIn() {
+  const clientId = getClientId();
+  if (!clientId) { openSetupModal(); return; }
+
+  if (typeof google === 'undefined' || !google.accounts) {
+    gdSetStatus('⏳ جاري تحميل مكتبة Google...', 'saving');
+    setTimeout(gdSignIn, 1000);
+    return;
+  }
+
+  const client = google.accounts.oauth2.initTokenClient({
+    client_id: clientId,
+    scope: GD_SCOPE,
+    callback: (resp) => {
+      if (resp.error) {
+        gdSetStatus('❌ فشل تسجيل الدخول: ' + resp.error, 'error');
+        return;
+      }
+      gdToken = resp.access_token;
+      // Store token with expiry (55 min)
+      localStorage.setItem(LS_TOKEN_KEY, JSON.stringify({
+        token: gdToken,
+        expires: Date.now() + 55 * 60 * 1000
+      }));
+      onGDSignedIn();
+    }
+  });
+  client.requestAccessToken();
+}
+
+function gdSignOut() {
+  gdToken = null;
+  gdFileId = null;
+  localStorage.removeItem(LS_TOKEN_KEY);
+  gdHide('btn-gd-save');
+  gdHide('btn-gd-load');
+  gdHide('btn-gd-logout');
+  gdShow('btn-gd-login');
+  gdSetStatus('تم تسجيل الخروج');
+}
+
+async function onGDSignedIn() {
+  gdHide('btn-gd-login');
+  gdShow('btn-gd-logout');
+  gdShow('btn-gd-save');
+  gdShow('btn-gd-load');
+  gdSetStatus('⏳ جاري البحث عن ملف البيانات...', 'saving');
+
+  // جلب اسم المستخدم
+  try {
+    const infoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: 'Bearer ' + gdToken }
+    });
+    const info = await infoRes.json();
+    if (info.name) {
+      document.getElementById('btn-gd-logout').textContent = '🚪 ' + info.name;
+    }
+  } catch(e) {}
+
+  try {
+    gdFileId = await gdFindFile();
+    if (gdFileId) {
+      gdSetStatus('✅ متصل بـ Drive');
+      gdEnable('btn-gd-save');
+      gdEnable('btn-gd-load');
+      await gdLoadNow(true);
+    } else {
+      gdSetStatus('📋 لا يوجد ملف محفوظ — سيُنشأ عند أول حفظ');
+      gdEnable('btn-gd-save');
+      gdEnable('btn-gd-load');
+    }
+    gdReady = true;
+  } catch(e) {
+    gdSetStatus('❌ خطأ في الاتصال بـ Drive', 'error');
+  }
+}
+
+// ---- Drive API ----
+async function gdFindFile() {
+  const res = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=name='${GD_FILE_NAME}' and trashed=false&fields=files(id,name,modifiedTime)&orderBy=modifiedTime desc`,
+    { headers: { Authorization: 'Bearer ' + gdToken } }
+  );
+  const data = await res.json();
+  if (data.files && data.files.length > 0) {
+    // احذف الملفات القديمة المكررة
+    if (data.files.length > 1) {
+      for (let i = 1; i < data.files.length; i++) {
+        fetch(`https://www.googleapis.com/drive/v3/files/${data.files[i].id}`, {
+          method: 'DELETE',
+          headers: { Authorization: 'Bearer ' + gdToken }
+        });
+      }
+    }
+    return data.files[0].id;
+  }
+  return null;
+}
+
+async function gdSaveNow() {
+  if (!gdToken) { gdSetStatus('سجّل الدخول أولاً', 'error'); return; }
+  gdDisable('btn-gd-save');
+  gdSetStatus('💾 جاري الحفظ...', 'saving');
+
+  try {
+    const payload = collectAllDataForDrive();
+    const bodyStr = JSON.stringify(payload);
+    const blob = new Blob([bodyStr], {type: 'application/json'});
+
+    if (gdFileId) {
+      const r = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${gdFileId}?uploadType=media`, {
+        method: 'PATCH',
+        headers: { Authorization: 'Bearer ' + gdToken, 'Content-Type': 'application/json' },
+        body: blob
+      });
+      if (!r.ok) {
+        // الملف ربما حذف — نعيد الإنشاء
+        gdFileId = null;
+        gdSaveNow();
+        return;
+      }
+    } else {
+      const meta = { name: GD_FILE_NAME };
+      const form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify(meta)], {type:'application/json'}));
+      form.append('file', blob);
+      const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + gdToken },
+        body: form
+      });
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(err);
+      }
+      const d = await res.json();
+      gdFileId = d.id;
+    }
+
+    const now = new Date().toLocaleTimeString('ar-SA');
+    gdSetStatus(`✅ تم الحفظ على Drive — ${now}`, 'saved');
+    gdEnable('btn-gd-save');
+  } catch(e) {
+    gdSetStatus('❌ فشل الحفظ: ' + e.message, 'error');
+    gdEnable('btn-gd-save');
+  }
+}
+
+async function gdLoadNow(silent) {
+  if (!gdToken) return;
+  // ابحث دائماً عن الملف الأحدث
+  gdFileId = await gdFindFile();
+  if (!gdFileId) {
+    if (!silent) gdSetStatus('⚠️ لا يوجد ملف محفوظ على Drive بعد — اضغط حفظ الآن أولاً');
+    return;
+  }
+  if (!silent) { gdDisable('btn-gd-load'); gdSetStatus('📂 جاري التحميل...', 'saving'); }
+
+  try {
+    const res = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${gdFileId}?alt=media`,
+      { headers: { Authorization: 'Bearer ' + gdToken } }
+    );
+
+    // تحقق من الاستجابة قبل القراءة
+    if (!res.ok) {
+      gdFileId = null;
+      if (!silent) gdSetStatus('⚠️ لا يوجد ملف محفوظ بعد — ابدأ بالحفظ أولاً');
+      gdEnable('btn-gd-load');
+      return;
+    }
+
+    const text = await res.text();
+    console.log('GD Load response status:', res.status);
+    console.log('GD Load text:', text.substring(0, 200));
+    if (!text || text.trim() === '' || text.trim() === 'undefined') {
+      if (!silent) gdSetStatus('⚠️ الملف فارغ — اضغط حفظ الآن أولاً');
+      gdEnable('btn-gd-load');
+      return;
+    }
+
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch(e) {
+      if (!silent) gdSetStatus('⚠️ الملف تالف — اضغط حفظ الآن لتجديده');
+      gdEnable('btn-gd-load');
+      return;
+    }
+
+    applyAllDataFromDrive(data);
+    const now = new Date().toLocaleTimeString('ar-SA');
+    gdSetStatus(`✅ تم تحميل البيانات من Drive — ${now}`, 'saved');
+    gdEnable('btn-gd-load');
+  } catch(e) {
+    gdSetStatus('❌ فشل التحميل: ' + e.message, 'error');
+    gdEnable('btn-gd-load');
+  }
+}
+
+// ---- Data collect / apply ----
+function collectAllDataForDrive() {
+  const data = { v: 2, inputs: {}, checks: [], chkbtns: {}, scores: scores, photos: photoStore };
+
+  document.querySelectorAll(
+    '#pagesContainer input[type=text], #pagesContainer input[type=tel],' +
+    '#pagesContainer input[type=email], #pagesContainer input[type=date],' +
+    '#pagesContainer input[type=url], #pagesContainer textarea'
+  ).forEach((el, idx) => {
+    const key = el.dataset.sid || ('f_' + idx);
+    el.dataset.sid = key;
+    data.inputs[key] = el.value;
+  });
+
+  document.querySelectorAll('.chk').forEach((el, idx) => {
+    data.checks[idx] = el.classList.contains('on') ? 1 : 0;
+  });
+  document.querySelectorAll('.chk-btn').forEach((el, idx) => {
+    data.chkbtns[idx] = el.classList.contains('on') ? 1 : 0;
+  });
+
+  if (bioPhotoData) data.bioPhoto = bioPhotoData;
+
+  return data;
+}
+
+function applyAllDataFromDrive(data) {
+  if (!data || data.v !== 2) return;
+
+  // inputs
+  if (data.inputs) {
+    document.querySelectorAll(
+      '#pagesContainer input[type=text], #pagesContainer input[type=tel],' +
+      '#pagesContainer input[type=email], #pagesContainer input[type=date],' +
+      '#pagesContainer input[type=url], #pagesContainer textarea'
+    ).forEach((el, idx) => {
+      const key = el.dataset.sid || ('f_' + idx);
+      el.dataset.sid = key;
+      if (data.inputs[key] !== undefined) el.value = data.inputs[key];
+    });
+  }
+
+  // checkboxes
+  if (data.checks) {
+    document.querySelectorAll('.chk').forEach((el, idx) => {
+      const on = data.checks[idx] === 1;
+      if (on) { el.classList.add('on'); el.innerHTML = '&#9745;'; }
+      else    { el.classList.remove('on'); el.innerHTML = '&#9744;'; }
+    });
+  }
+  if (data.chkbtns) {
+    document.querySelectorAll('.chk-btn').forEach((el, idx) => {
+      if (data.chkbtns[idx] === 1) { el.classList.add('on'); el.textContent = '✓'; }
+      else { el.classList.remove('on'); el.textContent = '☐'; }
+    });
+  }
+
+  // scores
+  if (data.scores) {
+    Object.entries(data.scores).forEach(([row, score]) => {
+      scores[parseInt(row)] = score;
+      selScore(parseInt(row), score);
+    });
+  }
+
+  // bio photo
+  if (data.bioPhoto) {
+    bioPhotoData = data.bioPhoto;
+    applyBioPhoto(bioPhotoData);
+  }
+
+  // photos
+  if (data.photos) {
+    Object.entries(data.photos).forEach(([uid, arr]) => {
+      photoStore[uid] = arr;
+      renderThumbs(uid);
+    });
+  }
+}
+
+// ---- Auto-save trigger (called from existing debounce listeners) ----
+function gdAutoSave() {
+  if (!gdReady || !gdToken) return;
+  clearTimeout(gdSaveTimer);
+  gdSetStatus('✏️ تغييرات غير محفوظة...', 'saving');
+  gdSaveTimer = setTimeout(gdSaveNow, 3000); // auto-save after 3s idle
+}
+
+// ---- Hook into existing save listeners ----
+window.addEventListener('load', () => {
+  // Extend existing input listener to also trigger GDrive auto-save
+  const container = document.getElementById('pagesContainer');
+  if (container) {
+    container.addEventListener('input',  () => gdAutoSave());
+    container.addEventListener('change', () => gdAutoSave());
+  }
+
+  // Init GDrive after a short delay (let GSI load)
+  setTimeout(initGDrive, 1000);
+});
+</script>
+</body>
+</html>

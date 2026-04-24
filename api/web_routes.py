@@ -1773,6 +1773,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
       {_alert_circs_html}
     </div>
   </div>
+  {'<div style="margin-bottom:18px"><a href="/web/lab-docs" target="_blank" style="display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,#0f6e56,#2da88a);color:white;padding:16px 22px;border-radius:12px;text-decoration:none;font-weight:700;font-size:15px;box-shadow:0 4px 14px rgba(45,168,138,0.35)"><span style="font-size:28px">📋</span><div><div>توثيق شواهد الأداء الوظيفي</div><div style="font-size:12px;font-weight:400;opacity:0.85;margin-top:3px">سجّل وأرشف شواهد أدائك الوظيفي بشكل تفاعلي</div></div><span style="margin-right:auto;opacity:0.7">↗</span></a></div>' if role == "lab" else ''}
   <div class="stat-cards" id="dash-cards"><div class="loading">⏳ جارٍ التحميل...</div></div>
   <div class="section"><div class="st">أكثر الفصول غياباً</div>
     <div class="tw"><table><thead><tr><th>الفصل</th><th>الغائبون</th><th>الحاضرون</th><th>نسبة الغياب</th></tr></thead>

@@ -24,7 +24,7 @@ _PROTECTED = {
 }
 
 # الامتدادات التي يجب تحديثها
-_UPDATE_EXTS = {".py", ".txt", ".json", ".iss", ".bat", ".spec", ".ico"}
+_UPDATE_EXTS = {".py", ".txt", ".json", ".iss", ".bat", ".spec", ".ico", ".html"}
 
 # ملفات JSON التي يجب تجاهلها (بيانات مستخدم)
 _SKIP_FILES = {
