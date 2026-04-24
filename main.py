@@ -51,15 +51,12 @@ from alerts_service import (schedule_daily_alerts, schedule_daily_report,
 from database import schedule_auto_backup
 from api.mobile_routes import _schedule_tardiness_sender
 from report_builder import export_to_noor_excel
-from constants import now_riyadh_date
 
 import multiprocessing
 import uvicorn
 import asyncio
 import atexit
-import tkinter as tk
 from ttkthemes import ThemedTk
-from tkinter import messagebox
 import traceback
 
 # ─── إصلاح asyncio لـ PyInstaller على Windows (ضروري لعمل uvicorn) ──────────

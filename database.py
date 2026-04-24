@@ -706,13 +706,12 @@ def add_student_points(student_id, points, reason="", date=None, author_id=None,
                 (student_id, points, reason, author_id, author_name, date, created_at))
     con.commit(); con.close()
 
-def get_teacher_points_balance(author_id: str, month_str: str, local_only: bool = False) -> int:
+def get_teacher_points_balance(author_id: str, month_str: str) -> int:
     """يُرجع إجمالي النقاط التي منحها المعلم في شهر معين (YYYY-MM)."""
-    if not local_only:
-        client = get_cloud_client()
-        if client.is_active():
-            res = client.get("/web/api/teacher-balance", {"username": author_id, "month": month_str})
-            return res.get("balance", 0)
+    client = get_cloud_client()
+    if client.is_active():
+        res = client.get("/web/api/teacher-balance", {"username": author_id, "month": month_str})
+        return res.get("balance", 0)
 
     con = get_db(); cur = con.cursor()
     cur.execute("SELECT SUM(points) FROM student_points WHERE author_id = ? AND date LIKE ?", (author_id, f"{month_str}%"))
@@ -721,16 +720,20 @@ def get_teacher_points_balance(author_id: str, month_str: str, local_only: bool 
     return res[0] if res and res[0] else 0
 
 def get_student_total_points(student_id) -> int:
-    client = get_cloud_client()
-    if client.is_active():
-        res = client.get(f"/web/api/student-analysis/{student_id}")
-        return res.get("data", {}).get("total_points", 0)
+    """يُرجع مجموع نقاط الطالب — يدعم وضع السحاب."""
+    try:
+        client = get_cloud_client()
+        if client.is_active():
+            res = client.get(f"/web/api/student-analysis/{student_id}")
+            return res.get("data", {}).get("total_points", 0)
 
-    con = get_db(); cur = con.cursor()
-    cur.execute("SELECT SUM(points) FROM student_points WHERE student_id = ?", (student_id,))
-    res = cur.fetchone()
-    con.close()
-    return res[0] if res and res[0] else 0
+        con = get_db(); cur = con.cursor()
+        cur.execute("SELECT SUM(points) FROM student_points WHERE student_id = ?", (student_id,))
+        res = cur.fetchone()
+        con.close()
+        return res[0] if res and res[0] else 0
+    except Exception:
+        return 0
 
 def _get_teacher_names_map() -> Dict[str, str]:
     """مساعد لجلب خارطة بأسماء المعلمين من teachers.json."""
@@ -858,13 +861,6 @@ def get_teachers_points_usage(month_str: str) -> List[Dict]:
     con.close()
     return sorted(results, key=lambda x: x["used"], reverse=True)
 
-def get_teacher_points_balance(username: str, month_str: str) -> int:
-    """يُرجع إجمالي النقاط التي استهلكها المعلم في شهر معين."""
-    con = get_db(); cur = con.cursor()
-    cur.execute("SELECT SUM(points) FROM student_points WHERE author_id = ? AND date LIKE ?", (username, f"{month_str}%"))
-    row = cur.fetchone()
-    con.close()
-    return row[0] if row and row[0] else 0
 
 def add_teacher_points_adjustment(username: str, points: int, reason: str, month_str: str = None):
     """يُضيف زيادة رصيد لمعلم محدد لشهر معين."""
@@ -1042,15 +1038,6 @@ def get_certificates_sent_on_date(date_str) -> int:
     con.close()
     return res[0] if res and res[0] else 0
 
-def get_student_total_points(student_id: str) -> int:
-    try:
-        con = get_db(); cur = con.cursor()
-        cur.execute("SELECT SUM(points) FROM student_points WHERE student_id = ?", (student_id,))
-        row = cur.fetchone()
-        con.close()
-        return row[0] if row and row[0] else 0
-    except Exception:
-        return 0
 
 def is_student_exempted(student_id) -> bool:
     con = get_db(); cur = con.cursor()
