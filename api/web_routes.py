@@ -1595,6 +1595,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
             ("المستخدمون",          "users",                "fas fa-user-shield"),
             ("النسخ الاحتياطية",    "backup",               "fas fa-hdd"),
             ("ملاحظات سريعة",       "quick_notes",          "fas fa-sticky-note"),
+            ("شواهد الأداء",        "lab_submissions",      "fas fa-clipboard-check"),
         ]),
     ]
 
@@ -1607,9 +1608,13 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
             continue
         sidebar_html += '<div class="sb-group">' + grp_title + '</div>'
         for name, key, icon in visible:
+            badge = ''
+            if key == 'lab_submissions' and unread_lab_submissions > 0:
+                badge = (f'<span style="background:#ef4444;color:white;border-radius:20px;'
+                         f'padding:1px 7px;font-size:11px;margin-right:6px">{unread_lab_submissions}</span>')
             sidebar_html += (
                 '<button class="tab-btn" data-key="' + key + '" onclick="showTab(\'' + key + '\')">'
-                '<i class="ti ' + icon + '"></i>' + name + '</button>'
+                '<i class="ti ' + icon + '"></i>' + name + badge + '</button>'
             )
         sidebar_html += '<div class="sb-div"></div>'
 
@@ -2595,6 +2600,22 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
     </div>
     <div id="qn-list"></div>
   </div>
+</div>
+
+<div id="tab-lab_submissions">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+    <h2 class="pt"><i class="fas fa-clipboard-check"></i> شواهد الأداء الوظيفي</h2>
+    <a href="/web/lab-docs/submissions" target="_blank"
+       style="background:#1565C0;color:white;padding:8px 16px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700">
+      ↗ فتح في نافذة جديدة
+    </a>
+  </div>
+  <iframe src="/web/lab-docs/submissions"
+          style="width:100%;height:calc(100vh - 160px);border:none;border-radius:12px;background:white"
+          id="lab-subs-frame"
+          onload="this.style.opacity=1"
+          style="opacity:0;transition:opacity .3s">
+  </iframe>
 </div>
 
 <div id="tab-referral_teacher">
