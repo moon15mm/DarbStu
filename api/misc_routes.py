@@ -32,4 +32,17 @@ async def health_check():
         "version": "1.0.0"
     }
 
-# مسارات إضافية ستُضاف هنا
+
+@router.post("/web/api/admin/trigger-update")
+async def trigger_update_now(request: Request):
+    """تحديث فوري للسيرفر — للمدير فقط — يُنزِّل آخر إصدار ويُعيد التشغيل."""
+    from api.web_routes import _get_current_user
+    user = _get_current_user(request)
+    if not user or user.get("role") != "admin":
+        return JSONResponse({"ok": False, "msg": "غير مصرح — للمدير فقط"}, status_code=403)
+    try:
+        from updater import trigger_immediate_update
+        ok, msg = trigger_immediate_update()
+        return JSONResponse({"ok": ok, "msg": msg})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)})

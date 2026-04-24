@@ -1,6 +1,6 @@
 {
-  "version": "3.2.14",
-  "notes": "نظام التحديثات الطارئة — الأجهزة تفحص force_update كل 5 دقائق",
+  "version": "3.2.15",
+  "notes": "تحديث فوري للسيرفر عبر واجهة الويب — بدون polling أو بطء",
   "force_update": false,
   "download_url": "https://github.com/moon15mm/DarbStu/archive/refs/heads/main.zip",
   "release_date": "2026-04-24"

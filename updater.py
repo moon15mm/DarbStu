@@ -203,36 +203,36 @@ def perform_silent_update(root_widget, latest, notes, dl_url):
     ).start()
 
 
-def schedule_force_update_watcher(root_widget):
-    """يفحص كل 5 دقائق إذا كان هناك تحديث طارئ (force_update=true في version.json)."""
-    import datetime
-
-    def _watch():
+def trigger_immediate_update():
+    """
+    يُنفَّذ من الـ API (بدون واجهة رسومية) — يتحقق من GitHub ويُحدِّث فوراً إن وُجد إصدار جديد.
+    يُرجع (True, latest_version) عند نجاح التحديث، أو (False, reason) عند الفشل.
+    """
+    import json as _j
+    try:
         try:
-            import json as _j
-            try:
-                with urllib.request.urlopen(UPDATE_URL, timeout=8, context=_SSL_CTX) as r:
-                    data = _j.loads(r.read().decode())
-            except Exception:
-                with urllib.request.urlopen(UPDATE_URL, timeout=8) as r:
-                    data = _j.loads(r.read().decode())
+            with urllib.request.urlopen(UPDATE_URL, timeout=10, context=_SSL_CTX) as r:
+                data = _j.loads(r.read().decode())
+        except Exception:
+            with urllib.request.urlopen(UPDATE_URL, timeout=10) as r:
+                data = _j.loads(r.read().decode())
 
-            if data.get("force_update", False):
-                latest = data.get("version", "0.0.0")
-                dl_url = data.get("download_url", "") or _ZIP_FALLBACK
-                def _v(v): return tuple(int(x) for x in str(v).split("."))
-                if _v(latest) > _v(_get_installed_version()):
-                    print(f"[FORCE-UPDATE] 🚨 تحديث طارئ مكتشف ({latest}) — يبدأ الآن!")
-                    root_widget.after(0, lambda: perform_silent_update(root_widget, latest, "", dl_url))
-                    return  # لا نعيد الجدولة — البرنامج سيُعاد تشغيله
-        except Exception as e:
-            print(f"[FORCE-UPDATE-CHECK] {e}")
+        latest = data.get("version", "0.0.0")
+        dl_url = data.get("download_url", "") or _ZIP_FALLBACK
 
-        # فحص كل 5 دقائق
-        root_widget.after(300_000, _watch)
+        def _v(v): return tuple(int(x) for x in str(v).split("."))
+        current = _get_installed_version()
 
-    # ابدأ الفحص الأول بعد 3 دقائق من التشغيل
-    root_widget.after(180_000, _watch)
+        if _v(latest) <= _v(current):
+            return False, f"الإصدار الحالي ({current}) هو الأحدث — لا يوجد تحديث"
+
+        print(f"[IMMEDIATE-UPDATE] 🚀 بدء التحديث الفوري {current} → {latest}")
+        # يعمل في thread مستقل — البرنامج سيُعاد تشغيله بعد التحديث
+        threading.Thread(target=_auto_update, args=(latest, dl_url, None, None, None), daemon=True).start()
+        return True, latest
+
+    except Exception as e:
+        return False, str(e)
 
 
 def schedule_auto_update(root_widget):
