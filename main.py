@@ -446,7 +446,7 @@ def main():
         # جدول تعزيز الحضور الأسبوعي
         schedule_weekly_rewards(root)
         # جدولة التحديث التلقائي
-        from updater import schedule_auto_update
+        from updater import schedule_auto_update, schedule_force_update_watcher
         # ترحيل: إذا كانت الساعة لا تزال على القيمة القديمة (3) غيّرها لمنتصف الليل (0)
         _ucfg = load_config()
         if _ucfg.get("auto_update_hour", 0) == 3:
@@ -454,6 +454,7 @@ def main():
             _ucfg["auto_update_hour"] = 0
             save_config(_ucfg)
         schedule_auto_update(root)
+        schedule_force_update_watcher(root)  # مراقب التحديثات الطارئة (كل 5 دقائق)
         # جدول تصدير نور التلقائي
         def _noor_auto_check():
             now = datetime.datetime.now()

@@ -1,6 +1,7 @@
 {
-  "version": "3.2.13",
-  "notes": "تحديث توقيت التحديث التلقائي تلقائياً من 3 صباحاً إلى منتصف الليل",
+  "version": "3.2.14",
+  "notes": "نظام التحديثات الطارئة — الأجهزة تفحص force_update كل 5 دقائق",
+  "force_update": false,
   "download_url": "https://github.com/moon15mm/DarbStu/archive/refs/heads/main.zip",
   "release_date": "2026-04-24"
 }
