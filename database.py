@@ -1672,18 +1672,22 @@ def get_user_allowed_tabs(username: str):
     cur.execute("SELECT role, allowed_tabs FROM users WHERE username=?", (username,))
     row = cur.fetchone(); con.close()
     if not row:
-        # المستخدم غير موجود محلياً (وضع السحاب) — استخدم الدور من CURRENT_USER
         from constants import CURRENT_USER, ROLE_TABS as _RT
         role = CURRENT_USER.get("role", "teacher")
         if role == "admin": return None
         return _RT.get(role)
     if row["role"] == "admin": return None  # admin يرى كل شيء
+    role_defaults = ROLE_TABS.get(row["role"]) or []
     if row["allowed_tabs"]:
         import json as _j
-        try: return _j.loads(row["allowed_tabs"])
-        except: pass
-    # fallback: استخدم ROLE_TABS
-    return ROLE_TABS.get(row["role"])
+        try:
+            stored = _j.loads(row["allowed_tabs"])
+            # دمج التبويبات الجديدة من ROLE_TABS التي لم تكن موجودة وقت الحفظ
+            merged = list(stored) + [t for t in role_defaults if t not in stored]
+            return merged
+        except:
+            pass
+    return role_defaults
 
 def save_user_allowed_tabs(username: str, tabs: list):
     """يحفظ قائمة التبويبات المسموحة للمستخدم."""
