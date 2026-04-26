@@ -270,6 +270,407 @@ def _body_inject(username: str) -> str:
 """
 
 
+def _build_lab_docs_html(username: str) -> str:
+    user_ctx = f'<script>window.__LAB_USER__={json.dumps({"username": username})};</script>'
+    return f"""<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>شواهد الأداء الوظيفي — محضر المختبر</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+{user_ctx}
+{_HEAD_INJECT}
+<style>
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{font-family:Cairo,sans-serif;background:#f0f4f3;direction:rtl}}
+.page-topbar{{background:#0f6e56;color:white;padding:10px 20px;display:flex;align-items:center;justify-content:space-between;font-size:15px;font-weight:700;position:sticky;top:0;z-index:100}}
+.page-topbar a{{color:#9ee8d4;text-decoration:none;font-size:13px}}
+.page-tabs{{display:flex;gap:4px;padding:12px 20px;background:#e8f5f1;border-bottom:2px solid #c1e0d7;flex-wrap:wrap}}
+.tab-btn{{padding:8px 18px;border:2px solid #0f6e56;border-radius:8px;background:white;color:#0f6e56;font-family:Cairo,sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:.2s}}
+.tab-btn.active{{background:#0f6e56;color:white}}
+#pagesContainer{{padding:20px;max-width:900px;margin:0 auto}}
+.page{{display:none;background:white;border-radius:16px;padding:28px;box-shadow:0 2px 16px rgba(15,110,86,.1);margin-bottom:20px}}
+.page.active{{display:block}}
+.page-title{{font-size:20px;font-weight:900;color:#0f6e56;border-bottom:3px solid #0f6e56;padding-bottom:10px;margin-bottom:20px}}
+.section-title{{font-size:15px;font-weight:700;color:#065f46;margin:18px 0 10px;background:#e8f5f1;padding:8px 14px;border-radius:8px;border-right:4px solid #0f6e56}}
+.field-row{{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}}
+.field-row.full{{grid-template-columns:1fr}}
+.field-group label{{display:block;font-size:12px;color:#555;font-weight:600;margin-bottom:4px}}
+.field-group input,.field-group textarea,.field-group select{{width:100%;border:1.5px solid #d1d5db;border-radius:8px;padding:9px 12px;font-family:Cairo,sans-serif;font-size:13px;color:#222;transition:.2s;background:#fafafa}}
+.field-group input:focus,.field-group textarea:focus,.field-group select:focus{{border-color:#0f6e56;background:white;outline:none}}
+.field-group textarea{{resize:vertical;min-height:70px}}
+.criteria-table{{width:100%;border-collapse:collapse;margin-bottom:18px}}
+.criteria-table th{{background:#0f6e56;color:white;padding:10px 12px;font-size:13px;text-align:center}}
+.criteria-table th:first-child{{text-align:right}}
+.criteria-table td{{padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;vertical-align:middle}}
+.criteria-table tr:hover{{background:#f0fdf9}}
+.criteria-table .grade-cell{{text-align:center}}
+.criteria-table input[type=radio]{{width:16px;height:16px;accent-color:#0f6e56;cursor:pointer}}
+.grade-labels{{display:flex;justify-content:space-around;background:#f9fafb;padding:6px 12px;border-radius:6px;margin-bottom:8px;font-size:11px;color:#666;font-weight:600}}
+.action-bar{{display:flex;gap:10px;justify-content:flex-end;padding:16px 0;flex-wrap:wrap}}
+.btn{{padding:10px 22px;border:none;border-radius:10px;font-family:Cairo,sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:.2s}}
+.btn-save{{background:#0f6e56;color:white}}
+.btn-save:hover{{background:#065f46}}
+.btn-clear{{background:#ef4444;color:white}}
+.btn-clear:hover{{background:#dc2626}}
+.btn-print{{background:#1565C0;color:white}}
+.btn-print:hover{{background:#0d47a1}}
+.score-summary{{background:linear-gradient(135deg,#0f6e56,#065f46);color:white;border-radius:12px;padding:20px;margin-top:20px;text-align:center}}
+.score-big{{font-size:52px;font-weight:900;line-height:1}}
+.score-label{{font-size:14px;opacity:.85;margin-top:6px}}
+.grade-badge{{display:inline-block;padding:6px 20px;border-radius:20px;font-weight:700;font-size:15px;margin-top:10px}}
+.grade-ممتاز{{background:#fbbf24;color:#78350f}}
+.grade-جيدجداً{{background:#34d399;color:#064e3b}}
+.grade-جيد{{background:#60a5fa;color:#1e3a8a}}
+.grade-مقبول{{background:#fb923c;color:#7c2d12}}
+.grade-ضعيف{{background:#f87171;color:#7f1d1d}}
+@media print{{
+  .page-topbar,.page-tabs,.action-bar{{display:none!important}}
+  .page{{display:block!important;box-shadow:none;margin-bottom:0;page-break-after:always}}
+  body{{background:white}}
+}}
+</style>
+</head>
+<body>
+<div class="page-topbar">
+  <span>📋 شواهد الأداء الوظيفي — محضر المختبر</span>
+  <a href="/web/dashboard">← لوحة التحكم</a>
+</div>
+
+<div class="page-tabs">
+  <button class="tab-btn active" onclick="showPage(0,this)">📝 البيانات الشخصية</button>
+  <button class="tab-btn" onclick="showPage(1,this)">🔬 الكفايات المختبرية</button>
+  <button class="tab-btn" onclick="showPage(2,this)">🎓 الكفايات التربوية</button>
+  <button class="tab-btn" onclick="showPage(3,this)">👔 الكفايات الشخصية</button>
+  <button class="tab-btn" onclick="showPage(4,this)">📊 التقييم الختامي</button>
+</div>
+
+<div id="pagesContainer">
+
+<!-- ═══ صفحة 1: البيانات الشخصية ═══ -->
+<div class="page active" id="page-0">
+  <div class="page-title">📝 البيانات الشخصية والوظيفية</div>
+
+  <div class="section-title">بيانات المحضر</div>
+  <div class="field-row">
+    <div class="field-group"><label>الاسم الكامل</label><input type="text" id="p_name" placeholder="اسم المحضر"></div>
+    <div class="field-group"><label>رقم الهوية / السجل المدني</label><input type="text" id="p_id" placeholder="1xxxxxxxxx"></div>
+  </div>
+  <div class="field-row">
+    <div class="field-group"><label>التخصص</label><input type="text" id="p_major" placeholder="مثال: كيمياء / أحياء / فيزياء"></div>
+    <div class="field-group"><label>المؤهل العلمي</label>
+      <select id="p_edu">
+        <option value="">-- اختر --</option>
+        <option>بكالوريوس</option><option>دبلوم عالٍ</option><option>ماجستير</option><option>دكتوراه</option><option>دبلوم</option>
+      </select>
+    </div>
+  </div>
+  <div class="field-row">
+    <div class="field-group"><label>عدد سنوات الخبرة في التعليم</label><input type="number" id="p_exp" min="0" placeholder="0"></div>
+    <div class="field-group"><label>عدد سنوات الخبرة في المختبر</label><input type="number" id="p_lab_exp" min="0" placeholder="0"></div>
+  </div>
+
+  <div class="section-title">بيانات المدرسة والفترة</div>
+  <div class="field-row">
+    <div class="field-group"><label>اسم المدرسة</label><input type="text" id="p_school" placeholder="اسم المدرسة"></div>
+    <div class="field-group"><label>المرحلة الدراسية</label>
+      <select id="p_stage">
+        <option value="">-- اختر --</option>
+        <option>ابتدائي</option><option>متوسط</option><option>ثانوي</option>
+      </select>
+    </div>
+  </div>
+  <div class="field-row">
+    <div class="field-group"><label>العام الدراسي</label><input type="text" id="p_year" placeholder="مثال: 1446/1447"></div>
+    <div class="field-group"><label>الفصل الدراسي</label>
+      <select id="p_semester">
+        <option value="">-- اختر --</option>
+        <option>الأول</option><option>الثاني</option><option>الثالث</option><option>كامل العام</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="action-bar">
+    <button class="btn btn-save" onclick="saveAllData()">💾 حفظ البيانات</button>
+    <button class="btn btn-print" onclick="window.print()">🖨️ طباعة</button>
+  </div>
+</div>
+
+<!-- ═══ صفحة 2: الكفايات المختبرية ═══ -->
+<div class="page" id="page-1">
+  <div class="page-title">🔬 الكفايات المختبرية والتقنية</div>
+  <div class="grade-labels">
+    <span>ممتاز (5)</span><span>جيد جداً (4)</span><span>جيد (3)</span><span>مقبول (2)</span><span>ضعيف (1)</span>
+  </div>
+
+  <div class="section-title">أولاً: إعداد وتجهيز المختبر</div>
+  <table class="criteria-table">
+    <thead><tr><th>المعيار</th><th>ممتاز</th><th>جيد جداً</th><th>جيد</th><th>مقبول</th><th>ضعيف</th></tr></thead>
+    <tbody id="lab-criteria-1"></tbody>
+  </table>
+
+  <div class="section-title">ثانياً: صيانة الأجهزة والمعدات</div>
+  <table class="criteria-table">
+    <thead><tr><th>المعيار</th><th>ممتاز</th><th>جيد جداً</th><th>جيد</th><th>مقبول</th><th>ضعيف</th></tr></thead>
+    <tbody id="lab-criteria-2"></tbody>
+  </table>
+
+  <div class="section-title">ثالثاً: السلامة والأمان</div>
+  <table class="criteria-table">
+    <thead><tr><th>المعيار</th><th>ممتاز</th><th>جيد جداً</th><th>جيد</th><th>مقبول</th><th>ضعيف</th></tr></thead>
+    <tbody id="lab-criteria-3"></tbody>
+  </table>
+
+  <div class="action-bar">
+    <button class="btn btn-save" onclick="saveAllData()">💾 حفظ</button>
+  </div>
+</div>
+
+<!-- ═══ صفحة 3: الكفايات التربوية ═══ -->
+<div class="page" id="page-2">
+  <div class="page-title">🎓 الكفايات التربوية والتعليمية</div>
+  <div class="grade-labels">
+    <span>ممتاز (5)</span><span>جيد جداً (4)</span><span>جيد (3)</span><span>مقبول (2)</span><span>ضعيف (1)</span>
+  </div>
+
+  <div class="section-title">أولاً: دعم العملية التعليمية</div>
+  <table class="criteria-table">
+    <thead><tr><th>المعيار</th><th>ممتاز</th><th>جيد جداً</th><th>جيد</th><th>مقبول</th><th>ضعيف</th></tr></thead>
+    <tbody id="edu-criteria-1"></tbody>
+  </table>
+
+  <div class="section-title">ثانياً: التوثيق والمتابعة</div>
+  <table class="criteria-table">
+    <thead><tr><th>المعيار</th><th>ممتاز</th><th>جيد جداً</th><th>جيد</th><th>مقبول</th><th>ضعيف</th></tr></thead>
+    <tbody id="edu-criteria-2"></tbody>
+  </table>
+
+  <div class="action-bar">
+    <button class="btn btn-save" onclick="saveAllData()">💾 حفظ</button>
+  </div>
+</div>
+
+<!-- ═══ صفحة 4: الكفايات الشخصية ═══ -->
+<div class="page" id="page-3">
+  <div class="page-title">👔 الكفايات الشخصية والمهنية</div>
+  <div class="grade-labels">
+    <span>ممتاز (5)</span><span>جيد جداً (4)</span><span>جيد (3)</span><span>مقبول (2)</span><span>ضعيف (1)</span>
+  </div>
+
+  <div class="section-title">الكفايات الشخصية</div>
+  <table class="criteria-table">
+    <thead><tr><th>المعيار</th><th>ممتاز</th><th>جيد جداً</th><th>جيد</th><th>مقبول</th><th>ضعيف</th></tr></thead>
+    <tbody id="personal-criteria"></tbody>
+  </table>
+
+  <div class="section-title">ملاحظات إضافية</div>
+  <div class="field-row full">
+    <div class="field-group"><label>الإنجازات والمبادرات خلال الفترة</label>
+      <textarea id="p_achievements" placeholder="اذكر أبرز الإنجازات والمبادرات..." rows="4"></textarea>
+    </div>
+  </div>
+  <div class="field-row full">
+    <div class="field-group"><label>احتياجات التطوير المهني</label>
+      <textarea id="p_development" placeholder="الدورات والتدريبات المطلوبة..." rows="3"></textarea>
+    </div>
+  </div>
+
+  <div class="action-bar">
+    <button class="btn btn-save" onclick="saveAllData()">💾 حفظ</button>
+  </div>
+</div>
+
+<!-- ═══ صفحة 5: التقييم الختامي ═══ -->
+<div class="page" id="page-4">
+  <div class="page-title">📊 التقييم الختامي والتوصيات</div>
+
+  <div class="score-summary">
+    <div class="score-big" id="final-score">--</div>
+    <div class="score-label">الدرجة الكلية من 100</div>
+    <div id="final-grade-badge"></div>
+  </div>
+
+  <div class="section-title" style="margin-top:20px">ملاحظات المقيّم</div>
+  <div class="field-row full">
+    <div class="field-group"><label>نقاط القوة</label>
+      <textarea id="eval_strengths" placeholder="أبرز نقاط القوة..." rows="3"></textarea>
+    </div>
+  </div>
+  <div class="field-row full">
+    <div class="field-group"><label>جوانب تحتاج تحسيناً</label>
+      <textarea id="eval_improvements" placeholder="الجوانب التي تحتاج تطوير..." rows="3"></textarea>
+    </div>
+  </div>
+  <div class="field-row full">
+    <div class="field-group"><label>التوصيات</label>
+      <textarea id="eval_recommendations" placeholder="توصيات للمحضر..." rows="3"></textarea>
+    </div>
+  </div>
+
+  <div class="field-row">
+    <div class="field-group"><label>اسم المقيّم / المدير</label><input type="text" id="eval_name" placeholder="اسم مدير المدرسة"></div>
+    <div class="field-group"><label>تاريخ التقييم</label><input type="date" id="eval_date"></div>
+  </div>
+
+  <div class="action-bar">
+    <button class="btn btn-save" onclick="saveAllData()">💾 حفظ الكل</button>
+    <button class="btn btn-print" onclick="window.print()">🖨️ طباعة التقرير</button>
+    <button class="btn btn-clear" onclick="clearAllData()">🗑 مسح الكل</button>
+  </div>
+</div>
+
+</div><!-- /pagesContainer -->
+
+<script>
+/* ══════════════════════════════════════════
+   بيانات معايير التقييم
+══════════════════════════════════════════ */
+var CRITERIA = {{
+  'lab-criteria-1': [
+    'تجهيز المختبر قبل الحصة بالمواد والأدوات اللازمة',
+    'ترتيب وتنظيم المختبر وفق معايير السلامة',
+    'حفظ وتخزين المواد الكيميائية بطريقة صحيحة وآمنة',
+    'توفير مستلزمات التجارب في الوقت المناسب',
+    'متابعة مستوى المخزون وطلب المستلزمات عند الحاجة',
+  ],
+  'lab-criteria-2': [
+    'صيانة الأجهزة والمعدات وإبلاغ الجهات المعنية عند العطل',
+    'التحقق من سلامة وجاهزية الأجهزة قبل استخدامها',
+    'توثيق العمليات الدورية لصيانة المعدات',
+    'حفظ سجلات دقيقة لجميع المعدات والأجهزة',
+    'التعامل الصحيح مع الأجهزة الدقيقة والحساسة',
+  ],
+  'lab-criteria-3': [
+    'الالتزام بتعليمات السلامة ومتطلبات الوقاية',
+    'توفير معدات الحماية الشخصية وضمان استخدامها',
+    'التعامل الآمن مع المواد الكيميائية والخطرة',
+    'وجود خطة واضحة للتعامل مع حالات الطوارئ',
+    'توعية الطلاب بقواعد السلامة داخل المختبر',
+  ],
+  'edu-criteria-1': [
+    'المساعدة في إعداد وتنفيذ التجارب العلمية',
+    'توضيح أساليب الاستخدام الصحيح للأدوات للطلاب',
+    'التعاون مع المعلمين لإنجاح العملية التعليمية',
+    'تقديم الدعم والمساندة للطلاب أثناء التجارب',
+    'المساهمة في تطوير بيئة تعليمية محفزة',
+  ],
+  'edu-criteria-2': [
+    'توثيق التجارب والأنشطة المختبرية بدقة',
+    'الاحتفاظ بسجلات منتظمة لاستخدام المختبر',
+    'إعداد التقارير الدورية عن الوضع العام للمختبر',
+    'متابعة الكسر والفقدان وتوثيقه رسمياً',
+    'المشاركة في الجرد الدوري للمواد والأجهزة',
+  ],
+  'personal-criteria': [
+    'الالتزام بمواعيد الدوام والحضور المنتظم',
+    'الانضباط والتصرف المهني في بيئة العمل',
+    'التعاون وروح الفريق مع الزملاء والإدارة',
+    'المبادرة وتقديم اقتراحات لتحسين العمل',
+    'الاستعداد للتطوير المهني والتدريب المستمر',
+    'الأمانة والنزاهة في العمل',
+    'حسن التواصل مع الطلاب والمعلمين والإدارة',
+  ],
+}};
+
+/* ══ بناء جداول التقييم ══ */
+Object.keys(CRITERIA).forEach(function(tbodyId) {{
+  var tbody = document.getElementById(tbodyId);
+  if (!tbody) return;
+  CRITERIA[tbodyId].forEach(function(text, i) {{
+    var key = tbodyId + '_' + i;
+    var tr = document.createElement('tr');
+    var grades = ['5','4','3','2','1'];
+    var cells = '<td>' + text + '</td>';
+    grades.forEach(function(g) {{
+      cells += '<td class="grade-cell"><input type="radio" name="' + key + '" value="' + g + '" onchange="updateScore()"></td>';
+    }});
+    tr.innerHTML = cells;
+    tbody.appendChild(tr);
+  }});
+}});
+
+/* ══ التنقل بين الصفحات ══ */
+function showPage(idx, btn) {{
+  document.querySelectorAll('.page').forEach(function(p,i){{ p.classList.toggle('active', i===idx); }});
+  document.querySelectorAll('.tab-btn').forEach(function(b){{ b.classList.remove('active'); }});
+  if (btn) btn.classList.add('active');
+  if (idx === 4) updateScore();
+}}
+
+/* ══ حساب الدرجة الكلية ══ */
+function updateScore() {{
+  var total = 0, count = 0;
+  document.querySelectorAll('input[type=radio]:checked').forEach(function(r) {{
+    total += parseInt(r.value); count++;
+  }});
+  var maxScore = 0;
+  Object.values(CRITERIA).forEach(function(arr){{ maxScore += arr.length * 5; }});
+  var pct = maxScore > 0 ? Math.round((total / maxScore) * 100) : 0;
+  var el = document.getElementById('final-score');
+  var badge = document.getElementById('final-grade-badge');
+  if (el) el.textContent = pct;
+  if (badge) {{
+    var g = pct >= 90 ? 'ممتاز' : pct >= 80 ? 'جيدجداً' : pct >= 70 ? 'جيد' : pct >= 60 ? 'مقبول' : 'ضعيف';
+    var gl = pct >= 90 ? 'ممتاز' : pct >= 80 ? 'جيد جداً' : pct >= 70 ? 'جيد' : pct >= 60 ? 'مقبول' : 'ضعيف';
+    badge.innerHTML = '<span class="grade-badge grade-' + g + '">' + gl + '</span>';
+  }}
+}}
+
+/* ══ حفظ واسترجاع البيانات ══ */
+var _KEY = 'lab_perf_data_v1';
+
+function saveAllData() {{
+  var data = {{}};
+  // حقول النص
+  ['p_name','p_id','p_major','p_edu','p_exp','p_lab_exp','p_school','p_stage','p_year',
+   'p_semester','p_achievements','p_development','eval_name','eval_date',
+   'eval_strengths','eval_improvements','eval_recommendations'].forEach(function(id) {{
+    var el = document.getElementById(id);
+    if (el) data[id] = el.value;
+  }});
+  // أزرار الراديو
+  document.querySelectorAll('input[type=radio]:checked').forEach(function(r) {{
+    data['radio_' + r.name] = r.value;
+  }});
+  localStorage.setItem(_KEY, JSON.stringify(data));
+}}
+
+function restoreAllData() {{
+  var raw = localStorage.getItem(_KEY);
+  if (!raw) return;
+  try {{
+    var data = JSON.parse(raw);
+    Object.keys(data).forEach(function(k) {{
+      if (k.startsWith('radio_')) {{
+        var name = k.replace('radio_', '');
+        var el = document.querySelector('input[type=radio][name="'+name+'"][value="'+data[k]+'"]');
+        if (el) el.checked = true;
+      }} else {{
+        var el = document.getElementById(k);
+        if (el) el.value = data[k] || '';
+      }}
+    }});
+  }} catch(e) {{}}
+}}
+
+function clearAllData() {{
+  if (!confirm('⚠️ هل تريد مسح جميع البيانات؟')) return;
+  localStorage.removeItem(_KEY);
+  location.reload();
+}}
+
+// تحميل البيانات عند فتح الصفحة
+window.addEventListener('load', function() {{
+  restoreAllData();
+  updateScore();
+}});
+</script>
+{_body_inject(username)}
+</body>
+</html>"""
+
+
 @router.get("/web/lab-docs", response_class=HTMLResponse)
 async def lab_docs_page(request: Request):
     user = _get_current_user(request)
@@ -284,32 +685,7 @@ async def lab_docs_page(request: Request):
             "</body></html>",
             status_code=403
         )
-
-    username = user.get("username", "")
-    html_path = os.path.join(BASE_DIR, "lab_docs.html")
-
-    try:
-        with open(html_path, "r", encoding="utf-8") as f:
-            html = f.read()
-    except FileNotFoundError:
-        return HTMLResponse(
-            "<html dir='rtl'><body style='font-family:Cairo,sans-serif;"
-            "text-align:center;padding:80px;background:#f0f4f3'>"
-            f"<h2 style='color:#e24b4a'>⚠️ ملف lab_docs.html غير موجود</h2>"
-            f"<p style='color:#555'>يرجى وضع الملف في: <code>{html_path}</code></p>"
-            "<a href='/web/dashboard' style='color:#2da88a'>العودة للوحة التحكم</a>"
-            "</body></html>",
-            status_code=500
-        )
-
-    # حقن السياق قبل </head>
-    user_ctx = f'<script>window.__LAB_USER__={json.dumps({"username": username})};</script>'
-    html = html.replace('</head>', user_ctx + _HEAD_INJECT + '</head>', 1)
-
-    # حقن المزامنة قبل </body>
-    html = html.replace('</body>', _body_inject(username) + '</body>', 1)
-
-    return HTMLResponse(html)
+    return HTMLResponse(_build_lab_docs_html(user.get("username", "")))
 
 
 @router.get("/web/api/lab-docs/load")
