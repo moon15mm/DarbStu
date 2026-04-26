@@ -1575,6 +1575,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
         ("الرسائل والتواصل", [
             ("إرسال رسائل الغياب",  "send_absence",         "fas fa-envelope-open-text"),
             ("إرسال رسائل التأخر",  "send_tardiness",       "fas fa-paper-plane"),
+            ("روابط بوابة أولياء الأمور", "portal_links",  "fas fa-user-shield"),
             ("التعاميم والنشرات",   "circulars",            "fas fa-scroll"),
             ("قصص المدرسة",         "school_stories",       "fas fa-camera-retro"),
             ("تعزيز الحضور الأسبوعي", "weekly_reward",      "fas fa-medal"),
@@ -2238,6 +2239,34 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
     <div id="st-send-btn" style="margin-top:12px;display:none">
       <button class="btn bp1" onclick="sendTardinessMessages()">📩 إرسال للمحددين</button>
       <span id="st-progress" style="margin-right:12px;font-size:13px;color:var(--mu)"></span>
+    </div>
+  </div>
+</div>
+
+<div id="tab-portal_links">
+  <h2 class="pt"><i class="fas fa-user-shield"></i> روابط بوابة أولياء الأمور</h2>
+  <div class="section">
+    <p style="color:var(--mu);font-size:13px;margin-bottom:14px">
+      اختر فصلاً لتوليد رابط المتابعة لكل طالب وإرساله لولي أمره عبر الواتساب.
+    </p>
+    <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px">
+      <div class="fg">
+        <label class="fl">الفصل</label>
+        <select id="pl-class" style="min-width:200px">
+          <option value="">-- اختر فصلاً --</option>
+        </select>
+      </div>
+      <button class="btn bp2" onclick="plLoadClass()">📋 تحميل الطلاب</button>
+    </div>
+    <div id="pl-status" style="margin-bottom:10px"></div>
+    <div id="pl-list"></div>
+    <div id="pl-actions" style="display:none;margin-top:14px">
+      <div class="bg-btn">
+        <button class="btn bp1" onclick="plSend()" id="pl-send-btn">📤 إرسال الروابط للمحددين</button>
+        <button class="btn bp2" onclick="plAll(true)">تحديد الكل</button>
+        <button class="btn bp2" onclick="plAll(false)">إلغاء الكل</button>
+      </div>
+      <div id="pl-progress" style="margin-top:10px;font-size:13px;color:var(--mu)"></div>
     </div>
   </div>
 </div>
@@ -3692,6 +3721,92 @@ async function sendTardinessMessages(){
   var students=checked.map(function(c){return {student_id:c.value,student_name:c.dataset.name,class_name:c.dataset.class,minutes_late:c.dataset.mins};});
   var r=await fetch('/web/api/send-tardiness-messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:date,students:students})});
   var d=await r.json();document.getElementById('st-progress').textContent=d.ok?'✅ تم إرسال '+d.sent+' رسالة':'❌ '+d.msg;
+}
+
+/* ── PORTAL LINKS ── */
+(function(){
+  // تحميل قائمة الفصول عند فتح التبويب
+  var _plLoaded = false;
+  var _origShow = window.showTab;
+  window.showTab = function(key){
+    if(typeof _origShow==='function') _origShow(key);
+    if(key==='portal_links' && !_plLoaded){ _plLoaded=true; plInitClasses(); }
+  };
+})();
+
+async function plInitClasses(){
+  var d = await api('/web/api/students');
+  if(!d||!d.ok) return;
+  var sel = document.getElementById('pl-class');
+  if(!sel) return;
+  sel.innerHTML = '<option value="">-- اختر فصلاً --</option>';
+  (d.classes||[]).forEach(function(c){
+    sel.innerHTML += '<option value="'+c.id+'">'+c.name+'</option>';
+  });
+}
+
+var _plStudents = [];
+async function plLoadClass(){
+  var cid = document.getElementById('pl-class').value;
+  if(!cid){ alert('اختر فصلاً أولاً'); return; }
+  ss('pl-status','⏳ جارٍ التحميل...','in');
+  var d = await api('/web/api/class-students/'+cid);
+  if(!d||!d.ok){ ss('pl-status','❌ فشل التحميل','er'); return; }
+  _plStudents = d.students||[];
+  if(!_plStudents.length){ ss('pl-status','لا يوجد طلاب في هذا الفصل','wn'); return; }
+  ss('pl-status','','in');
+  var html = '<table style="width:100%;border-collapse:collapse">'
+    +'<thead><tr style="background:var(--pr-lt)">'
+    +'<th style="padding:8px;text-align:right;font-size:13px">تحديد</th>'
+    +'<th style="padding:8px;text-align:right;font-size:13px">اسم الطالب</th>'
+    +'<th style="padding:8px;text-align:right;font-size:13px">رقم الجوال</th>'
+    +'<th style="padding:8px;text-align:right;font-size:13px">الحالة</th>'
+    +'</tr></thead><tbody>';
+  _plStudents.forEach(function(s,i){
+    var hasPhone = s.phone && s.phone.trim();
+    html += '<tr id="pl-row-'+i+'" style="border-bottom:1px solid #e5e7eb">'
+      +'<td style="padding:8px;text-align:center">'
+      +'<input type="checkbox" class="pl-chk" value="'+s.id+'" data-idx="'+i+'" '+(hasPhone?'checked':'disabled')+'>'
+      +'</td>'
+      +'<td style="padding:8px;font-size:13px">'+s.name+'</td>'
+      +'<td style="padding:8px;font-size:13px;direction:ltr;text-align:right">'+(hasPhone?s.phone:'<span style="color:#aaa">لا يوجد</span>')+'</td>'
+      +'<td style="padding:8px;font-size:12px" id="pl-st-'+i+'">'+(!hasPhone?'<span style="color:#aaa">لا يوجد جوال</span>':'')+'</td>'
+      +'</tr>';
+  });
+  html += '</tbody></table>';
+  document.getElementById('pl-list').innerHTML = html;
+  document.getElementById('pl-actions').style.display = '';
+}
+
+function plAll(v){
+  document.querySelectorAll('.pl-chk:not(:disabled)').forEach(function(c){ c.checked=v; });
+}
+
+async function plSend(){
+  var checks = Array.from(document.querySelectorAll('.pl-chk:checked'));
+  if(!checks.length){ alert('حدد طالباً واحداً على الأقل'); return; }
+  var btn = document.getElementById('pl-send-btn');
+  btn.disabled = true;
+  var prog = document.getElementById('pl-progress');
+  var sent=0, failed=0, total=checks.length;
+  prog.textContent = 'جارٍ الإرسال... 0 / '+total;
+  for(var i=0;i<checks.length;i++){
+    var idx = parseInt(checks[i].dataset.idx);
+    var stu = _plStudents[idx];
+    var stEl = document.getElementById('pl-st-'+idx);
+    if(stEl) stEl.innerHTML = '⏳';
+    var r = await fetch('/web/api/send-portal-link',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({student_id:stu.id, student_name:stu.name, phone:stu.phone})
+    });
+    var d = await r.json();
+    if(d.ok){ sent++; if(stEl) stEl.innerHTML='<span style="color:green">✅ أُرسل</span>'; }
+    else { failed++; if(stEl) stEl.innerHTML='<span style="color:red">❌ '+(d.msg||'فشل')+'</span>'; }
+    prog.textContent = 'جارٍ الإرسال... '+(sent+failed)+' / '+total;
+  }
+  prog.innerHTML = '✅ أُرسل: <b>'+sent+'</b> &nbsp;|&nbsp; ❌ فشل: <b>'+failed+'</b>';
+  btn.disabled = false;
 }
 
 /* ── ADMIN REPORT ── */
@@ -8101,6 +8216,43 @@ async def api_get_portal_link(request: Request, student_id: str):
     token = get_or_create_portal_token(student_id)
     base_url = str(request.base_url).rstrip("/")
     return JSONResponse({"ok": True, "link": f"{base_url}/p/{token}"})
+
+
+@router.post("/web/api/send-portal-link", response_class=JSONResponse)
+async def api_send_portal_link(request: Request):
+    """يولّد رابط بوابة ولي الأمر لطالب واحد ويرسله عبر الواتساب."""
+    user = _get_current_user(request)
+    if not user:
+        return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
+    try:
+        body = await request.json()
+        student_id   = str(body.get("student_id", "")).strip()
+        student_name = str(body.get("student_name", "")).strip()
+        phone        = str(body.get("phone", "")).strip()
+
+        if not phone:
+            return JSONResponse({"ok": False, "msg": "لا يوجد رقم جوال"})
+
+        from database import get_or_create_portal_token
+        from whatsapp_service import send_whatsapp_message
+        from constants import CLOUDFLARE_DOMAIN
+
+        token    = get_or_create_portal_token(student_id)
+        base_url = f"https://{CLOUDFLARE_DOMAIN}"
+        link     = f"{base_url}/p/{token}"
+
+        msg = (
+            f"ولي أمر الطالب: {student_name}\n\n"
+            f"يسعدنا إطلاعكم على رابط بوابة المتابعة المدرسية الخاص بنجلكم،\n"
+            f"يمكنكم من خلاله الاطلاع على الغياب والتأخر والإجراءات المتخذة.\n\n"
+            f"🔗 رابط المتابعة:\n{link}\n\n"
+            f"الرابط خاص بنجلكم ولا يُشارَك مع أحد."
+        )
+        ok, status = send_whatsapp_message(phone, msg)
+        return JSONResponse({"ok": ok, "msg": status})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
 
 # ─── PARENT PORTAL (SNAP-VIEW) ───────────────────────────────────
 
