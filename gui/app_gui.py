@@ -52,6 +52,7 @@ from gui.tabs.student_analysis_tab import StudentAnalysisTabMixin
 from gui.tabs.circulars_tab        import CircularsTabMixin
 from gui.tabs.exempted_tab         import ExemptedTabMixin
 from gui.tabs.leaderboard_tab       import LeaderboardTabMixin
+from gui.tabs.parent_visits_tab     import ParentVisitsTabMixin
 
 # ─── استيراد كل الوحدات اللازمة ───────────────────────
 from constants import (APP_TITLE, APP_VERSION, DB_PATH, DATA_DIR, HOST, PORT,
@@ -158,6 +159,7 @@ class AppGUI(
     CircularsTabMixin,
     ExemptedTabMixin,
     LeaderboardTabMixin,
+    ParentVisitsTabMixin,
 ):
     """الواجهة الرئيسية للتطبيق — تجمع كل Mixins في class واحد."""
     def __init__(self, root, public_url=None):
@@ -231,6 +233,7 @@ class AppGUI(
             "التعاميم والنشرات":    "_build_circulars_tab",
             "الطلاب المستثنون":     "_build_exempted_tab",
             "لوحة الصدارة (النقاط)": "_build_leaderboard_tab",
+            "زيارات أولياء الأمور":  "_build_parent_visits_tab",
         }
 
         # مجموعات القائمة الجانبية
@@ -242,7 +245,8 @@ class AppGUI(
         sidebar_groups = [
             ("⬤  يومي", [t for t in [
                 "لوحة المراقبة","روابط الفصول","التأخر","لوحة الصدارة (النقاط)",
-                "الأعذار","الاستئذان","المراقبة الحية","الموجّه الطلابي"] if _vis(t)]),
+                "الأعذار","الاستئذان","المراقبة الحية","الموجّه الطلابي",
+                "زيارات أولياء الأمور"] if _vis(t)]),
             ("⬤  السجلات", [t for t in [
                 "السجلات / التصدير","إدارة الغياب",
                 "التقارير / الطباعة","تقرير الفصل","نشر النتائج","تحليل النتائج","تحليل الطالب","تصدير نور","الإشعارات الذكية"] if _vis(t)]),

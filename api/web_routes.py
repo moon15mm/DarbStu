@@ -571,17 +571,21 @@ async def web_update_students(req: Request):
         classes = data.get("classes")
         if classes is None:
             return JSONResponse({"ok": False, "msg": "بيانات مفقودة"})
-        
+        if not classes:
+            return JSONResponse({"ok": False, "msg": "لا يمكن حفظ قائمة فصول فارغة"})
+
         from constants import STUDENTS_JSON, ensure_dirs
-        import json
+        import json, os as _os
         ensure_dirs()
-        with open(STUDENTS_JSON, "w", encoding="utf-8") as f:
+        _tmp = STUDENTS_JSON + ".tmp"
+        with open(_tmp, "w", encoding="utf-8") as f:
             json.dump({"classes": classes}, f, ensure_ascii=False, indent=2)
-            
+        _os.replace(_tmp, STUDENTS_JSON)
+
         # تحديث المتجر في الذاكرة أيضاً للسيرفر
         import constants
         constants.STUDENTS_STORE = {"list": classes, "by_id": {c["id"]: c for c in classes}}
-        
+
         return JSONResponse({"ok": True})
     except Exception as e:
         return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
@@ -1551,13 +1555,14 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
             ("طلب استئذان",         "new_permission",       "fas fa-bell"),
         ]),
         ("المتابعة الانضباطية", [
-            ("سجل الغياب",          "absences",             "fas fa-history"),
-            ("سجل التأخر",          "tardiness",            "fas fa-clock"),
-            ("الأعذار",             "excuses",              "fas fa-file-medical"),
-            ("الاستئذان",           "permissions",          "fas fa-door-open"),
-            ("إدارة الغياب",        "absence_mgmt",         "fas fa-users-cog"),
-            ("الموجّه الطلابي",     "counselor",            "fas fa-brain"),
-            ("استلام تحويلات",      "referral_deputy",      "fas fa-inbox"),
+            ("سجل الغياب",              "absences",             "fas fa-history"),
+            ("سجل التأخر",              "tardiness",            "fas fa-clock"),
+            ("الأعذار",                 "excuses",              "fas fa-file-medical"),
+            ("الاستئذان",               "permissions",          "fas fa-door-open"),
+            ("إدارة الغياب",            "absence_mgmt",         "fas fa-users-cog"),
+            ("الموجّه الطلابي",         "counselor",            "fas fa-brain"),
+            ("استلام تحويلات",          "referral_deputy",      "fas fa-inbox"),
+            ("زيارات أولياء الأمور",   "parent_visits",        "fas fa-users"),
         ]),
         ("التقارير والإحصائيات", [
             ("التقارير / الطباعة",  "reports_print",        "fas fa-print"),
@@ -1616,6 +1621,16 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
                 '<button class="tab-btn" data-key="' + key + '" onclick="showTab(\'' + key + '\')">'
                 '<i class="ti ' + icon + '"></i>' + name + badge + '</button>'
             )
+        sidebar_html += '<div class="sb-div"></div>'
+
+    # ── رابط ربط واتساب للمدير والوكيل ────────────────────────
+    if role in ("admin", "deputy"):
+        sidebar_html += '<div class="sb-group">واتساب</div>'
+        sidebar_html += (
+            '<a class="tab-btn" href="/web/whatsapp-connect" target="_blank" '
+            'style="text-decoration:none;color:inherit">'
+            '<i class="ti fas fa-qrcode"></i>ربط واتساب</a>'
+        )
         sidebar_html += '<div class="sb-div"></div>'
 
     # ── CSS المضغوط الكامل ────────────────────────────────────
@@ -2667,6 +2682,127 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
   </div>
 </div>
 
+<div id="tab-parent_visits">
+  <h2 class="pt"><i class="fas fa-users"></i> سجل زيارات أولياء الأمور</h2>
+
+  <!-- ── شريط التحكم ── -->
+  <div class="section" style="padding:12px 16px">
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+      <label class="fl" style="white-space:nowrap">من:</label>
+      <input type="date" id="pv-from" style="width:130px">
+      <label class="fl" style="white-space:nowrap">إلى:</label>
+      <input type="date" id="pv-to" style="width:130px">
+      <button class="btn bp1 bsm" onclick="pvLoad()"><i class="fas fa-sync-alt"></i> عرض</button>
+      <button class="btn bp4 bsm" onclick="pvOpenAdd()"><i class="fas fa-plus"></i> تسجيل زيارة</button>
+      <button class="btn bsm" style="background:#f1f5f9;color:#475569" onclick="exportTbl('pv-tbl','زيارات_أولياء_الأمور')"><i class="fas fa-file-download"></i> Excel</button>
+      <button class="btn bsm" style="background:#0d47a1;color:#fff" onclick="pvPrintReport()"><i class="fas fa-print"></i> طباعة التقرير</button>
+      <input type="text" id="pv-search" placeholder="🔍 بحث..." oninput="pvFilter()"
+             style="width:160px;margin-right:auto">
+    </div>
+  </div>
+
+  <!-- ── إحصائيات سريعة ── -->
+  <div class="stat-cards" id="pv-stats" style="margin-bottom:10px"></div>
+
+  <!-- ── جدول السجلات ── -->
+  <div class="section">
+    <div class="tw"><table>
+      <thead><tr>
+        <th>#</th><th>التاريخ</th><th>الوقت</th><th>الطالب</th><th>الفصل</th>
+        <th>اسم ولي الأمر</th><th>سبب الزيارة</th><th>الجهة المستقبلة</th>
+        <th>نتيجة الزيارة</th><th>ملاحظات</th><th>إجراء</th>
+      </tr></thead>
+      <tbody id="pv-tbl"></tbody>
+    </table></div>
+    <div id="pv-empty" style="text-align:center;padding:30px;color:#94a3b8;display:none">
+      <i class="fas fa-users fa-2x" style="margin-bottom:8px;display:block"></i>
+      لا توجد زيارات في هذه الفترة
+    </div>
+  </div>
+
+  <!-- ── مودال إضافة زيارة ── -->
+  <div id="pv-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:900;align-items:center;justify-content:center">
+    <div style="background:#fff;border-radius:14px;padding:28px 32px;width:min(560px,96vw);max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.2)">
+      <h3 style="margin:0 0 20px;color:#1565C0;font-size:1.1rem">
+        <i class="fas fa-user-plus"></i> تسجيل زيارة ولي أمر
+      </h3>
+      <div class="fg2">
+        <div class="fg">
+          <label class="fl">التاريخ <span style="color:red">*</span></label>
+          <input type="date" id="pv-add-date">
+        </div>
+        <div class="fg">
+          <label class="fl">الوقت <span style="color:red">*</span></label>
+          <select id="pv-add-time"></select>
+        </div>
+        <div class="fg">
+          <label class="fl">الفصل <span style="color:red">*</span></label>
+          <select id="pv-add-cls" onchange="pvLoadStudents()"><option value="">اختر الفصل</option></select>
+        </div>
+        <div class="fg">
+          <label class="fl">الطالب <span style="color:red">*</span></label>
+          <select id="pv-add-stu" onchange="pvFillGuardian()"><option value="">اختر الطالب</option></select>
+        </div>
+        <div class="fg">
+          <label class="fl">اسم ولي الأمر</label>
+          <input type="text" id="pv-add-grd" readonly
+                 style="background:#f8fafc;color:#475569;cursor:default"
+                 placeholder="يملأ تلقائياً">
+        </div>
+        <div class="fg">
+          <label class="fl">سبب الزيارة <span style="color:red">*</span></label>
+          <select id="pv-add-reason">
+            <option value="">اختر السبب</option>
+            <option>غياب الطالب</option>
+            <option>التأخر المتكرر</option>
+            <option>السلوك والانضباط</option>
+            <option>المتابعة الأكاديمية</option>
+            <option>طلب إجازة</option>
+            <option>استفسار عام</option>
+            <option>تسليم وثيقة</option>
+            <option>أخرى</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="fl">الجهة المستقبلة <span style="color:red">*</span></label>
+          <select id="pv-add-rcv">
+            <option value="">اختر الجهة</option>
+            <option>المدير</option>
+            <option>الوكيل</option>
+            <option>المرشد الطلابي</option>
+            <option>الإداري</option>
+            <option>المعلم</option>
+            <option>أخرى</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="fl">نتيجة الزيارة <span style="color:red">*</span></label>
+          <select id="pv-add-result">
+            <option value="">اختر النتيجة</option>
+            <option>تم التوجيه والإرشاد</option>
+            <option>تم الإشعار والتنبيه</option>
+            <option>اتخذ إجراء رسمي</option>
+            <option>تم الاستلام وقيد الدراسة</option>
+            <option>لم يُتخذ إجراء</option>
+            <option>أخرى</option>
+          </select>
+        </div>
+        <div class="fg" style="grid-column:1/-1">
+          <label class="fl">ملاحظات</label>
+          <textarea id="pv-add-notes" rows="3"
+                    placeholder="أي تفاصيل أو ملاحظات إضافية..."></textarea>
+        </div>
+      </div>
+      <div id="pv-add-st" style="margin:10px 0;min-height:20px"></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
+        <button class="btn bp1" onclick="pvSave()"><i class="fas fa-save"></i> حفظ</button>
+        <button class="btn" style="background:#f1f5f9;color:#475569"
+                onclick="document.getElementById('pv-modal').style.display='none'">إلغاء</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="tab-teacher_forms">
   <h2 class="pt"><i class="fas fa-file-contract"></i> نماذج المعلم</h2>
   <div class="ab ai">اختر النموذج المراد تعبئته، وسيقوم النظام بتوليد ملف PDF وإرساله للمدير. (يتطلب اتصال واتساب للرسائل)</div>
@@ -3121,6 +3257,7 @@ function showTab(key){
     'teacher_forms':function(){},
     'send_absence':function(){},
     'send_tardiness':function(){},
+    'parent_visits':pvInit,
   };
   if(L[key])L[key]();
   if(window.innerWidth<=768)closeSidebar();
@@ -4690,6 +4827,193 @@ async function closeDeputyReferral(){
   var d=await r.json();if(d.ok){document.getElementById('rd-modal').style.display='none';loadDeputyReferrals();alert('تم إغلاق التحويل');}
 }
 
+/* ── PARENT VISITS (زيارات أولياء الأمور) ── */
+var _pvRows=[], _pvStudMap={};
+var _pvTimes=["07:00","07:15","07:30","07:45","08:00","08:15","08:30","08:45",
+  "09:00","09:15","09:30","09:45","10:00","10:15","10:30","10:45",
+  "11:00","11:15","11:30","11:45","12:00","12:15","12:30","12:45",
+  "13:00","13:15","13:30","13:45","14:00","14:30","15:00"];
+
+function pvInit(){
+  var d=new Date(), pad=function(n){return String(n).padStart(2,'0');};
+  var today=d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+  var m1=d.getFullYear()+'-'+pad(d.getMonth()+1)+'-01';
+  document.getElementById('pv-from').value=m1;
+  document.getElementById('pv-to').value=today;
+  pvLoad();
+}
+
+async function pvLoad(){
+  var from=document.getElementById('pv-from').value;
+  var to=document.getElementById('pv-to').value;
+  var d=await api('/web/api/parent-visits?from='+from+'&to='+to);
+  if(!d||!d.ok)return;
+  _pvRows=d.visits||[];
+  pvRender(_pvRows);
+  pvStats(_pvRows);
+}
+
+function pvStats(rows){
+  var wrap=document.getElementById('pv-stats');
+  var total=rows.length;
+  var reasons={};
+  rows.forEach(function(r){reasons[r.visit_reason]=(reasons[r.visit_reason]||0)+1;});
+  var topReason=Object.entries(reasons).sort(function(a,b){return b[1]-a[1];});
+  var html='<div class="sc" style="background:#EFF6FF;border-color:#BFDBFE">'
+    +'<div class="v" style="color:#1d4ed8">'+total+'</div><div class="l">إجمالي الزيارات</div></div>';
+  if(topReason.length>0)
+    html+='<div class="sc" style="background:#F0FDF4;border-color:#BBF7D0">'
+      +'<div class="v" style="color:#166534;font-size:14px">'+topReason[0][0]+'</div>'
+      +'<div class="l">أكثر أسباب الزيارة</div></div>';
+  var rcvMap={};
+  rows.forEach(function(r){rcvMap[r.received_by]=(rcvMap[r.received_by]||0)+1;});
+  var topRcv=Object.entries(rcvMap).sort(function(a,b){return b[1]-a[1];});
+  if(topRcv.length>0)
+    html+='<div class="sc" style="background:#FFF7ED;border-color:#FED7AA">'
+      +'<div class="v" style="color:#c2410c;font-size:14px">'+topRcv[0][0]+'</div>'
+      +'<div class="l">أكثر الجهات استقبالاً</div></div>';
+  wrap.innerHTML=html;
+}
+
+function pvFilter(){
+  var q=document.getElementById('pv-search').value.toLowerCase().trim();
+  var filtered=_pvRows.filter(function(r){
+    return !q||Object.values(r).some(function(v){return String(v).toLowerCase().includes(q);});
+  });
+  pvRender(filtered);
+}
+
+function pvRender(rows){
+  var tbody=document.getElementById('pv-tbl');
+  var empty=document.getElementById('pv-empty');
+  if(!rows.length){tbody.innerHTML='';empty.style.display='block';return;}
+  empty.style.display='none';
+  tbody.innerHTML=rows.map(function(r){
+    return '<tr>'
+      +'<td>'+r.id+'</td>'
+      +'<td>'+r.date+'</td>'
+      +'<td>'+r.visit_time+'</td>'
+      +'<td>'+r.student_name+'</td>'
+      +'<td>'+r.class_name+'</td>'
+      +'<td>'+(r.guardian_name||'-')+'</td>'
+      +'<td><span class="badge bb">'+r.visit_reason+'</span></td>'
+      +'<td>'+r.received_by+'</td>'
+      +'<td>'+r.visit_result+'</td>'
+      +'<td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+(r.notes||'')+'">'+(r.notes||'-')+'</td>'
+      +'<td><button class="btn bsm" style="background:#fee2e2;color:#991b1b" onclick="pvDelete('+r.id+')">'
+      +'<i class="fas fa-trash"></i></button></td>'
+      +'</tr>';
+  }).join('');
+}
+
+function pvOpenAdd(){
+  var modal=document.getElementById('pv-modal');
+  modal.style.display='flex';
+  /* التاريخ والوقت */
+  var d=new Date(),pad=function(n){return String(n).padStart(2,'0');};
+  document.getElementById('pv-add-date').value=
+    d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+  var timeEl=document.getElementById('pv-add-time');
+  timeEl.innerHTML=_pvTimes.map(function(t){return '<option>'+t+'</option>';}).join('');
+  var nowMin=d.getHours()*60+d.getMinutes();
+  var closest=_pvTimes.reduce(function(a,b){
+    var ta=parseInt(a.split(':')[0])*60+parseInt(a.split(':')[1]);
+    var tb=parseInt(b.split(':')[0])*60+parseInt(b.split(':')[1]);
+    return Math.abs(tb-nowMin)<Math.abs(ta-nowMin)?b:a;
+  });
+  timeEl.value=closest;
+  /* الفصول من _classes العامة */
+  var clsEl=document.getElementById('pv-add-cls');
+  clsEl.innerHTML='<option value="">اختر الفصل</option>';
+  (_classes||[]).forEach(function(c){
+    clsEl.innerHTML+='<option value="'+c.id+'" data-name="'+c.name+'">'+c.name+'</option>';
+  });
+  document.getElementById('pv-add-stu').innerHTML='<option value="">اختر الطالب</option>';
+  document.getElementById('pv-add-grd').value='';
+  document.getElementById('pv-add-reason').value='';
+  document.getElementById('pv-add-rcv').value='';
+  document.getElementById('pv-add-result').value='';
+  document.getElementById('pv-add-notes').value='';
+  document.getElementById('pv-add-st').innerHTML='';
+}
+
+async function pvLoadStudents(){
+  var clsEl=document.getElementById('pv-add-cls');
+  var cid=clsEl.value;
+  var stuEl=document.getElementById('pv-add-stu');
+  stuEl.innerHTML='<option value="">اختر الطالب</option>';
+  document.getElementById('pv-add-grd').value='';
+  _pvStudMap={};
+  if(!cid)return;
+  var d=await api('/web/api/class-students/'+cid);
+  if(!d||!d.ok)return;
+  (d.students||[]).forEach(function(s){
+    _pvStudMap[s.id]=s.name;
+    stuEl.innerHTML+='<option value="'+s.id+'">'+s.name+'</option>';
+  });
+}
+
+function pvFillGuardian(){
+  var stuEl=document.getElementById('pv-add-stu');
+  var sid=stuEl.value;
+  var sname=stuEl.options[stuEl.selectedIndex]&&stuEl.options[stuEl.selectedIndex].text;
+  document.getElementById('pv-add-grd').value=sname?'ولي أمر: '+sname:'';
+}
+
+async function pvSave(){
+  var date=document.getElementById('pv-add-date').value;
+  var time=document.getElementById('pv-add-time').value;
+  var stuEl=document.getElementById('pv-add-stu');
+  var sid=stuEl.value;
+  var sname=stuEl.options[stuEl.selectedIndex]&&stuEl.options[stuEl.selectedIndex].text;
+  var clsEl=document.getElementById('pv-add-cls');
+  var cls=clsEl.options[clsEl.selectedIndex]&&clsEl.options[clsEl.selectedIndex].dataset.name||clsEl.value;
+  var grd=document.getElementById('pv-add-grd').value;
+  var reason=document.getElementById('pv-add-reason').value;
+  var rcv=document.getElementById('pv-add-rcv').value;
+  var result=document.getElementById('pv-add-result').value;
+  var notes=document.getElementById('pv-add-notes').value.trim();
+  var st=document.getElementById('pv-add-st');
+  if(!date||!time||!sid||!cls||!reason||!rcv||!result){
+    st.innerHTML='<span style="color:#dc2626">⚠️ يرجى تعبئة جميع الحقول المطلوبة</span>';return;
+  }
+  st.innerHTML='⏳ جارٍ الحفظ...';
+  var payload={date:date,visit_time:time,student_id:sid,student_name:sname,
+    class_name:cls,guardian_name:grd,visit_reason:reason,received_by:rcv,
+    visit_result:result,notes:notes};
+  var r=await fetch('/web/api/parent-visits',{method:'POST',
+    headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  var d=await r.json();
+  if(d.ok){
+    document.getElementById('pv-modal').style.display='none';
+    pvLoad();
+  } else {
+    st.innerHTML='<span style="color:#dc2626">❌ '+d.msg+'</span>';
+  }
+}
+
+async function pvDelete(id){
+  if(!confirm('هل تريد حذف هذا السجل؟'))return;
+  var r=await fetch('/web/api/parent-visits/'+id,{method:'DELETE'});
+  var d=await r.json();
+  if(d.ok)pvLoad();else alert('خطأ في الحذف');
+}
+
+function pvPrintReport(){
+  var from=document.getElementById('pv-from').value;
+  var to=document.getElementById('pv-to').value;
+  var url='/web/parent-visits/report?from='+from+'&to='+to;
+  var q=document.getElementById('pv-search').value.trim();
+  if(q){url+='&q='+encodeURIComponent(q);}
+  window.open(url,'_blank');
+}
+
+/* إغلاق مودال زيارات عند النقر خارجه */
+document.addEventListener('click',function(e){
+  var m=document.getElementById('pv-modal');
+  if(m&&e.target===m)m.style.display='none';
+});
+
 /* ── TEACHER FORMS (نماذج المعلم) ── */
 async function toBase64(file){
    return new Promise(function(resolve){
@@ -5778,8 +6102,11 @@ async def web_update_student_phone(req: Request):
                     s["phone"] = phone
                     updated = True
         if updated:
-            with open(STUDENTS_JSON, "w", encoding="utf-8") as f:
+            import os as _os
+            _tmp = STUDENTS_JSON + ".tmp"
+            with open(_tmp, "w", encoding="utf-8") as f:
                 json.dump(store, f, ensure_ascii=False, indent=2)
+            _os.replace(_tmp, STUDENTS_JSON)
             load_students(force_reload=True)
             return JSONResponse({"ok": True})
         return JSONResponse({"ok": False, "msg": "الطالب غير موجود"})
@@ -5902,6 +6229,323 @@ async def web_add_counselor_session(req: Request):
         return JSONResponse({"ok": True})
     except Exception as e:
         return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+
+# ─── زيارات أولياء الأمور ─────────────────────────────────────
+
+@router.get("/web/api/parent-visits", response_class=JSONResponse)
+async def web_get_parent_visits(request: Request):
+    user = _get_current_user(request)
+    if not user:
+        return JSONResponse({"error": "غير مصرح"}, status_code=401)
+    try:
+        date_from = request.query_params.get("from")
+        date_to   = request.query_params.get("to")
+        con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
+        q = "SELECT * FROM parent_visits WHERE 1=1"
+        params = []
+        if date_from:
+            q += " AND date>=?"; params.append(date_from)
+        if date_to:
+            q += " AND date<=?"; params.append(date_to)
+        q += " ORDER BY date DESC, visit_time DESC LIMIT 500"
+        cur.execute(q, params)
+        rows = [dict(r) for r in cur.fetchall()]
+        con.close()
+        return JSONResponse({"ok": True, "visits": rows})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+
+@router.post("/web/api/parent-visits", response_class=JSONResponse)
+async def web_add_parent_visit(req: Request):
+    user = _get_current_user(req)
+    if not user:
+        return JSONResponse({"error": "غير مصرح"}, status_code=401)
+    try:
+        data = await req.json()
+        required = ["date", "visit_time", "student_id", "student_name",
+                    "class_name", "visit_reason", "received_by", "visit_result"]
+        missing = [f for f in required if not data.get(f)]
+        if missing:
+            return JSONResponse({"ok": False, "msg": "حقول مطلوبة: " + ", ".join(missing)})
+        data["created_by"] = user.get("sub", "")
+        from database import insert_parent_visit
+        new_id = insert_parent_visit(data)
+        return JSONResponse({"ok": True, "id": new_id})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+
+@router.delete("/web/api/parent-visits/{vid}", response_class=JSONResponse)
+async def web_delete_parent_visit(vid: int, request: Request):
+    user = _get_current_user(request)
+    if not user:
+        return JSONResponse({"error": "غير مصرح"}, status_code=401)
+    try:
+        from database import delete_parent_visit
+        delete_parent_visit(vid)
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+
+@router.get("/web/parent-visits/report", response_class=HTMLResponse)
+async def web_parent_visits_report(request: Request):
+    """تقرير زيارات أولياء الأمور — صفحة HTML جاهزة للطباعة."""
+    user = _get_current_user(request)
+    if not user:
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse("/web/login")
+
+    date_from   = request.query_params.get("from", "")
+    date_to     = request.query_params.get("to",   "")
+    filter_cls  = request.query_params.get("cls",  "")
+    filter_rsn  = request.query_params.get("reason", "")
+    filter_rcv  = request.query_params.get("rcv",  "")
+
+    cfg         = load_config()
+    school_name = cfg.get("school_name", "المدرسة")
+    logo_tag    = logo_img_tag_from_config(cfg)
+
+    # ── جلب البيانات ──────────────────────────────────────────
+    con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
+    q = "SELECT * FROM parent_visits WHERE 1=1"
+    params = []
+    if date_from: q += " AND date>=?"; params.append(date_from)
+    if date_to:   q += " AND date<=?"; params.append(date_to)
+    if filter_cls: q += " AND class_name=?"; params.append(filter_cls)
+    if filter_rsn: q += " AND visit_reason=?"; params.append(filter_rsn)
+    if filter_rcv: q += " AND received_by=?"; params.append(filter_rcv)
+    q += " ORDER BY date ASC, visit_time ASC"
+    cur.execute(q, params)
+    rows = [dict(r) for r in cur.fetchall()]
+    con.close()
+
+    # ── إحصائيات ──────────────────────────────────────────────
+    total = len(rows)
+    reason_counts   = {}
+    rcv_counts      = {}
+    result_counts   = {}
+    class_counts    = {}
+    for r in rows:
+        reason_counts[r["visit_reason"]]  = reason_counts.get(r["visit_reason"], 0) + 1
+        rcv_counts[r["received_by"]]      = rcv_counts.get(r["received_by"], 0) + 1
+        result_counts[r["visit_result"]]  = result_counts.get(r["visit_result"], 0) + 1
+        class_counts[r["class_name"]]     = class_counts.get(r["class_name"], 0) + 1
+
+    def _stat_rows(d):
+        return "".join(
+            f'<tr><td>{k}</td><td style="text-align:center;font-weight:700">{v}</td></tr>'
+            for k, v in sorted(d.items(), key=lambda x: -x[1])
+        )
+
+    # ── صفوف الجدول التفصيلي ──────────────────────────────────
+    detail_rows = ""
+    for i, r in enumerate(rows, 1):
+        detail_rows += (
+            f'<tr>'
+            f'<td style="text-align:center">{i}</td>'
+            f'<td style="text-align:center">{r["date"]}</td>'
+            f'<td style="text-align:center">{r["visit_time"]}</td>'
+            f'<td>{r["student_name"]}</td>'
+            f'<td style="text-align:center">{r["class_name"]}</td>'
+            f'<td>{r.get("guardian_name","")}</td>'
+            f'<td>{r["visit_reason"]}</td>'
+            f'<td style="text-align:center">{r["received_by"]}</td>'
+            f'<td>{r["visit_result"]}</td>'
+            f'<td style="font-size:11px;color:#555">{r.get("notes","")}</td>'
+            f'</tr>'
+        )
+    if not detail_rows:
+        detail_rows = '<tr><td colspan="10" style="text-align:center;color:#999;padding:20px">لا توجد زيارات في هذه الفترة</td></tr>'
+
+    period_label = ""
+    if date_from and date_to:
+        period_label = f"من {date_from} إلى {date_to}"
+    elif date_from:
+        period_label = f"من {date_from}"
+    elif date_to:
+        period_label = f"حتى {date_to}"
+    else:
+        period_label = "كامل السجل"
+
+    html = f"""<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8">
+<title>تقرير زيارات أولياء الأمور — {school_name}</title>
+<style>
+  @page {{ size: A4; margin: 18mm 14mm; }}
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ font-family: 'Segoe UI', Tahoma, Arial, sans-serif; direction: rtl;
+         color: #1e293b; font-size: 12px; background: #fff; }}
+
+  /* ── رأس التقرير ── */
+  .header {{ display: flex; align-items: center; justify-content: space-between;
+             border-bottom: 3px solid #1565C0; padding-bottom: 10px; margin-bottom: 16px; }}
+  .header-center {{ text-align: center; flex: 1; }}
+  .header-center h1 {{ font-size: 18px; color: #1565C0; font-weight: 700; margin-bottom: 4px; }}
+  .header-center h2 {{ font-size: 13px; color: #475569; font-weight: 400; }}
+  .header-side {{ min-width: 70px; text-align: center; }}
+  .meta-bar {{ display: flex; gap: 24px; background: #EFF6FF; border: 1px solid #BFDBFE;
+               border-radius: 8px; padding: 8px 14px; margin-bottom: 16px;
+               font-size: 11.5px; flex-wrap: wrap; }}
+  .meta-bar span {{ color: #1e40af; }}
+  .meta-bar strong {{ color: #1e3a5f; margin-left: 4px; }}
+
+  /* ── بطاقات الإحصاء ── */
+  .stats-grid {{ display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 16px; }}
+  .stat-card {{ border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 8px;
+                text-align: center; background: #f8fafc; }}
+  .stat-card .val {{ font-size: 22px; font-weight: 700; color: #1565C0; line-height: 1.1; }}
+  .stat-card .lbl {{ font-size: 10px; color: #64748b; margin-top: 3px; }}
+
+  /* ── جداول الملخص ── */
+  .summary-grid {{ display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 18px; }}
+  .sum-box h3 {{ font-size: 11px; font-weight: 700; color: #1565C0;
+                 padding: 5px 8px; background: #EFF6FF; border-radius: 6px 6px 0 0;
+                 border: 1px solid #BFDBFE; border-bottom: none; }}
+  .sum-box table {{ width: 100%; border-collapse: collapse;
+                    border: 1px solid #e2e8f0; border-radius: 0 0 6px 6px; overflow: hidden; }}
+  .sum-box td {{ padding: 5px 8px; border-bottom: 1px solid #f1f5f9; font-size: 11px; }}
+  .sum-box tr:last-child td {{ border-bottom: none; }}
+  .sum-box tr:nth-child(even) {{ background: #f8fafc; }}
+
+  /* ── الجدول التفصيلي ── */
+  .section-title {{ font-size: 13px; font-weight: 700; color: #1565C0;
+                    border-right: 4px solid #1565C0; padding-right: 8px;
+                    margin-bottom: 10px; }}
+  table.main {{ width: 100%; border-collapse: collapse; font-size: 11px; }}
+  table.main th {{ background: #1565C0; color: #fff; padding: 7px 5px;
+                   text-align: center; font-weight: 600; border: 1px solid #1043a0; }}
+  table.main td {{ padding: 6px 5px; border: 1px solid #e2e8f0; vertical-align: top; }}
+  table.main tr:nth-child(even) {{ background: #f8fafc; }}
+  table.main tr:hover {{ background: #EFF6FF; }}
+
+  /* ── تذييل ── */
+  .footer {{ margin-top: 18px; border-top: 1px solid #e2e8f0; padding-top: 8px;
+             display: flex; justify-content: space-between; color: #94a3b8; font-size: 10px; }}
+
+  /* ── طباعة ── */
+  @media print {{
+    body {{ font-size: 11px; }}
+    .no-print {{ display: none !important; }}
+    table.main {{ page-break-inside: auto; }}
+    table.main tr {{ page-break-inside: avoid; }}
+  }}
+
+  /* ── شريط الطباعة (يختفي عند الطباعة) ── */
+  .print-bar {{ position: fixed; top: 0; left: 0; right: 0; background: #1565C0;
+               color: #fff; padding: 8px 20px; display: flex; gap: 10px;
+               align-items: center; z-index: 999; box-shadow: 0 2px 8px rgba(0,0,0,.2); }}
+  .print-bar button {{ padding: 6px 18px; border: none; border-radius: 6px; cursor: pointer;
+                       font-size: 13px; font-family: Tahoma; font-weight: 700; }}
+  .btn-print {{ background: #fff; color: #1565C0; }}
+  .btn-close {{ background: rgba(255,255,255,.2); color: #fff; }}
+  @media screen {{ body {{ padding-top: 48px; }} }}
+</style>
+</head>
+<body>
+
+<!-- شريط الطباعة -->
+<div class="print-bar no-print">
+  <button class="btn-print" onclick="window.print()">🖨️ طباعة / حفظ PDF</button>
+  <button class="btn-close" onclick="window.close()">✕ إغلاق</button>
+  <span style="margin-right:auto;font-size:12px;opacity:.8">
+    يمكنك حفظ كـ PDF من خيارات الطباعة
+  </span>
+</div>
+
+<!-- رأس التقرير -->
+<div class="header">
+  <div class="header-side"><div style="max-width:70px;max-height:70px;overflow:hidden">{logo_tag}</div></div>
+  <div class="header-center">
+    <h1>تقرير زيارات أولياء الأمور</h1>
+    <h2>{school_name}</h2>
+  </div>
+  <div class="header-side" style="text-align:left;font-size:10px;color:#64748b">
+    {now_riyadh_date()}
+  </div>
+</div>
+
+<!-- شريط المعلومات -->
+<div class="meta-bar">
+  <div><strong>الفترة:</strong> <span>{period_label}</span></div>
+  <div><strong>إجمالي الزيارات:</strong> <span>{total}</span></div>
+  {'<div><strong>الفصل:</strong> <span>' + filter_cls + '</span></div>' if filter_cls else ''}
+  {'<div><strong>سبب الزيارة:</strong> <span>' + filter_rsn + '</span></div>' if filter_rsn else ''}
+  {'<div><strong>الجهة المستقبلة:</strong> <span>' + filter_rcv + '</span></div>' if filter_rcv else ''}
+</div>
+
+<!-- بطاقات الإحصاء -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="val">{total}</div>
+    <div class="lbl">إجمالي الزيارات</div>
+  </div>
+  <div class="stat-card">
+    <div class="val">{len(reason_counts)}</div>
+    <div class="lbl">أنواع الأسباب</div>
+  </div>
+  <div class="stat-card">
+    <div class="val">{len(class_counts)}</div>
+    <div class="lbl">فصل مشارك</div>
+  </div>
+  <div class="stat-card">
+    <div class="val">{len(rcv_counts)}</div>
+    <div class="lbl">جهة استقبال</div>
+  </div>
+</div>
+
+<!-- جداول الملخص -->
+<div class="summary-grid">
+  <div class="sum-box">
+    <h3>📋 توزيع أسباب الزيارات</h3>
+    <table>{_stat_rows(reason_counts) or '<tr><td>—</td></tr>'}</table>
+  </div>
+  <div class="sum-box">
+    <h3>🏢 الجهات المستقبلة</h3>
+    <table>{_stat_rows(rcv_counts) or '<tr><td>—</td></tr>'}</table>
+  </div>
+  <div class="sum-box">
+    <h3>✅ نتائج الزيارات</h3>
+    <table>{_stat_rows(result_counts) or '<tr><td>—</td></tr>'}</table>
+  </div>
+</div>
+
+<!-- الجدول التفصيلي -->
+<div class="section-title">📄 سجل الزيارات التفصيلي</div>
+<table class="main">
+  <thead>
+    <tr>
+      <th style="width:30px">#</th>
+      <th style="width:80px">التاريخ</th>
+      <th style="width:50px">الوقت</th>
+      <th style="width:110px">اسم الطالب</th>
+      <th style="width:80px">الفصل</th>
+      <th style="width:100px">ولي الأمر</th>
+      <th style="width:100px">سبب الزيارة</th>
+      <th style="width:80px">الجهة</th>
+      <th style="width:110px">النتيجة</th>
+      <th>ملاحظات</th>
+    </tr>
+  </thead>
+  <tbody>{detail_rows}</tbody>
+</table>
+
+<!-- التذييل -->
+<div class="footer">
+  <span>نظام درب — DarbStu</span>
+  <span>تاريخ الطباعة: {now_riyadh_date()}</span>
+  <span>إجمالي السجلات: {total}</span>
+</div>
+
+</body>
+</html>"""
+    return HTMLResponse(content=html, headers={
+        "Content-Security-Policy": "default-src 'self' 'unsafe-inline'; img-src * data:;"
+    })
 
 
 # ─── تحويلات الموجّه الطلابي ─────────────────────────────────
@@ -6177,9 +6821,11 @@ async def web_add_student(request: Request):
             "id": sid, "name": name, "phone": phone
         })
 
-        import json as _j
-        with open(STUDENTS_JSON, "w", encoding="utf-8") as f:
+        import json as _j, os as _os
+        _tmp = STUDENTS_JSON + ".tmp"
+        with open(_tmp, "w", encoding="utf-8") as f:
             _j.dump({"classes": classes}, f, ensure_ascii=False, indent=2)
+        _os.replace(_tmp, STUDENTS_JSON)
 
         global STUDENTS_STORE
         STUDENTS_STORE = None
@@ -7728,6 +8374,332 @@ async def api_delete_story(request: Request, story_id: int):
     except Exception as e:
         return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
 
+
+
+# ─── WhatsApp Browser Connect ────────────────────────────────────────────────
+
+@router.get("/web/api/wa/qr")
+async def wa_qr_proxy(request: Request):
+    """بروكسي لـ QR من خادم Node.js — متاح فقط للمدير والوكيل."""
+    user = _get_current_user(request)
+    if not user or user.get("role") not in ("admin", "deputy"):
+        return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=403)
+    try:
+        import urllib.request as _ur, json as _j
+        r = _ur.urlopen("http://localhost:3000/qr", timeout=3)
+        data = _j.loads(r.read())
+        return JSONResponse({"ok": True, **data})
+    except Exception as e:
+        return JSONResponse({"ok": False, "ready": False, "qr": None, "msg": str(e)})
+
+
+@router.get("/web/api/wa/status")
+async def wa_status_proxy(request: Request):
+    """بروكسي لحالة خادم واتساب."""
+    user = _get_current_user(request)
+    if not user or user.get("role") not in ("admin", "deputy"):
+        return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=403)
+    try:
+        import urllib.request as _ur, json as _j
+        r = _ur.urlopen("http://localhost:3000/status", timeout=3)
+        data = _j.loads(r.read())
+        return JSONResponse({"ok": True, **data})
+    except Exception as e:
+        return JSONResponse({"ok": False, "ready": False, "msg": str(e)})
+
+
+@router.post("/web/api/wa/start", response_class=JSONResponse)
+async def wa_start_server(request: Request):
+    """تشغيل خادم واتساب — للمدير والوكيل فقط."""
+    user = _get_current_user(request)
+    if not user or user.get("role") not in ("admin", "deputy"):
+        return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=403)
+    try:
+        from whatsapp_service import start_whatsapp_server
+        start_whatsapp_server()
+        return JSONResponse({"ok": True, "msg": "جارٍ التشغيل..."})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)})
+
+
+@router.post("/web/api/wa/reset", response_class=JSONResponse)
+async def wa_reset_session(request: Request):
+    """حذف جلسة واتساب المحفوظة لإجبار QR جديد."""
+    user = _get_current_user(request)
+    if not user or user.get("role") not in ("admin", "deputy"):
+        return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=403)
+    try:
+        import shutil
+        from constants import BASE_DIR
+        auth_path = os.path.join(BASE_DIR, "my-whatsapp-server", ".wwebjs_auth")
+        if os.path.exists(auth_path):
+            shutil.rmtree(auth_path, ignore_errors=True)
+        return JSONResponse({"ok": True, "msg": "تم حذف الجلسة — يرجى تشغيل الخادم من جديد"})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)})
+
+
+@router.get("/web/whatsapp-connect", response_class=HTMLResponse)
+async def wa_connect_page(request: Request):
+    """صفحة ربط واتساب — للمدير والوكيل فقط."""
+    user = _get_current_user(request)
+    if not user:
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse("/web/login")
+    if user.get("role") not in ("admin", "deputy"):
+        return HTMLResponse(
+            "<h2 style='text-align:center;margin-top:60px;font-family:Tahoma'>"
+            "غير مصرح لك بالوصول لهذه الصفحة</h2>", status_code=403)
+
+    html = """<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ربط واتساب — درب</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Tahoma,Arial,sans-serif;background:#f0f4f8;min-height:100vh;
+       display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .card{background:#fff;border-radius:16px;padding:32px 36px;
+        box-shadow:0 4px 28px rgba(0,0,0,.11);max-width:460px;width:95%;text-align:center}
+  h1{font-size:1.25rem;color:#1e3a5f;margin-bottom:4px}
+  .sub{color:#64748b;font-size:.88rem;margin-bottom:22px}
+
+  /* شارة الحالة */
+  #badge{display:inline-flex;align-items:center;gap:8px;padding:8px 20px;
+         border-radius:999px;font-size:.92rem;font-weight:700;margin-bottom:18px;
+         transition:all .3s}
+  .b-init    {background:#f1f5f9;color:#475569}
+  .b-starting{background:#fef3c7;color:#92400e}
+  .b-waiting {background:#fef3c7;color:#92400e}
+  .b-scanning{background:#dbeafe;color:#1e40af}
+  .b-ok      {background:#d1fae5;color:#065f46}
+  .b-error   {background:#fee2e2;color:#991b1b}
+
+  .dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+  .d-grey  {background:#9ca3af}
+  .d-yellow{background:#f59e0b;animation:blink 1s infinite}
+  .d-blue  {background:#3b82f6;animation:blink .8s infinite}
+  .d-green {background:#22c55e;animation:pulse 1.2s infinite}
+  .d-red   {background:#ef4444}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+  /* منطقة QR */
+  #qr-area{min-height:230px;display:flex;flex-direction:column;align-items:center;
+           justify-content:center;background:#f8fafc;border-radius:12px;
+           border:2px dashed #cbd5e1;margin-bottom:16px;padding:16px;gap:10px}
+  #qr-area canvas,#qr-area img{max-width:210px;max-height:210px}
+  #qr-area .qr-icon{font-size:2.8rem}
+  #qr-area .qr-msg{font-size:.85rem;color:#64748b}
+
+  /* رسالة */
+  #msg{color:#475569;font-size:.87rem;line-height:1.7;margin-bottom:14px}
+
+  /* أزرار */
+  .btns{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:16px}
+  .btn{padding:8px 18px;border:none;border-radius:8px;cursor:pointer;
+       font-family:Tahoma;font-size:.88rem;font-weight:700;transition:opacity .2s}
+  .btn:hover{opacity:.85}
+  .btn:disabled{opacity:.4;cursor:default}
+  .btn-primary{background:#1565C0;color:#fff}
+  .btn-warn   {background:#f59e0b;color:#fff}
+  .btn-danger {background:#dc2626;color:#fff}
+  .btn-ghost  {background:#f1f5f9;color:#475569}
+
+  /* خطوات */
+  .steps{text-align:right;background:#f8fafc;border-radius:10px;
+         padding:12px 16px;color:#374151;font-size:.85rem;line-height:2.1;
+         border:1px solid #e2e8f0;margin-bottom:18px}
+  .steps strong{color:#1565C0}
+
+  .back{display:inline-block;padding:8px 20px;background:#1565C0;color:#fff;
+        border-radius:8px;text-decoration:none;font-size:.88rem}
+  #spinner{display:none;width:28px;height:28px;border:3px solid #e2e8f0;
+           border-top-color:#1565C0;border-radius:50%;animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="card">
+  <div style="font-size:2rem;margin-bottom:6px">📱</div>
+  <h1>ربط واتساب المدرسة</h1>
+  <p class="sub">امسح رمز QR بتطبيق واتساب لربط الحساب</p>
+
+  <div id="badge" class="b-init">
+    <div class="dot d-grey" id="dot"></div>
+    <span id="badge-txt">جارٍ التحقق...</span>
+  </div>
+
+  <div id="qr-area">
+    <div id="spinner"></div>
+    <div id="qr-div"></div>
+    <div class="qr-icon" id="qr-icon" style="display:none"></div>
+    <div class="qr-msg" id="qr-sub"></div>
+  </div>
+
+  <p id="msg"></p>
+
+  <div class="btns" id="btns">
+    <button class="btn btn-primary" id="btn-start" onclick="waStart()">▶ تشغيل الخادم</button>
+    <button class="btn btn-warn"    id="btn-reset" onclick="waReset()" style="display:none">🔄 فرض QR جديد</button>
+    <button class="btn btn-ghost"   id="btn-refresh" onclick="poll()">↻ تحديث</button>
+  </div>
+
+  <div class="steps">
+    <strong>خطوات الربط:</strong><br>
+    ١- اضغط "تشغيل الخادم" إذا كان الخادم غير متصل<br>
+    ٢- انتظر ظهور رمز QR (قد يستغرق دقيقة)<br>
+    ٣- افتح واتساب ← الأجهزة المرتبطة ← ربط جهاز<br>
+    ٤- امسح رمز QR الظاهر أعلاه
+  </div>
+
+  <a class="back" href="/web/dashboard">← العودة للوحة التحكم</a>
+</div>
+
+<script>
+var _connected=false, _lastQR='', _qrInst=null, _pollTimer=null;
+
+function setBadge(cls,dotCls,txt){
+  var b=document.getElementById('badge');
+  b.className=cls;
+  document.getElementById('dot').className='dot '+dotCls;
+  document.getElementById('badge-txt').textContent=txt;
+}
+function setMsg(txt){ document.getElementById('msg').textContent=txt; }
+function showSpinner(v){
+  document.getElementById('spinner').style.display=v?'block':'none';
+}
+function showIcon(icon,sub){
+  document.getElementById('qr-icon').style.display=icon?'block':'none';
+  document.getElementById('qr-icon').textContent=icon||'';
+  document.getElementById('qr-sub').textContent=sub||'';
+}
+function showQRDiv(v){
+  document.getElementById('qr-div').style.display=v?'block':'none';
+}
+
+function renderQR(txt){
+  if(txt===_lastQR)return;
+  _lastQR=txt;
+  showSpinner(false);
+  showIcon('','');
+  showQRDiv(true);
+  var wrap=document.getElementById('qr-div');
+  wrap.innerHTML='';
+  _qrInst=new QRCode(wrap,{text:txt,width:210,height:210,
+    colorDark:'#000',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.M});
+}
+
+function schedulePoll(ms){
+  clearTimeout(_pollTimer);
+  _pollTimer=setTimeout(poll,ms);
+}
+
+async function poll(){
+  if(_connected)return;
+  try{
+    var r=await fetch('/web/api/wa/qr');
+    var d=await r.json();
+
+    // ── الخادم لا يعمل (ok=false أو خطأ في الاتصال بـ Node.js) ──
+    if(!d.ok){
+      setBadge('b-error','d-red','الخادم غير متصل');
+      showSpinner(false);
+      showIcon('🔴','خادم واتساب لا يعمل');
+      showQRDiv(false);
+      setMsg('خادم واتساب لا يعمل. اضغط "تشغيل الخادم" ثم انتظر.');
+      document.getElementById('btn-start').style.display='';
+      document.getElementById('btn-reset').style.display='none';
+      schedulePoll(5000);
+      return;
+    }
+
+    // ── متصل ✅ ──
+    if(d.ready){
+      _connected=true;
+      clearTimeout(_pollTimer);
+      setBadge('b-ok','d-green','متصل ✅');
+      showSpinner(false);
+      showIcon('✅','واتساب متصل وجاهز');
+      showQRDiv(false);
+      setMsg('تم الربط بنجاح! يمكنك الآن إرسال رسائل واتساب من النظام.');
+      document.getElementById('btn-start').style.display='none';
+      document.getElementById('btn-reset').style.display='';
+      return;
+    }
+
+    // ── الخادم يعمل وفيه QR ──
+    if(d.qr){
+      setBadge('b-scanning','d-blue','بانتظار المسح...');
+      renderQR(d.qr);
+      setMsg('امسح رمز QR بتطبيق واتساب. ينتهي صلاحيته بعد دقيقة.');
+      document.getElementById('btn-start').style.display='none';
+      document.getElementById('btn-reset').style.display='';
+      schedulePoll(3000);
+      return;
+    }
+
+    // ── الخادم يعمل لكن لا يوجد QR بعد (جلسة محفوظة تُحمَّل) ──
+    setBadge('b-starting','d-yellow','الخادم يبدأ...');
+    showSpinner(true);
+    showIcon('','');
+    showQRDiv(false);
+    setMsg('الخادم يعمل ويحاول الاتصال. قد تكون هناك جلسة محفوظة، انتظر أو اضغط "فرض QR جديد".');
+    document.getElementById('btn-start').style.display='none';
+    document.getElementById('btn-reset').style.display='';
+    schedulePoll(3000);
+
+  }catch(e){
+    setBadge('b-error','d-red','خطأ في الاتصال');
+    showSpinner(false);
+    showIcon('⚠️','');
+    showQRDiv(false);
+    setMsg('تعذّر الوصول للخادم: '+e.message);
+    schedulePoll(5000);
+  }
+}
+
+async function waStart(){
+  var btn=document.getElementById('btn-start');
+  btn.disabled=true; btn.textContent='⏳ جارٍ التشغيل...';
+  setBadge('b-starting','d-yellow','جارٍ التشغيل...');
+  showSpinner(true); showQRDiv(false);
+  setMsg('جارٍ تشغيل خادم واتساب، يرجى الانتظار...');
+  try{
+    await fetch('/web/api/wa/start',{method:'POST'});
+  }catch(e){}
+  setTimeout(function(){ btn.disabled=false; btn.textContent='▶ تشغيل الخادم'; poll(); }, 4000);
+}
+
+async function waReset(){
+  if(!confirm('سيتم حذف الجلسة المحفوظة وستحتاج لمسح QR جديد. هل تريد المتابعة؟'))return;
+  var btn=document.getElementById('btn-reset');
+  btn.disabled=true; btn.textContent='⏳...';
+  try{
+    var r=await fetch('/web/api/wa/reset',{method:'POST'});
+    var d=await r.json();
+    if(d.ok){ setMsg('تم حذف الجلسة. اضغط "تشغيل الخادم".'); }
+    else     { setMsg('خطأ: '+d.msg); }
+  }catch(e){ setMsg('خطأ: '+e.message); }
+  _lastQR=''; _connected=false;
+  btn.disabled=false; btn.textContent='🔄 فرض QR جديد';
+  document.getElementById('btn-start').style.display='';
+  schedulePoll(1000);
+}
+
+// ابدأ فور تحميل الصفحة
+showSpinner(true); showQRDiv(false);
+poll();
+</script>
+</body>
+</html>"""
+    return HTMLResponse(content=html, headers={
+        "Content-Security-Policy":
+            "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;"
+    })
 
 
 # ===================== main =====================

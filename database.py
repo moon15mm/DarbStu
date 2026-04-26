@@ -2,6 +2,14 @@ import os, sqlite3, datetime, hashlib, json, zipfile, csv, re, socket, sys # TES
 import tkinter as tk
 from tkinter import messagebox, filedialog
 
+
+def _safe_write_json(path: str, data) -> None:
+    """كتابة آمنة لملف JSON: يكتب في ملف مؤقت ثم يُعيد التسمية لمنع تلف البيانات."""
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, path)
+
 # ─── منع ازدواجية التطبيق ───
 # تم نقل القفل إلى main.py لمنع التداخل عند استدعاء قاعدة البيانات
 # ─────────────────────────────────────────────────────────────
@@ -420,6 +428,26 @@ def init_db():
         status       TEXT,
         created_at   TEXT NOT NULL
     )""")
+
+    # ─── جدول زيارات أولياء الأمور ──────────────────────────────
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS parent_visits (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        date          TEXT NOT NULL,
+        visit_time    TEXT NOT NULL,
+        student_id    TEXT NOT NULL,
+        student_name  TEXT NOT NULL,
+        class_name    TEXT NOT NULL,
+        guardian_name TEXT,
+        visit_reason  TEXT NOT NULL,
+        received_by   TEXT NOT NULL,
+        visit_result  TEXT NOT NULL,
+        notes         TEXT,
+        created_by    TEXT,
+        created_at    TEXT NOT NULL
+    )""")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_parent_visits_date ON parent_visits(date)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_parent_visits_student ON parent_visits(student_id)")
 
     # ─── جدول العقود السلوكية ───────────────────────────────────
     cur.execute("""
@@ -1565,8 +1593,7 @@ def import_students_from_excel_sheet2_format(xlsx_path: str) -> Dict[str, Any]:
         raise ValueError("لم يُعثر على أي طلاب في الملف — تحقق من صحة البيانات.")
 
     data = {"classes": list(classes.values())}
-    with open(STUDENTS_JSON, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    _safe_write_json(STUDENTS_JSON, data)
     return data
 
 # ═══════════════════════════════════════════════════════════════
@@ -1968,13 +1995,13 @@ def load_students(force_reload: bool = False) -> Dict[str, Any]:
         if res.get("ok"):
             classes = res.get("classes", [])
             constants.STUDENTS_STORE = {"list": classes, "by_id": {c["id"]: c for c in classes}}
-            # حفظ في الملف المحلي للمزامنة
-            try:
-                ensure_dirs()
-                with open(STUDENTS_JSON, "w", encoding="utf-8") as f:
-                    json.dump({"classes": classes}, f, ensure_ascii=False, indent=2)
-            except Exception as e:
-                print(f"[SYNC-STUDENTS-ERROR] {e}")
+            # حفظ في الملف المحلي فقط إذا كانت البيانات غير فارغة — يمنع محو الطلاب عند خطأ الخادم
+            if classes:
+                try:
+                    ensure_dirs()
+                    _safe_write_json(STUDENTS_JSON, {"classes": classes})
+                except Exception as e:
+                    print(f"[SYNC-STUDENTS-ERROR] {e}")
             return constants.STUDENTS_STORE
 
     ensure_dirs()
@@ -2013,19 +2040,22 @@ def load_students(force_reload: bool = False) -> Dict[str, Any]:
 
 def save_students(classes_list: List[Dict[str, Any]]) -> bool:
     """يحفظ قائمة الطلاب في الملف المحلي أو يرسلها للسيرفر السحابي إذا كان مفعلًا."""
+    if not classes_list:
+        print("[SAVE-STUDENTS] رُفض الحفظ: القائمة فارغة")
+        return False
+
     client = get_cloud_client()
     if client.is_active():
         res = client.post("/web/api/update-students", {"classes": classes_list})
         if not res.get("ok"):
             print(f"[CLOUD-SYNC-ERROR] {res.get('msg')}")
             return False
-            
+
     # دائماً احفظ محلياً أيضاً كنسخة احتياطية أو كمرجع أساسي في وضع السيرفر
     try:
         from constants import STUDENTS_JSON, ensure_dirs
         ensure_dirs()
-        with open(STUDENTS_JSON, "w", encoding="utf-8") as f:
-            json.dump({"classes": classes_list}, f, ensure_ascii=False, indent=2)
+        _safe_write_json(STUDENTS_JSON, {"classes": classes_list})
         # تحديث المخزن في الذاكرة
         constants.STUDENTS_STORE = {"list": classes_list, "by_id": {c["id"]: c for c in classes_list}}
         return True
@@ -2996,3 +3026,59 @@ def get_unread_lab_submissions_count() -> int:
         return count
     except Exception:
         return 0
+
+
+# ─── زيارات أولياء الأمور ─────────────────────────────────────
+
+def insert_parent_visit(data: dict) -> int:
+    con = get_db(); cur = con.cursor()
+    now = datetime.datetime.now().isoformat()
+    cur.execute("""
+        INSERT INTO parent_visits
+            (date, visit_time, student_id, student_name, class_name,
+             guardian_name, visit_reason, received_by, visit_result, notes,
+             created_by, created_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+    """, (
+        data.get("date", now.split("T")[0]),
+        data.get("visit_time", ""),
+        data.get("student_id", ""),
+        data.get("student_name", ""),
+        data.get("class_name", ""),
+        data.get("guardian_name", ""),
+        data.get("visit_reason", ""),
+        data.get("received_by", ""),
+        data.get("visit_result", ""),
+        data.get("notes", ""),
+        data.get("created_by", ""),
+        now,
+    ))
+    new_id = cur.lastrowid
+    con.commit(); con.close()
+    return new_id
+
+
+def get_parent_visits(student_id: str = None, date_from: str = None,
+                      date_to: str = None, limit: int = 300) -> list:
+    con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
+    q = "SELECT * FROM parent_visits WHERE 1=1"
+    params = []
+    if student_id:
+        q += " AND student_id=?"; params.append(student_id)
+    if date_from:
+        q += " AND date>=?"; params.append(date_from)
+    if date_to:
+        q += " AND date<=?"; params.append(date_to)
+    q += " ORDER BY date DESC, visit_time DESC LIMIT ?"
+    params.append(limit)
+    cur.execute(q, params)
+    rows = [dict(r) for r in cur.fetchall()]
+    con.close()
+    return rows
+
+
+def delete_parent_visit(visit_id: int):
+    con = get_db(); cur = con.cursor()
+    cur.execute("DELETE FROM parent_visits WHERE id=?", (visit_id,))
+    con.commit(); con.close()
+

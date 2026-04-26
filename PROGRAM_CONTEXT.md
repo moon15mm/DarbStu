@@ -177,7 +177,49 @@ threading.Thread(target=_worker, daemon=True).start()
 
 ---
 
+## 18. ميزة سجل زيارات أولياء الأمور (26 أبريل 2026)
+
+### الجدول: `parent_visits`
+| الحقل | النوع | الوصف |
+|-------|-------|-------|
+| id | INTEGER PK | معرّف تلقائي |
+| date | TEXT | تاريخ الزيارة |
+| visit_time | TEXT | وقت الزيارة (من قائمة منسدلة) |
+| student_id | TEXT | رقم الطالب |
+| student_name | TEXT | اسم الطالب |
+| class_name | TEXT | اسم الفصل |
+| guardian_name | TEXT | اسم ولي الأمر (يملأ تلقائياً) |
+| visit_reason | TEXT | سبب الزيارة (قائمة منسدلة) |
+| received_by | TEXT | الجهة المستقبلة (قائمة منسدلة) |
+| visit_result | TEXT | نتيجة الزيارة (قائمة منسدلة) |
+| notes | TEXT | ملاحظات (حرة الكتابة فقط) |
+| created_by | TEXT | المستخدم المُسجِّل |
+| created_at | TEXT | وقت التسجيل |
+
+### دوال database.py
+- `insert_parent_visit(data)` → int
+- `get_parent_visits(student_id, date_from, date_to, limit)` → list
+- `delete_parent_visit(visit_id)`
+
+### API Endpoints
+- `GET /web/api/parent-visits?from=&to=` — جلب السجلات مع فلتر التاريخ
+- `POST /web/api/parent-visits` — إضافة زيارة جديدة
+- `DELETE /web/api/parent-visits/{id}` — حذف زيارة
+
+### ملاحظات التنفيذ
+- **كل الحقول قوائم منسدلة** باستثناء "ملاحظات" (`<textarea>`)
+- **اسم ولي الأمر** يُملأ تلقائياً عند اختيار الطالب (readonly)
+- **الأدوار:** admin (كل شيء) + deputy + staff + counselor
+- **Web sidebar:** ضمن مجموعة "المتابعة الانضباطية"
+- **Tkinter sidebar:** ضمن مجموعة "يومي"
+
+---
+
 ## 16. سجل التحديثات (Change Log)
+
+- **v3.3.9 (26 أبريل 2026):**
+  - إضافة **سجل زيارات أولياء الأمور** (جدول + API + واجهة ويب + تطبيق مكتبي).
+  - إضافة صفحة **ربط واتساب عبر المتصفح** (`/web/whatsapp-connect`) للوكيل.
 
 - **v3.2.8 (24 أبريل 2026) — إصلاح عاجل:**
   - حل مشكلة **SyntaxError في f-string** يمنع تشغيل الخادم.
