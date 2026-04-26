@@ -4005,13 +4005,20 @@ async function referToCounselor(type){
 async function loadStudents(){
   var d=await api('/web/api/students');if(!d||!d.ok)return;
   var all=[];d.classes.forEach(function(c){c.students.forEach(function(s){all.push(Object.assign({},s,{class_name:c.name,class_id:c.id}));});});
-  window._students=all;renderStuTbl(all);
+  window._students=all;renderStuTbl(all);renderPhoTbl(all);
   var sm=document.getElementById('sm-sum');if(sm)sm.innerHTML='<span class="badge bb">'+all.length+' طالب إجمالاً</span>';
 }
 function filterStudents(){
-  var q=(document.getElementById('sm-q')||document.getElementById('ph-q')||{value:''}).value.toLowerCase();
-  var cls=(document.getElementById('sm-cls')||document.getElementById('ph-cls')||{value:''}).value;
-  var f=(window._students||[]).filter(function(s){return(!q||(s.name||'').toLowerCase().includes(q)||(s.id||'').includes(q))&&(!cls||s.class_id===cls);});
+  var phTab=document.getElementById('tab-phones');
+  var phActive=phTab&&phTab.classList.contains('active');
+  var q=(phActive?document.getElementById('ph-q'):document.getElementById('sm-q')||document.getElementById('ph-q'));
+  var cls=(phActive?document.getElementById('ph-cls'):document.getElementById('sm-cls')||document.getElementById('ph-cls'));
+  var qv=(q&&q.value||'').toLowerCase();
+  var clsv=cls&&cls.value||'';
+  var f=(window._students||[]).filter(function(s){
+    return(!qv||(s.name||'').toLowerCase().includes(qv)||(s.id||'').includes(qv)||(s.phone||'').includes(qv))
+        &&(!clsv||s.class_id===clsv);
+  });
   renderStuTbl(f);renderPhoTbl(f);
 }
 function renderStuTbl(arr){
