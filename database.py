@@ -588,6 +588,10 @@ def init_db():
     cur.execute("CREATE INDEX IF NOT EXISTS idx_snotes_student ON student_notes(student_id)")
 
     migrate_circulars_permission(cur)
+    _migrate_add_tab(cur, 'زيارات أولياء الأمور',
+                     ('admin', 'deputy', 'staff', 'counselor'))
+    _migrate_add_tab(cur, 'روابط بوابة أولياء الأمور',
+                     ('admin', 'deputy', 'staff', 'counselor'))
 
     cur.execute("""
     CREATE TABLE IF NOT EXISTS exempted_students (
@@ -1091,6 +1095,23 @@ def migrate_circulars_permission(cur):
             if isinstance(tabs, list) and "التعاميم والنشرات" not in tabs:
                 tabs.append("التعاميم والنشرات")
                 cur.execute("UPDATE users SET allowed_tabs=? WHERE id=?", (json.dumps(tabs, ensure_ascii=False), rid))
+        except:
+            pass
+
+
+def _migrate_add_tab(cur, tab_name: str, roles: tuple):
+    """يُضيف تبويباً جديداً لقوائم المستخدمين المؤهلين إذا لم يكن موجوداً."""
+    cur.execute("SELECT id, role, allowed_tabs FROM users WHERE allowed_tabs IS NOT NULL AND allowed_tabs != ''")
+    rows = cur.fetchall()
+    for rid, role, allowed_tabs_json in rows:
+        if role not in roles:
+            continue
+        try:
+            tabs = json.loads(allowed_tabs_json)
+            if isinstance(tabs, list) and tab_name not in tabs:
+                tabs.append(tab_name)
+                cur.execute("UPDATE users SET allowed_tabs=? WHERE id=?",
+                            (json.dumps(tabs, ensure_ascii=False), rid))
         except:
             pass
 
