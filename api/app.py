@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 
 app = FastAPI()
 
@@ -24,6 +25,7 @@ class RemoveCSPMiddleware(BaseHTTPMiddleware):
         response.headers["X-Frame-Options"] = "SAMEORIGIN"
         return response
 
+app.add_middleware(GZipMiddleware, minimum_size=500)
 app.add_middleware(RemoveCSPMiddleware)
 
 # ── تسجيل الـ Routers مباشرة عند استيراد هذا الملف ──

@@ -124,7 +124,8 @@ def get_db():
     con.execute("PRAGMA synchronous=NORMAL")
     con.execute("PRAGMA cache_size=10000")
     con.execute("PRAGMA temp_store=MEMORY")
-    con.execute("PRAGMA busy_timeout=3000")   # 3 ثوانٍ قبل رفع الخطأ
+    con.execute("PRAGMA mmap_size=134217728")  # 128 MB memory-mapped I/O
+    con.execute("PRAGMA busy_timeout=3000")
     return con
 
 def init_db():
