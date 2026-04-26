@@ -2603,21 +2603,70 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 </div>
 
 <div id="tab-users">
-  <h2 class="pt"><i class="fas fa-user-shield"></i> إدارة المستخدمين</h2>
-  <div class="section">
-    <div class="st">إضافة مستخدم جديد</div>
-    <div class="fg2">
-      <div class="fg"><label class="fl">اسم المستخدم</label><input type="text" id="us-uname"></div>
-      <div class="fg"><label class="fl">الاسم الكامل</label><input type="text" id="us-fname"></div>
-      <div class="fg"><label class="fl">كلمة المرور</label><input type="text" id="us-pw"></div>
-      <div class="fg"><label class="fl">الدور</label><select id="us-role"><option value="admin">مدير</option><option value="deputy">وكيل</option><option value="teacher">معلم</option><option value="guard">حارس</option></select></div>
+  <h2 class="pt"><i class="fas fa-user-shield"></i> إدارة المستخدمين وصلاحيات التبويبات</h2>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+
+    <!-- ══ قائمة المستخدمين ══ -->
+    <div class="section" style="padding:14px">
+      <div class="st" style="margin-bottom:10px">قائمة المستخدمين</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+        <button class="btn bp1 bsm" onclick="usOpenAdd()">➕ جديد</button>
+        <button class="btn bp2 bsm" onclick="usToggle()">🔄 تفعيل/تعطيل</button>
+        <button class="btn bp2 bsm" onclick="usChangePw()">🔑 كلمة المرور</button>
+        <button class="btn bp3 bsm" onclick="usDelete()">🗑 حذف</button>
+      </div>
+      <div class="tw">
+        <table id="us-tbl" style="width:100%;font-size:12px">
+          <thead><tr>
+            <th>ID</th><th>اسم المستخدم</th><th>الاسم الكامل</th>
+            <th>الدور</th><th>الحالة</th><th>آخر ظهور</th>
+          </tr></thead>
+          <tbody id="us-tbody"></tbody>
+        </table>
+      </div>
+      <div id="us-st" style="margin-top:8px;font-size:13px"></div>
     </div>
-    <button class="btn bp1" onclick="addUser()">+ إضافة</button>
-    <div id="us-st" style="margin-top:10px"></div>
+
+    <!-- ══ صلاحيات التبويبات ══ -->
+    <div class="section" style="padding:14px">
+      <div class="st" style="margin-bottom:6px">صلاحيات التبويبات</div>
+      <div id="us-perm-title" style="font-size:13px;font-weight:700;color:var(--pr);margin-bottom:10px">← اختر مستخدماً من القائمة</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+        <button class="btn bp1 bsm" onclick="usSaveTabs()">💾 حفظ الصلاحيات</button>
+        <button class="btn bp2 bsm" onclick="usResetTabs()">↩ افتراضي للدور</button>
+        <button class="btn bp2 bsm" onclick="usSelAll(true)">تحديد الكل</button>
+        <button class="btn bp2 bsm" onclick="usSelAll(false)">إلغاء الكل</button>
+      </div>
+      <div id="us-tabs-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:4px;max-height:420px;overflow-y:auto"></div>
+    </div>
   </div>
-  <div class="section"><div class="tw"><table>
-    <thead><tr><th>اسم المستخدم</th><th>الاسم الكامل</th><th>الدور</th><th>الحالة</th><th>حذف</th></tr></thead>
-    <tbody id="us-table"></tbody></table></div></div>
+
+  <!-- مودال إضافة مستخدم -->
+  <div id="us-add-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center">
+    <div style="background:white;border-radius:14px;padding:28px;width:360px;direction:rtl">
+      <div style="font-size:16px;font-weight:700;margin-bottom:16px;color:var(--pr)">➕ إضافة مستخدم جديد</div>
+      <div class="fg" style="margin-bottom:10px"><label class="fl">اسم المستخدم</label><input type="text" id="us-new-uname" style="width:100%"></div>
+      <div class="fg" style="margin-bottom:10px"><label class="fl">الاسم الكامل</label><input type="text" id="us-new-fname" style="width:100%"></div>
+      <div class="fg" style="margin-bottom:10px"><label class="fl">كلمة المرور</label><input type="text" id="us-new-pw" style="width:100%"></div>
+      <div class="fg" style="margin-bottom:16px"><label class="fl">الدور</label>
+        <select id="us-new-role" style="width:100%">
+          <option value="admin">مدير</option>
+          <option value="deputy">وكيل</option>
+          <option value="staff">إداري</option>
+          <option value="counselor">موجه طلابي</option>
+          <option value="activity_leader">رائد نشاط</option>
+          <option value="teacher" selected>معلم</option>
+          <option value="lab">محضر</option>
+          <option value="guard">حارس</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn bp1" onclick="usAddConfirm()">حفظ</button>
+        <button class="btn bp2" onclick="document.getElementById('us-add-modal').style.display='none'">إلغاء</button>
+      </div>
+      <div id="us-add-st" style="margin-top:8px;font-size:13px"></div>
+    </div>
+  </div>
 </div>
 
 <div id="tab-backup">
@@ -4042,26 +4091,142 @@ async function editPhone(id){
 }
 
 /* ── USERS ── */
+var _usSelected = null;
+var _usData = [];
+var _US_ROLES = {admin:'مدير',deputy:'وكيل',staff:'إداري',counselor:'موجه طلابي',
+                 activity_leader:'رائد نشاط',teacher:'معلم',lab:'محضر',guard:'حارس'};
+var _US_ALL_TABS = [
+  'لوحة المراقبة','المراقبة الحية','روابط الفصول','تسجيل الغياب','تسجيل التأخر',
+  'طلب استئذان','سجل الغياب','سجل التأخر','الأعذار','الاستئذان','إدارة الغياب',
+  'الموجّه الطلابي','استلام تحويلات','التقارير / الطباعة','تقرير الفصل','تقرير الإدارة',
+  'تحليل طالب','أكثر الطلاب غياباً','الإشعارات الذكية','إرسال رسائل الغياب',
+  'إرسال رسائل التأخر','روابط بوابة أولياء الأمور','التعاميم والنشرات','قصص المدرسة',
+  'تعزيز الحضور الأسبوعي','لوحة الصدارة (النقاط)','إدارة الطلاب','إضافة طالب',
+  'إدارة الفصول','إدارة الجوالات','الطلاب المستثنون','نشر النتائج','تصدير نور',
+  'زيارات أولياء الأمور','تحويل طالب','نماذج المعلم','تحليل النتائج',
+  'إعدادات المدرسة','المستخدمون','النسخ الاحتياطية','شواهد الأداء'
+];
+var _US_ROLE_DEFAULTS = {
+  deputy:['لوحة المراقبة','المراقبة الحية','روابط الفصول','تسجيل الغياب','تسجيل التأخر',
+          'طلب استئذان','سجل الغياب','سجل التأخر','الأعذار','الاستئذان','إدارة الغياب',
+          'الموجّه الطلابي','استلام تحويلات','التقارير / الطباعة','تقرير الفصل','تقرير الإدارة',
+          'تحليل طالب','أكثر الطلاب غياباً','الإشعارات الذكية','إرسال رسائل الغياب',
+          'إرسال رسائل التأخر','روابط بوابة أولياء الأمور','التعاميم والنشرات','قصص المدرسة',
+          'تعزيز الحضور الأسبوعي','لوحة الصدارة (النقاط)','إدارة الطلاب','إضافة طالب',
+          'إدارة الفصول','إدارة الجوالات','الطلاب المستثنون','نشر النتائج','تصدير نور',
+          'زيارات أولياء الأمور'],
+  staff:['لوحة المراقبة','المراقبة الحية','روابط الفصول','تسجيل الغياب','تسجيل التأخر',
+         'طلب استئذان','سجل الغياب','سجل التأخر','الأعذار','الاستئذان','التعاميم والنشرات',
+         'إدارة الطلاب','إضافة طالب','إدارة الجوالات','الطلاب المستثنون','قصص المدرسة',
+         'لوحة الصدارة (النقاط)','تحليل طالب','زيارات أولياء الأمور'],
+  counselor:['لوحة المراقبة','المراقبة الحية','روابط الفصول','سجل الغياب','سجل التأخر',
+             'الأعذار','الموجّه الطلابي','تحليل طالب','أكثر الطلاب غياباً','الإشعارات الذكية',
+             'التعاميم والنشرات','قصص المدرسة','تعزيز الحضور الأسبوعي','لوحة الصدارة (النقاط)',
+             'زيارات أولياء الأمور'],
+  activity_leader:['لوحة المراقبة','التعاميم والنشرات','قصص المدرسة','لوحة الصدارة (النقاط)','تحليل طالب','نماذج المعلم'],
+  teacher:['لوحة المراقبة','تحويل طالب','نماذج المعلم','تحليل النتائج','التعاميم والنشرات','لوحة الصدارة (النقاط)','تحليل طالب'],
+  lab:['لوحة المراقبة','نماذج المعلم','التعاميم والنشرات','لوحة الصدارة (النقاط)','تحليل طالب','شواهد الأداء'],
+  guard:['لوحة المراقبة','تسجيل التأخر','المراقبة الحية','لوحة الصدارة (النقاط)','تحليل طالب']
+};
+
 async function loadUsers(){
-  var d=await api('/web/api/users');if(!d||!d.ok){document.getElementById('us-table').innerHTML='';return;}
-  var rl={admin:'مدير',deputy:'وكيل',teacher:'معلم',guard:'حارس'};
-  document.getElementById('us-table').innerHTML=(d.users||[]).map(function(u){
-    return '<tr><td>'+u.username+'</td><td>'+(u.full_name||'-')+'</td>'+
-           '<td><span class="badge bb">'+(rl[u.role]||u.role)+'</span></td>'+
-           '<td>'+(u.active?'<span class="badge bg">نشط</span>':'<span class="badge br">معطل</span>')+'</td>'+
-           '<td><button class="btn bp3 bsm" onclick="delUser('+u.id+')">حذف</button></td></tr>';
-  }).join('')||'<tr><td colspan="5" style="color:#9CA3AF">لا يوجد</td></tr>';
+  var d=await api('/web/api/users');
+  if(!d||!d.ok){document.getElementById('us-tbody').innerHTML='';return;}
+  _usData=d.users||[];
+  _usRenderTable();
+  _usBuildTabsGrid();
 }
-async function addUser(){
-  var un=document.getElementById('us-uname').value.trim();var fn=document.getElementById('us-fname').value.trim();
-  var pw=document.getElementById('us-pw').value;var rl=document.getElementById('us-role').value;
-  if(!un||!pw){ss('us-st','اكمل الحقول المطلوبة','er');return;}
-  var r=await fetch('/web/api/add-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:un,full_name:fn,password:pw,role:rl})});
-  var d=await r.json();ss('us-st',d.ok?'✅ تم الإضافة':'❌ '+(d.msg||'خطأ'),d.ok?'ok':'er');
-  if(d.ok)loadUsers();
+function _usRenderTable(){
+  document.getElementById('us-tbody').innerHTML=_usData.map(function(u){
+    var isAdm=u.role==='admin';
+    var tabsInfo=isAdm?'كل التبويبات':(u.allowed_tabs?(JSON.parse(u.allowed_tabs||'[]').length+' تبويب'):'افتراضي');
+    var sel=_usSelected&&_usSelected.id===u.id;
+    return '<tr onclick="usSelect('+u.id+')" style="cursor:pointer;'+(sel?'background:var(--pr-lt)':'')+
+           (isAdm?';color:#7C3AED;font-weight:700':'')+(!u.active?';color:#9CA3AF':'')+'">'+
+           '<td>'+u.id+'</td><td>'+u.username+'</td><td>'+(u.full_name||'-')+'</td>'+
+           '<td>'+(_US_ROLES[u.role]||u.role)+'</td>'+
+           '<td>'+(u.active?'<span style="color:green">✅ نشط</span>':'<span style="color:#aaa">⛔ معطل</span>')+'</td>'+
+           '<td style="font-size:11px;color:#888">'+(u.last_login||'-')+'</td>'+
+           '</tr>';
+  }).join('')||'<tr><td colspan="6" style="color:#9CA3AF;text-align:center">لا يوجد مستخدمون</td></tr>';
 }
-async function delUser(id){if(!confirm('حذف هذا المستخدم؟'))return;
-  var r=await fetch('/web/api/delete-user/'+id,{method:'DELETE'});var d=await r.json();if(d.ok)loadUsers();}
+function _usBuildTabsGrid(){
+  var grid=document.getElementById('us-tabs-grid');
+  grid.innerHTML=_US_ALL_TABS.map(function(t){
+    return '<label style="display:flex;align-items:center;gap:6px;font-size:12px;padding:4px 6px;border-radius:6px;cursor:pointer;border:1px solid #e5e7eb">'+
+           '<input type="checkbox" class="us-tab-chk" value="'+t+'"> '+t+'</label>';
+  }).join('');
+}
+function usSelect(id){
+  _usSelected=_usData.find(function(u){return u.id===id;})||null;
+  _usRenderTable();
+  if(!_usSelected)return;
+  var u=_usSelected;
+  document.getElementById('us-perm-title').textContent='تبويبات المستخدم: '+u.full_name+' — '+('' +_US_ROLES[u.role]||u.role);
+  if(u.role==='admin'){
+    document.querySelectorAll('.us-tab-chk').forEach(function(c){c.checked=true;c.disabled=true;});
+    return;
+  }
+  var allowed=[];
+  try{allowed=JSON.parse(u.allowed_tabs||'null')||_US_ROLE_DEFAULTS[u.role]||[];}catch(e){allowed=_US_ROLE_DEFAULTS[u.role]||[];}
+  document.querySelectorAll('.us-tab-chk').forEach(function(c){c.disabled=false;c.checked=allowed.indexOf(c.value)>-1;});
+}
+function usSelAll(v){document.querySelectorAll('.us-tab-chk:not(:disabled)').forEach(function(c){c.checked=v;});}
+async function usSaveTabs(){
+  if(!_usSelected){ss('us-st','اختر مستخدماً أولاً','er');return;}
+  var tabs=Array.from(document.querySelectorAll('.us-tab-chk:checked')).map(function(c){return c.value;});
+  var r=await fetch('/web/api/users/allowed-tabs',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({username:_usSelected.username,tabs:tabs})});
+  var d=await r.json();
+  ss('us-st',d.ok?'✅ تم حفظ الصلاحيات':'❌ '+(d.msg||'خطأ'),d.ok?'ok':'er');
+  if(d.ok){_usSelected.allowed_tabs=JSON.stringify(tabs);_usRenderTable();}
+}
+function usResetTabs(){
+  if(!_usSelected){ss('us-st','اختر مستخدماً أولاً','er');return;}
+  var defs=_US_ROLE_DEFAULTS[_usSelected.role]||[];
+  document.querySelectorAll('.us-tab-chk').forEach(function(c){c.checked=defs.indexOf(c.value)>-1;});
+}
+async function usToggle(){
+  if(!_usSelected){ss('us-st','اختر مستخدماً أولاً','er');return;}
+  var newActive=!_usSelected.active;
+  var r=await fetch('/web/api/users/toggle-active',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({user_id:_usSelected.id,active:newActive})});
+  var d=await r.json();
+  ss('us-st',d.ok?'✅ تم التحديث':'❌ '+(d.msg||'خطأ'),d.ok?'ok':'er');
+  if(d.ok){_usSelected.active=newActive;_usRenderTable();}
+}
+async function usChangePw(){
+  if(!_usSelected){ss('us-st','اختر مستخدماً أولاً','er');return;}
+  var pw=prompt('كلمة المرور الجديدة لـ '+_usSelected.username+':');
+  if(!pw)return;
+  var r=await fetch('/web/api/users/update-password',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({username:_usSelected.username,password:pw})});
+  var d=await r.json();ss('us-st',d.ok?'✅ تم تغيير كلمة المرور':'❌ '+(d.msg||'خطأ'),d.ok?'ok':'er');
+}
+async function usDelete(){
+  if(!_usSelected){ss('us-st','اختر مستخدماً أولاً','er');return;}
+  if(!confirm('حذف المستخدم '+_usSelected.username+'؟'))return;
+  var r=await fetch('/web/api/users/'+_usSelected.id,{method:'DELETE'});
+  var d=await r.json();
+  if(d.ok){_usSelected=null;ss('us-st','✅ تم الحذف','ok');loadUsers();}
+  else ss('us-st','❌ '+(d.msg||'خطأ'),'er');
+}
+function usOpenAdd(){document.getElementById('us-add-modal').style.display='flex';}
+async function usAddConfirm(){
+  var un=document.getElementById('us-new-uname').value.trim();
+  var fn=document.getElementById('us-new-fname').value.trim();
+  var pw=document.getElementById('us-new-pw').value;
+  var rl=document.getElementById('us-new-role').value;
+  if(!un||!pw){document.getElementById('us-add-st').textContent='❌ اكمل الحقول المطلوبة';return;}
+  var r=await fetch('/web/api/users/create',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({username:un,full_name:fn,password:pw,role:rl})});
+  var d=await r.json();
+  document.getElementById('us-add-st').textContent=d.ok?'✅ تم الإضافة':'❌ '+(d.msg||'خطأ');
+  if(d.ok){setTimeout(function(){document.getElementById('us-add-modal').style.display='none';loadUsers();},800);}
+}
+/* دوال قديمة للتوافق */
+async function addUser(){usOpenAdd();}
+async function delUser(id){_usSelected=_usData.find(function(u){return u.id===id;})||null;usDelete();}
 
 /* ── BACKUP ── */
 async function loadBackups(){
