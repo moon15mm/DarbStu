@@ -670,6 +670,13 @@ def init_db():
     try: cur.execute("ALTER TABLE circulars ADD COLUMN created_by TEXT DEFAULT 'الإدارة'")
     except: pass
 
+    cur.execute("""CREATE TABLE IF NOT EXISTS parent_portal_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id TEXT NOT NULL UNIQUE,
+        token TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL
+    )""")
+
     con.commit(); con.close()
 
 # --- Helper functions for Exempted Students ---
@@ -3081,4 +3088,29 @@ def delete_parent_visit(visit_id: int):
     con = get_db(); cur = con.cursor()
     cur.execute("DELETE FROM parent_visits WHERE id=?", (visit_id,))
     con.commit(); con.close()
+
+
+# ─── بوابة ولي الأمر — توكنات الوصول ────────────────────────────
+import secrets as _secrets
+
+def get_or_create_portal_token(student_id: str) -> str:
+    con = get_db(); cur = con.cursor()
+    cur.execute("SELECT token FROM parent_portal_tokens WHERE student_id=?", (student_id,))
+    row = cur.fetchone()
+    if row:
+        con.close()
+        return row[0]
+    token = _secrets.token_urlsafe(24)
+    now = datetime.datetime.now().isoformat()
+    cur.execute("INSERT INTO parent_portal_tokens (student_id, token, created_at) VALUES (?,?,?)",
+                (student_id, token, now))
+    con.commit(); con.close()
+    return token
+
+def get_student_id_by_portal_token(token: str) -> Optional[str]:
+    con = get_db(); cur = con.cursor()
+    cur.execute("SELECT student_id FROM parent_portal_tokens WHERE token=?", (token,))
+    row = cur.fetchone()
+    con.close()
+    return row[0] if row else None
 
