@@ -6390,9 +6390,10 @@ async def web_update_student_phone(req: Request):
                     updated = True
         if updated:
             import os as _os
+            create_backup()
             _tmp = STUDENTS_JSON + ".tmp"
             with open(_tmp, "w", encoding="utf-8") as f:
-                json.dump(store, f, ensure_ascii=False, indent=2)
+                json.dump({"classes": store["list"]}, f, ensure_ascii=False, indent=2)
             _os.replace(_tmp, STUDENTS_JSON)
             load_students(force_reload=True)
             return JSONResponse({"ok": True})

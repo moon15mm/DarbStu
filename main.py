@@ -433,7 +433,7 @@ def main():
             )
             return
         # جدول النسخ الاحتياطية التلقائية
-        schedule_auto_backup(root, interval_hours=24)
+        schedule_auto_backup(root, interval_hours=4)
         # جدول إرسال رابط التأخر تلقائياً عند بداية الدوام
         _schedule_tardiness_sender(root)
         # جدول التقرير اليومي للإدارة

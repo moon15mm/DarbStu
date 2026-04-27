@@ -1984,7 +1984,7 @@ def create_backup(target_dir=None):
                     (filename, size_kb, datetime.datetime.utcnow().isoformat()))
         con.commit(); con.close()
         # احتفظ بآخر 30 نسخة فقط
-        _cleanup_old_backups(target_dir, keep=30)
+        _cleanup_old_backups(target_dir, keep=60)
         return True, filename, size_kb
     except Exception as e:
         return False, str(e), 0
@@ -2014,8 +2014,8 @@ def schedule_auto_backup(root_widget, interval_hours=24):
         # جدول المرة القادمة
         ms = interval_hours * 3600 * 1000
         root_widget.after(ms, do_backup)
-    # أول نسخة بعد ساعة من التشغيل
-    root_widget.after(3600 * 1000, do_backup)
+    # أول نسخة بعد 5 دقائق من التشغيل
+    root_widget.after(300 * 1000, do_backup)
 
 
 def load_students(force_reload: bool = False) -> Dict[str, Any]:
