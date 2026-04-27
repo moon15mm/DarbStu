@@ -1,6 +1,6 @@
 {
-  "version": "3.4.5",
-  "notes": "إصلاح خطأ فقدان بيانات الطلاب عند تعديل رقم الجوال + تحسين النسخ الاحتياطي التلقائي",
+  "version": "3.4.6",
+  "notes": "إضافة استعادة النسخ الاحتياطية من واجهة الويب مع تأكيد كلمة المرور",
   "download_url": "https://github.com/moon15mm/DarbStu/archive/refs/heads/main.zip",
   "release_date": "2026-04-27"
 }

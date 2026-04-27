@@ -2683,6 +2683,20 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
   </div>
 </div>
 
+<div id="bk-restore-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:14px;padding:28px;width:360px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,.25)">
+    <h3 style="margin:0 0 6px;font-size:16px;color:#1e293b">↩️ استعادة نسخة احتياطية</h3>
+    <p id="bk-restore-fname" style="font-size:12px;color:#64748b;margin:0 0 14px;word-break:break-all;direction:ltr;text-align:right"></p>
+    <div class="ab ae" style="margin-bottom:14px;font-size:13px">⚠️ سيتم استبدال جميع البيانات الحالية. سيُنشأ backup تلقائي من وضعك الحالي قبل الاستعادة.</div>
+    <div class="fg"><label class="fl">كلمة مرور حسابك</label><input type="password" id="bk-restore-pw" placeholder="أدخل كلمة المرور للتأكيد" onkeydown="if(event.key==='Enter')doRestore()"></div>
+    <div id="bk-restore-st" style="margin:10px 0;min-height:22px"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px">
+      <button class="btn bp2" onclick="closeBkModal()">إلغاء</button>
+      <button class="btn bp3" onclick="doRestore()">↩️ استعادة</button>
+    </div>
+  </div>
+</div>
+
 <div id="tab-quick_notes">
   <h2 class="pt"><i class="fas fa-sticky-note"></i> ملاحظات سريعة</h2>
   <div class="section">
@@ -4229,14 +4243,42 @@ async function addUser(){usOpenAdd();}
 async function delUser(id){_usSelected=_usData.find(function(u){return u.id===id;})||null;usDelete();}
 
 /* ── BACKUP ── */
+var _bkRestoreFile='';
 async function loadBackups(){
   var d=await api('/web/api/backups');if(!d||!d.ok){document.getElementById('bk-table').innerHTML='';return;}
   document.getElementById('bk-table').innerHTML=(d.backups||[]).map(function(b){
-    return '<tr><td style="font-size:12px">'+b.filename.split('/').pop().split('\\').pop()+'</td><td>'+(b.size_kb||0)+' KB</td>'+
-           '<td style="font-size:12px">'+b.created_at+'</td>'+
+    var fname=b.filename.split('/').pop().split('\\').pop();
+    var dt=b.created_at?b.created_at.substring(0,16).replace('T',' '):'—';
+    return '<tr><td style="font-size:12px">'+fname+'</td><td>'+(b.size_kb||0)+' KB</td>'+
+           '<td style="font-size:12px">'+dt+'</td>'+
            '<td><a href="/web/api/download-backup/'+encodeURIComponent(b.filename)+'" class="btn bp1 bsm">⬇️</a></td>'+
-           '<td><button class="btn bp5 bsm" onclick="alert(\'استعادة: '+b.filename.split('/').pop()+'\')">استعادة</button></td></tr>';
+           '<td><button class="btn bp5 bsm" onclick="openBkModal(\''+b.filename.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\')" >↩️</button></td></tr>';
   }).join('')||'<tr><td colspan="5" style="color:#9CA3AF">لا توجد نسخ</td></tr>';
+}
+function openBkModal(filename){
+  _bkRestoreFile=filename;
+  document.getElementById('bk-restore-fname').textContent=filename.split('/').pop().split('\\').pop();
+  document.getElementById('bk-restore-pw').value='';
+  document.getElementById('bk-restore-st').innerHTML='';
+  document.getElementById('bk-restore-modal').style.display='flex';
+  setTimeout(function(){document.getElementById('bk-restore-pw').focus();},100);
+}
+function closeBkModal(){document.getElementById('bk-restore-modal').style.display='none';}
+async function doRestore(){
+  var pw=document.getElementById('bk-restore-pw').value.trim();
+  if(!pw){ss('bk-restore-st','أدخل كلمة المرور','er');return;}
+  ss('bk-restore-st','⏳ جارٍ الاستعادة...','in');
+  document.querySelector('#bk-restore-modal .btn.bp3').disabled=true;
+  var r=await fetch('/web/api/restore-backup',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({filename:_bkRestoreFile,password:pw})});
+  var d=await r.json();
+  document.querySelector('#bk-restore-modal .btn.bp3').disabled=false;
+  if(d.ok){
+    ss('bk-restore-st','✅ تمت الاستعادة — أعد تحميل الصفحة لتطبيق التغييرات','ok');
+    setTimeout(function(){closeBkModal();location.reload();},2000);
+  } else {
+    ss('bk-restore-st','❌ '+(d.msg||'فشل'),'er');
+  }
 }
 async function createBackup(){
   ss('bk-st','⏳ جارٍ الإنشاء...','in');
@@ -6330,6 +6372,48 @@ async def web_download_backup(filename: str, request: Request):
                             media_type="application/zip")
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@router.post("/web/api/restore-backup", response_class=JSONResponse)
+async def web_restore_backup(req: Request):
+    user = _get_current_user(req)
+    if not user or user["role"] != "admin":
+        return JSONResponse({"ok": False, "msg": "هذا الإجراء للمدير فقط"}, status_code=403)
+    try:
+        data = await req.json()
+        filename = str(data.get("filename", "")).strip()
+        password = str(data.get("password", "")).strip()
+        if not filename or not password:
+            return JSONResponse({"ok": False, "msg": "بيانات مفقودة"})
+
+        if authenticate(user["username"], password) is None:
+            return JSONResponse({"ok": False, "msg": "كلمة المرور غير صحيحة"})
+
+        fpath = filename if (os.path.isabs(filename) and os.path.exists(filename)) \
+                else os.path.join(BACKUP_DIR, os.path.basename(filename))
+        if not os.path.exists(fpath):
+            return JSONResponse({"ok": False, "msg": "ملف النسخة غير موجود"})
+
+        # نسخة من الوضع الحالي قبل الاستعادة
+        create_backup()
+
+        import zipfile as _zf
+        with _zf.ZipFile(fpath, "r") as zf:
+            names = zf.namelist()
+            if "absences.db" in names:
+                zf.extract("absences.db", os.path.dirname(DB_PATH))
+            for jname in ["students.json", "teachers.json", "config.json"]:
+                if jname in names:
+                    zf.extract(jname, DATA_DIR)
+
+        import constants as _c
+        _c.STUDENTS_STORE = None
+        from config_manager import invalidate_config_cache
+        invalidate_config_cache()
+        load_students(force_reload=True)
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
 
 
 @router.delete("/web/api/delete-absence/{record_id}", response_class=JSONResponse)
