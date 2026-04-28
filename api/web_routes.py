@@ -2913,16 +2913,13 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
   <div id="tf-lesson" class="ip" style="margin-top:16px">
     <div class="section"><div class="st">📘 نموذج تحضير الدرس</div>
       <div class="fg2">
-        <div class="fg"><label class="fl">المرحلة الدراسية</label><select id="tfl-grade"><option>الأول متوسط</option><option>الثاني متوسط</option><option>الثالث متوسط</option><option>الأول ثانوي</option><option>الثاني ثانوي</option><option>الثالث ثانوي</option></select></div>
+        <div class="fg"><label class="fl">المرحلة الدراسية</label><select id="tfl-grade"><option>الأول ثانوي</option><option>الثاني ثانوي</option><option>الثالث ثانوي</option></select></div>
         <div class="fg"><label class="fl">الفصل</label><input type="text" id="tfl-cls" value="جميع الفصول"></div>
         <div class="fg"><label class="fl">عدد الطلاب</label><input type="number" id="tfl-count" value="30"></div>
         <div class="fg"><label class="fl">المادة</label><input type="text" id="tfl-subj"></div>
         <div class="fg"><label class="fl">التاريخ</label><input type="date" id="tfl-date"></div>
         <div class="fg"><label class="fl">عنوان الدرس</label><input type="text" id="tfl-lesson"></div>
-        <div class="fg"><label class="fl">الاستراتيجية</label><select id="tfl-strat">
-          <option>التعلم المبني على حل المشكلات</option><option>العصف الذهني</option><option>التعلم التعاوني</option>
-          <option>الخرائط الذهنية</option><option>التدريس التبادلي</option><option>التعلم الذاتي</option><option>أخرى</option>
-        </select></div>
+        <div class="fg"><label class="fl">الاستراتيجية</label><input type="text" id="tfl-strat" placeholder="اكتب الاستراتيجية..."></div>
       </div>
       <div class="st" style="margin-top:14px">الأدوات والوسائل التعليمية</div>
       <div id="tfl-tools" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:13px;margin-bottom:10px">
