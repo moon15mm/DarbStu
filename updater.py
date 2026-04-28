@@ -163,24 +163,31 @@ def _auto_update(latest, dl_url, win=None, status_lbl=None, btn=None):
         _ui(f"✅  تم تحديث {updated} ملف — سيُعاد التشغيل...", "green")
         time.sleep(2)
 
-        # ٤. إعادة التشغيل
+        # ٤. إعادة التشغيل — نستخدم batch script حتى لا يتعارض القفل
         if getattr(sys, 'frozen', False):
-            cmd = [sys.executable] + sys.argv[1:]
+            exe = sys.executable
         else:
-            main_file = os.path.join(BASE_DIR, "main.py")
-            cmd = [sys.executable, main_file] + sys.argv[1:]
+            exe = os.path.join(BASE_DIR, "main.py")
 
         if sys.platform == "win32":
-            subprocess.Popen(cmd, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP, cwd=BASE_DIR)
+            # نكتب ملف bat مؤقت يأخذ 4 ثوان للتأكد أن العملية القديمة أغلقت تماماً
+            restart_bat = os.path.join(BASE_DIR, "_darb_restart.bat")
+            with open(restart_bat, "w", encoding="utf-8") as _f:
+                _f.write(f'@echo off\ntimeout /t 4 /nobreak > nul\nstart "" "{exe}"\ndel "%~f0"\n')
+            subprocess.Popen(
+                [restart_bat],
+                creationflags=subprocess.CREATE_NEW_CONSOLE,
+                cwd=BASE_DIR,
+                shell=True
+            )
         else:
-            subprocess.Popen(cmd, cwd=BASE_DIR)
+            time.sleep(4)
+            subprocess.Popen([sys.executable, exe], cwd=BASE_DIR)
 
-        time.sleep(1)
         if win:
             try: win.destroy()
             except: pass
-        
-        # محاولة إغلاق كل شيء والخروج
+
         try:
             import tkinter as _tk
             if _tk._default_root:
