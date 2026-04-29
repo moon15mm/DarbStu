@@ -315,7 +315,7 @@ class TeacherFormsTabMixin:
         sig_f.pack(fill="x", pady=(0, 8))
         teacher_name_var = tk.StringVar()
         principal_name_var = tk.StringVar(
-            value=cfg.get("principal_name", ""))
+            value=cfg.get("principal_name", "حسن محمد عبيري"))
 
         sig_r = tk.Frame(sig_f, bg=WHITE); sig_r.pack(fill="x", padx=20)
         tk.Label(sig_r, text="اسم المعلم:", bg=WHITE,
@@ -334,19 +334,20 @@ class TeacherFormsTabMixin:
 
         def _collect_lesson():
             return {
-                "school":       school,
-                "strategy":     strat_var.get().strip(),
-                "subject":      subject_var.get().strip(),
-                "date":         date_var.get().strip(),
-                "grade":        grade_var.get().strip(),
-                "class_name":   class_var.get().strip(),
-                "student_count":count_var.get().strip(),
-                "lesson":       lesson_var.get().strip(),
-                "tools":        list(_selected_tools),
-                "goals":        [v.get().strip() for v in goal_vars],
-                "evidence":     evidence_txt.get("1.0", "end-1c").strip(),
-                "evidence_img": _ev_img_path[0],
-                "teacher_name": teacher_name_var.get().strip(),
+                "school":         school,
+                "strategy":       strat_var.get().strip(),
+                "subject":        subject_var.get().strip(),
+                "date":           date_var.get().strip(),
+                "grade":          grade_var.get().strip(),
+                "class_name":     class_var.get().strip(),
+                "student_count":  count_var.get().strip(),
+                "lesson":         lesson_var.get().strip(),
+                "tools":          list(_selected_tools),
+                "goals":          [v.get().strip() for v in goal_vars],
+                "evidence":       evidence_txt.get("1.0", "end-1c").strip(),
+                "evidence_img":   _ev_img_path[0],
+                "executor_name":  teacher_name_var.get().strip(),
+                "teacher_name":   teacher_name_var.get().strip(),
                 "principal_name": principal_name_var.get().strip(),
             }
 
@@ -533,21 +534,39 @@ class TeacherFormsTabMixin:
                       relief="flat", cursor="hand2",
                       command=_pick).pack()
 
+        # ── التواقيع ─────────────────────────────────────────────
+        sig_f2 = tk.Frame(main, bg="white", relief="groove", bd=1, pady=8)
+        sig_f2.pack(fill="x", pady=(0, 8))
+        prog_executor_var  = tk.StringVar()
+        prog_principal_var = tk.StringVar(value=cfg.get("principal_name", "حسن محمد عبيري"))
+        sig_r2 = tk.Frame(sig_f2, bg="white"); sig_r2.pack(fill="x", padx=20)
+        tk.Label(sig_r2, text="اسم المنفذ:", bg="white",
+                 font=("Tahoma", 10)).pack(side="right", padx=4)
+        tk.Entry(sig_r2, textvariable=prog_executor_var,
+                 width=22, font=("Tahoma", 10)).pack(side="right")
+        tk.Label(sig_r2, text="     ", bg="white").pack(side="right")
+        tk.Label(sig_r2, text="مدير المدرسة:", bg="white",
+                 font=("Tahoma", 10)).pack(side="right", padx=4)
+        tk.Entry(sig_r2, textvariable=prog_principal_var,
+                 width=22, font=("Tahoma", 10)).pack(side="right")
+
         # ── أزرار ────────────────────────────────────────────────
         btns_f = tk.Frame(win, bg="#e3f2fd", pady=10)
         btns_f.pack(fill="x", side="bottom")
 
         def _collect_prog():
             return {
-                "school":    school,
-                "executor":  prog_vars["executor"].get().strip(),
-                "place":     prog_vars["place"].get().strip(),
-                "target":    prog_vars["target"].get().strip(),
-                "count":     prog_vars["count"].get().strip(),
-                "date":      prog_vars["date"].get().strip(),
-                "goals":     [v.get().strip() for v in prog_goal_vars],
-                "img1":      _img_paths[0],
-                "img2":      _img_paths[1],
+                "school":         school,
+                "executor":       prog_vars["executor"].get().strip(),
+                "executor_name":  prog_executor_var.get().strip() or prog_vars["executor"].get().strip(),
+                "principal_name": prog_principal_var.get().strip(),
+                "place":          prog_vars["place"].get().strip(),
+                "target":         prog_vars["target"].get().strip(),
+                "count":          prog_vars["count"].get().strip(),
+                "date":           prog_vars["date"].get().strip(),
+                "goals":          [v.get().strip() for v in prog_goal_vars],
+                "img1":           _img_paths[0],
+                "img2":           _img_paths[1],
             }
 
         def _preview():
@@ -613,21 +632,128 @@ def _ar(txt: str) -> str:
         return str(txt) if txt else ""
 
 
-def _register_font():
+def _register_fonts():
+    """يُسجّل الخط العادي والعريض ويُعيد (regular, bold)."""
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
-    if "DarbFont" in pdfmetrics.getRegisteredFontNames():
-        return "DarbFont"
-    for fp in [r"C:\Windows\Fonts\tahoma.ttf",
-               r"C:\Windows\Fonts\Arial.ttf",
-               "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"]:
-        if os.path.exists(fp):
-            try:
-                pdfmetrics.registerFont(TTFont("DarbFont", fp))
-                return "DarbFont"
-            except Exception:
-                pass
-    return "Helvetica"
+
+    reg  = "DarbFont"
+    bold = "DarbFontBold"
+
+    if reg not in pdfmetrics.getRegisteredFontNames():
+        for fp in [r"C:\Windows\Fonts\tahoma.ttf",
+                   r"C:\Windows\Fonts\Arial.ttf",
+                   "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"]:
+            if os.path.exists(fp):
+                try:
+                    pdfmetrics.registerFont(TTFont(reg, fp)); break
+                except Exception: pass
+        else:
+            reg = "Helvetica"
+
+    if bold not in pdfmetrics.getRegisteredFontNames():
+        for fp in [r"C:\Windows\Fonts\tahomabd.ttf",
+                   r"C:\Windows\Fonts\arialbd.ttf",
+                   r"C:\Windows\Fonts\Arial Bold.ttf"]:
+            if os.path.exists(fp):
+                try:
+                    pdfmetrics.registerFont(TTFont(bold, fp)); break
+                except Exception: pass
+        else:
+            bold = reg
+
+    return reg, bold
+
+
+def _register_font():
+    return _register_fonts()[0]
+
+
+def _official_header(font: str, font_bold: str, form_title: str) -> list:
+    """
+    يبني الترويسة الرسمية مطابِقةً لخطاب مدرسة الدرب الثانوية:
+    ┌──────────────────────────────────────────────────────┐  ← navy
+    │ المملكة العربية السعودية  │  وزارة التعليم  │       │
+    │   الإدارة العامة للتعليم بمنطقة جازان (ممتدة)      │
+    └──────────────────────────────────────────────────────┘
+    [  مدرسة ثانوية الدرب - مسارات  ]  ← teal
+    [  عنوان النموذج  ]  ← أبيض بإطار navy
+    """
+    from reportlab.lib import colors
+    from reportlab.platypus import Table, TableStyle, Spacer, Paragraph
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.units import cm
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
+
+    NAVY       = colors.HexColor("#1d3d5f")
+    TEAL       = colors.HexColor("#0d7a6e")
+    DIVIDER    = colors.HexColor("#3a6080")
+    WHITE      = colors.white
+
+    def _p(txt, size, fn, align, color):
+        s = ParagraphStyle("",
+            fontName=fn, fontSize=size,
+            textColor=color, alignment=align,
+            leading=size * 1.55, wordWrap="RTL")
+        return Paragraph(_ar(txt), s)
+
+    # ── الشريط الكبير (navy) يضم صفّين ───────────────────────────
+    main = Table(
+        [
+            # الصف 1: المملكة | وزارة التعليم | فراغ
+            [
+                _p("المملكة العربية السعودية", 11, font_bold, TA_RIGHT,  WHITE),
+                _p("وزارة التعليم",            13, font_bold, TA_CENTER, WHITE),
+                _p("",                          11, font_bold, TA_LEFT,   WHITE),
+            ],
+            # الصف 2: الإدارة العامة (ممتد)
+            [
+                _p("الإدارة العامة للتعليم بمنطقة جازان", 11, font_bold, TA_CENTER, WHITE),
+                "", "",
+            ],
+        ],
+        colWidths=["38%", "24%", "38%"],
+        style=TableStyle([
+            ("BACKGROUND",    (0,0), (-1,-1), NAVY),
+            ("SPAN",          (0,1), (2,1)),
+            ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
+            # صف المملكة ووزارة التعليم
+            ("TOPPADDING",    (0,0), (-1,0), 14),
+            ("BOTTOMPADDING", (0,0), (-1,0), 6),
+            ("RIGHTPADDING",  (0,0), (-1,0), 14),
+            ("LEFTPADDING",   (0,0), (-1,0), 14),
+            # الفاصل الناعم بين الصفين
+            ("LINEBELOW",     (0,0), (-1,0), 0.6, DIVIDER),
+            # صف الإدارة العامة
+            ("TOPPADDING",    (0,1), (-1,1), 6),
+            ("BOTTOMPADDING", (0,1), (-1,1), 12),
+        ])
+    )
+
+    # ── شريط اسم المدرسة ─────────────────────────────────────────
+    school = Table(
+        [[_p("مدرسة ثانوية الدرب - مسارات", 13, font_bold, TA_CENTER, WHITE)]],
+        colWidths=["100%"],
+        style=TableStyle([
+            ("BACKGROUND",    (0,0), (-1,-1), TEAL),
+            ("TOPPADDING",    (0,0), (-1,-1), 9),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 9),
+        ])
+    )
+
+    # ── عنوان النموذج ────────────────────────────────────────────
+    title = Table(
+        [[_p(form_title, 14, font_bold, TA_CENTER, NAVY)]],
+        colWidths=["100%"],
+        style=TableStyle([
+            ("BACKGROUND",    (0,0), (-1,-1), colors.HexColor("#eef4fb")),
+            ("BOX",           (0,0), (-1,-1), 1.5, NAVY),
+            ("TOPPADDING",    (0,0), (-1,-1), 10),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 10),
+        ])
+    )
+
+    return [main, school, title, Spacer(1, 0.35*cm)]
 
 
 def _make_lesson_pdf(d: dict) -> bytes:
@@ -639,23 +765,24 @@ def _make_lesson_pdf(d: dict) -> bytes:
                                     Spacer, Table, TableStyle,
                                     HRFlowable, Image as RLImage)
     from reportlab.lib.styles import ParagraphStyle
-    from reportlab.lib.enums import TA_RIGHT, TA_CENTER
+    from reportlab.lib.enums import TA_RIGHT, TA_CENTER, TA_LEFT
 
     buf  = io.BytesIO()
-    font = _register_font()
+    font, font_bold = _register_fonts()
 
     doc = SimpleDocTemplate(buf, pagesize=A4,
                             rightMargin=1.8*cm, leftMargin=1.8*cm,
                             topMargin=1.5*cm, bottomMargin=1.5*cm)
 
+    NAVY    = colors.HexColor("#1d3d5f")
     GREEN_H = colors.HexColor("#0d7377")
     GREEN_L = colors.HexColor("#e0f7fa")
-    TEAL_L  = colors.HexColor("#b2ebf2")
     DARK    = colors.HexColor("#1a1a1a")
 
     def sty(size=10, bold=False, align=TA_RIGHT, color=DARK):
+        fn = font_bold if bold else font
         return ParagraphStyle("",
-            fontName=font, fontSize=size,
+            fontName=fn, fontSize=size,
             textColor=color, alignment=align,
             leading=size*1.5, wordWrap="RTL")
 
@@ -663,31 +790,11 @@ def _make_lesson_pdf(d: dict) -> bytes:
         return Paragraph(_ar(txt), sty(size, bold, align, color))
 
     def hrow(label, value):
-        return [p(value, 10), p(label+":", 9, color=colors.gray)]
+        return [p(value, 10), p(label+":", 9, bold=True, color=colors.HexColor("#475569"))]
 
     story = []
+    story.extend(_official_header(font, font_bold, "نموذج تحضير الدرس"))
 
-    # ── عنوان ───────────────────────────────────────────────────
-    story.append(Table(
-        [[p("نموذج تحضير الدرس", 14, align=TA_CENTER, color=colors.white)]],
-        colWidths=["100%"],
-        style=TableStyle([
-            ("BACKGROUND", (0,0), (-1,-1), GREEN_H),
-            ("ALIGN",      (0,0), (-1,-1), "CENTER"),
-            ("TOPPADDING",    (0,0), (-1,-1), 10),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 10),
-        ])
-    ))
-    story.append(Table(
-        [[p(d.get("school",""), 11, align=TA_CENTER, color=GREEN_H)]],
-        colWidths=["100%"],
-        style=TableStyle([
-            ("BACKGROUND", (0,0), (-1,-1), TEAL_L),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 6),
-            ("TOPPADDING",    (0,0), (-1,-1), 6),
-        ])
-    ))
-    story.append(Spacer(1, 0.3*cm))
 
     # ── جدول البيانات ───────────────────────────────────────────
     data_rows = [
@@ -807,16 +914,27 @@ def _make_lesson_pdf(d: dict) -> bytes:
     story.append(Spacer(1, 0.4*cm))
 
     # ── التواقيع ─────────────────────────────────────────────────
+    executor_name  = d.get("executor_name") or d.get("teacher_name") or "اسم المنفذ"
+    principal_name = d.get("principal_name") or "حسن محمد عبيري"
+    NAVY_SIG = colors.HexColor("#1d3d5f")
     sig_data = [[
-        p(d.get("principal_name","مدير المدرسة"), 10, align=TA_CENTER),
-        p(d.get("teacher_name","اسم المعلم"),     10, align=TA_CENTER),
+        p("مدير المدرسة", 9, bold=True, align=TA_CENTER, color=NAVY_SIG),
+        p("", 9),
+        p("اسم المنفذ",   9, bold=True, align=TA_CENTER, color=NAVY_SIG),
+    ],[
+        p(principal_name, 10, align=TA_CENTER),
+        p("", 9),
+        p(executor_name,  10, align=TA_CENTER),
     ]]
-    story.append(Table(sig_data, colWidths=["50%","50%"],
+    story.append(Table(sig_data, colWidths=["40%","20%","40%"],
                        style=TableStyle([
-                           ("BOX",     (0,0), (0,0), 0.5, colors.grey),
-                           ("BOX",     (1,0), (1,0), 0.5, colors.grey),
-                           ("TOPPADDING",    (0,0), (-1,-1), 14),
-                           ("BOTTOMPADDING", (0,0), (-1,-1), 14),
+                           ("BOX",           (0,0), (0,-1), 1,   NAVY_SIG),
+                           ("BOX",           (2,0), (2,-1), 1,   NAVY_SIG),
+                           ("BACKGROUND",    (0,0), (0,0),  colors.HexColor("#e0f7fa")),
+                           ("BACKGROUND",    (2,0), (2,0),  colors.HexColor("#e0f7fa")),
+                           ("ALIGN",         (0,0), (-1,-1), "CENTER"),
+                           ("TOPPADDING",    (0,0), (-1,-1), 10),
+                           ("BOTTOMPADDING", (0,0), (-1,-1), 10),
                        ])))
 
     doc.build(story)
@@ -832,52 +950,33 @@ def _make_program_pdf(d: dict) -> bytes:
                                     Spacer, Table, TableStyle,
                                     Image as RLImage)
     from reportlab.lib.styles import ParagraphStyle
-    from reportlab.lib.enums import TA_RIGHT, TA_CENTER
+    from reportlab.lib.enums import TA_RIGHT, TA_CENTER, TA_LEFT
 
     buf  = io.BytesIO()
-    font = _register_font()
+    font, font_bold = _register_fonts()
 
     doc = SimpleDocTemplate(buf, pagesize=A4,
                             rightMargin=1.8*cm, leftMargin=1.8*cm,
                             topMargin=1.5*cm, bottomMargin=1.5*cm)
 
-    BLUE_H = colors.HexColor("#1565C0")
+    NAVY   = colors.HexColor("#1d3d5f")
     BLUE_L = colors.HexColor("#e3f2fd")
-    TEAL_H = colors.HexColor("#0d7377")
+    TEAL_H = colors.HexColor("#0d7a6e")
     DARK   = colors.HexColor("#1a1a1a")
 
-    def sty(size=10, align=TA_RIGHT, color=DARK):
+    def sty(size=10, bold=False, align=TA_RIGHT, color=DARK):
+        fn = font_bold if bold else font
         return ParagraphStyle("",
-            fontName=font, fontSize=size,
+            fontName=fn, fontSize=size,
             textColor=color, alignment=align,
             leading=size*1.6, wordWrap="RTL")
 
-    def p(txt, size=10, align=TA_RIGHT, color=DARK):
-        return Paragraph(_ar(txt), sty(size, align, color))
+    def p(txt, size=10, bold=False, align=TA_RIGHT, color=DARK):
+        return Paragraph(_ar(txt), sty(size, bold, align, color))
 
     story = []
+    story.extend(_official_header(font, font_bold, "تقرير تنفيذ البرنامج"))
 
-    # رأس
-    story.append(Table(
-        [[p("تقرير تنفيذ البرنامج", 14, align=TA_CENTER,
-            color=colors.white)]],
-        colWidths=["100%"],
-        style=TableStyle([
-            ("BACKGROUND", (0,0), (-1,-1), BLUE_H),
-            ("TOPPADDING",    (0,0), (-1,-1), 10),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 10),
-        ])
-    ))
-    story.append(Table(
-        [[p(d.get("school",""), 11, align=TA_CENTER, color=BLUE_H)]],
-        colWidths=["100%"],
-        style=TableStyle([
-            ("BACKGROUND", (0,0), (-1,-1), BLUE_L),
-            ("TOPPADDING",    (0,0), (-1,-1), 6),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 6),
-        ])
-    ))
-    story.append(Spacer(1, 0.4*cm))
 
     # بيانات
     fields = [
@@ -887,7 +986,7 @@ def _make_program_pdf(d: dict) -> bytes:
         ("عدد المستفيدين", d.get("count",    "")),
         ("تاريخ التنفيذ",  d.get("date",     "")),
     ]
-    f_rows = [[p(val, 10), p(lbl+":", 9, color=colors.gray)]
+    f_rows = [[p(val, 10), p(lbl+":", 9, bold=True, color=colors.HexColor("#475569"))]
               for lbl, val in fields]
     story.append(Table(f_rows, colWidths=["70%","30%"],
                        style=TableStyle([
@@ -939,17 +1038,17 @@ def _make_program_pdf(d: dict) -> bytes:
 
     def _img_cell(idx, img_path):
         lbl_txt = _ar(f"الشاهد {idx}")
-        inner = [[Paragraph(lbl_txt, sty(9, TA_CENTER, colors.grey))]]
+        inner = [[Paragraph(lbl_txt, sty(9, False, TA_CENTER, colors.grey))]]
         if img_path and os.path.exists(img_path):
             try:
                 inner.append([RLImage(img_path, width=7*cm,
                                       height=5*cm, kind="proportional")])
             except Exception:
                 inner.append([Paragraph(_ar("(خطأ في تحميل الصورة)"),
-                                         sty(9, TA_CENTER, colors.grey))])
+                                         sty(9, False, TA_CENTER, colors.grey))])
         else:
             inner.append([Paragraph(_ar("(لا توجد صورة)"),
-                                     sty(9, TA_CENTER, colors.grey))])
+                                     sty(9, False, TA_CENTER, colors.grey))])
         return Table(inner, colWidths=["100%"],
                      style=TableStyle([
                          ("BOX",  (0,0), (-1,-1), 0.5, colors.lightgrey),
@@ -963,6 +1062,32 @@ def _make_program_pdf(d: dict) -> bytes:
         colWidths=["50%", "50%"],
         style=TableStyle([("ALIGN", (0,0), (-1,-1), "CENTER")])
     ))
+
+    story.append(Spacer(1, 0.4*cm))
+
+    # ── التواقيع ─────────────────────────────────────────────────
+    executor_name  = d.get("executor_name") or d.get("executor") or "اسم المنفذ"
+    principal_name = d.get("principal_name") or "حسن محمد عبيري"
+    NAVY_SIG = colors.HexColor("#1d3d5f")
+    sig_data = [[
+        p("مدير المدرسة", 9, bold=True, align=TA_CENTER, color=NAVY_SIG),
+        p("", 9),
+        p("اسم المنفذ",   9, bold=True, align=TA_CENTER, color=NAVY_SIG),
+    ],[
+        p(principal_name, 10, align=TA_CENTER),
+        p("", 9),
+        p(executor_name,  10, align=TA_CENTER),
+    ]]
+    story.append(Table(sig_data, colWidths=["40%","20%","40%"],
+                       style=TableStyle([
+                           ("BOX",           (0,0), (0,-1), 1,   NAVY_SIG),
+                           ("BOX",           (2,0), (2,-1), 1,   NAVY_SIG),
+                           ("BACKGROUND",    (0,0), (0,0),  colors.HexColor("#e3f2fd")),
+                           ("BACKGROUND",    (2,0), (2,0),  colors.HexColor("#e3f2fd")),
+                           ("ALIGN",         (0,0), (-1,-1), "CENTER"),
+                           ("TOPPADDING",    (0,0), (-1,-1), 10),
+                           ("BOTTOMPADDING", (0,0), (-1,-1), 10),
+                       ])))
 
     doc.build(story)
     return buf.getvalue()

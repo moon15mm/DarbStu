@@ -1,6 +1,6 @@
 {
-  "version": "3.4.7",
-  "notes": "تحسين نموذج تحضير الدرس: إزالة فصول المتوسط + حقل استراتيجية نصي حر",
+  "version": "3.4.8",
+  "notes": "ترويسة رسمية في نماذج المعلم + إصلاح قائمة المعلمين في الموجه الطلابي + حقول اسم المنفذ ومدير المدرسة",
   "download_url": "https://github.com/moon15mm/DarbStu/archive/refs/heads/main.zip",
-  "release_date": "2026-04-28"
+  "release_date": "2026-04-29"
 }

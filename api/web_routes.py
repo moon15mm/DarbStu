@@ -2935,6 +2935,13 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
       <div class="st" style="margin-top:14px">الشواهد (نصي)</div>
       <textarea id="tfl-evidence" rows="3"></textarea>
       <div class="fg" style="margin-top:8px"><label class="fl">صورة شاهد (اختياري)</label><input type="file" id="tfl-ev-img" accept="image/*"></div>
+      <div class="section" style="margin-top:14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px">
+        <div class="st" style="margin-bottom:8px">التواقيع</div>
+        <div class="fg2">
+          <div class="fg"><label class="fl">اسم المنفذ</label><input type="text" id="tfl-executor" placeholder="يُملأ تلقائياً من حسابك"></div>
+          <div class="fg"><label class="fl">مدير المدرسة</label><input type="text" id="tfl-principal" value="حسن محمد عبيري"></div>
+        </div>
+      </div>
       <div class="bg-btn" style="margin-top:12px">
         <button class="btn bp1" onclick="submitTeacherForm('lesson', false)">تحميل PDF</button>
         <button class="btn bp4" onclick="submitTeacherForm('lesson', true)">📲 إرسال للمدير</button>
@@ -2956,6 +2963,13 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
       <div class="fg2" style="margin-top:8px">
         <div class="fg"><label class="fl">صورة الشاهد 1 (اختياري)</label><input type="file" id="tfp-img1" accept="image/*"></div>
         <div class="fg"><label class="fl">صورة الشاهد 2 (اختياري)</label><input type="file" id="tfp-img2" accept="image/*"></div>
+      </div>
+      <div class="section" style="margin-top:14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px">
+        <div class="st" style="margin-bottom:8px">التواقيع</div>
+        <div class="fg2">
+          <div class="fg"><label class="fl">اسم المنفذ</label><input type="text" id="tfp-executor" placeholder="يُملأ تلقائياً من حسابك"></div>
+          <div class="fg"><label class="fl">مدير المدرسة</label><input type="text" id="tfp-principal" value="حسن محمد عبيري"></div>
+        </div>
       </div>
       <div class="bg-btn" style="margin-top:12px">
         <button class="btn bp1" onclick="submitTeacherForm('program', false)">تحميل PDF</button>
@@ -3343,7 +3357,12 @@ function showTab(key){
     'school_stories':loadStories,
     'referral_teacher':function(){loadRefStudents();loadRefHistory();},
     'referral_deputy':loadDeputyReferrals,
-    'teacher_forms':function(){},
+    'teacher_forms':function(){
+      var uname = (_me&&_me.name)?_me.name:'';
+      var eL=document.getElementById('tfl-executor');var eP=document.getElementById('tfp-executor');
+      if(eL&&!eL.value)eL.value=uname;
+      if(eP&&!eP.value)eP.value=uname;
+    },
     'send_absence':function(){},
     'send_tardiness':function(){},
     'parent_visits':pvInit,
@@ -5364,6 +5383,8 @@ async function submitTeacherForm(formType, sendToPrincipal){
     payload.goals=document.getElementById('tfl-goals').value.split('\n').filter(Boolean);
     payload.tools=Array.from(document.querySelectorAll('#tfl-tools input:checked')).map(function(c){return c.value;});
     payload.evidence_img_b64 = await toBase64(document.getElementById('tfl-ev-img').files[0]);
+    payload.executor_name = document.getElementById('tfl-executor').value;
+    payload.principal_name = document.getElementById('tfl-principal').value;
   } else {
     payload.date=document.getElementById('tfp-date').value || new Date().toISOString().split('T')[0];
     payload.executor=document.getElementById('tfp-exec').value;
@@ -5373,6 +5394,8 @@ async function submitTeacherForm(formType, sendToPrincipal){
     payload.goals=document.getElementById('tfp-goals').value.split('\n').filter(Boolean);
     payload.img1_b64 = await toBase64(document.getElementById('tfp-img1').files[0]);
     payload.img2_b64 = await toBase64(document.getElementById('tfp-img2').files[0]);
+    payload.executor_name = document.getElementById('tfp-executor').value;
+    payload.principal_name = document.getElementById('tfp-principal').value;
   }
   var stId=formType==='lesson'?'tfl-st':'tfp-st';
   ss(stId,'⏳ جارٍ الإنشاء...','ai');
@@ -5880,7 +5903,7 @@ async function loadCounselorInquiries(){
   var dt=await api('/web/api/teachers');
   if(dt&&dt.ok){
      document.getElementById('coinq-teacher').innerHTML='<option value="">اختر المعلم</option>'+
-       dt.teachers.map(function(t){return '<option value="'+t.username+'">'+t.full_name+'</option>';}).join('');
+       dt.teachers.map(function(t){var n=t["اسم المعلم"]||t.full_name||'';return '<option value="'+n+'">'+n+'</option>';}).join('');
   }
 }
 
@@ -8234,8 +8257,13 @@ async def web_generate_teacher_form(request: Request):
     try:
         from fastapi.responses import Response
         data = await request.json()
-        data["teacher_name"] = user.get("full_name", user.get("username", "معلم"))
-        
+        user_full_name = user.get("full_name") or user.get("username", "معلم")
+        if not data.get("executor_name"):
+            data["executor_name"] = user_full_name
+        data["teacher_name"] = data["executor_name"]
+        if not data.get("principal_name"):
+            data["principal_name"] = "حسن محمد عبيري"
+
         # معالجة الشواهد كـ Base64
         import base64, tempfile
         temp_files = []
@@ -8248,7 +8276,7 @@ async def web_generate_teacher_form(request: Request):
                     data[key_path] = tmp.name
                     temp_files.append(tmp.name)
                 except Exception: pass
-        
+
         if data.get("form_type") == "lesson":
             pdf_bytes = generate_lesson_pdf(data)
         else:
@@ -8334,9 +8362,13 @@ async def web_send_teacher_form(request: Request):
     if not user: return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
     try:
         data = await request.json()
-        teacher_name = user.get("full_name", user.get("username", "معلم"))
-        data["teacher_name"] = teacher_name
-        
+        user_full_name = user.get("full_name") or user.get("username", "معلم")
+        if not data.get("executor_name"):
+            data["executor_name"] = user_full_name
+        data["teacher_name"] = data["executor_name"]
+        if not data.get("principal_name"):
+            data["principal_name"] = "حسن محمد عبيري"
+
         # معالجة الشواهد كـ Base64
         import base64, tempfile
         temp_files = []
@@ -8349,13 +8381,13 @@ async def web_send_teacher_form(request: Request):
                     data[key_path] = tmp.name
                     temp_files.append(tmp.name)
                 except Exception: pass
-        
+
         if data.get("form_type") == "lesson":
             pdf_bytes = generate_lesson_pdf(data)
-            caption = f"📘 نموذج تحضير درس\nالمعلم: {teacher_name}\nالمادة: {data.get('subject','')}\nالتاريخ: {data.get('date','')}"
+            caption = f"📘 نموذج تحضير درس\nالمنفذ: {data['executor_name']}\nالمادة: {data.get('subject','')}\nالتاريخ: {data.get('date','')}"
         else:
             pdf_bytes = generate_program_pdf(data)
-            caption = f"📊 تقرير تنفيذ تقوية\nالمنفذ: {data.get('executor','')}\nالتاريخ: {data.get('date','')}"
+            caption = f"📊 تقرير تنفيذ برنامج\nالمنفذ: {data['executor_name']}\nالتاريخ: {data.get('date','')}"
             
         for tf in temp_files:
             try: os.unlink(tf)
