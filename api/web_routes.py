@@ -1571,6 +1571,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
             ("تحليل طالب",          "student_analysis",     "fas fa-search"),
             ("أكثر الطلاب غياباً", "top_absent",           "fas fa-award"),
             ("الإشعارات الذكية",    "alerts",               "fas fa-exclamation-triangle"),
+            ("تقارير المعلمين",     "teacher_reports_admin","fas fa-file-pdf"),
         ]),
         ("الرسائل والتواصل", [
             ("إرسال رسائل الغياب",  "send_absence",         "fas fa-envelope-open-text"),
@@ -2302,6 +2303,33 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
   </div>
 </div>
 
+<!-- ══ تبويب تقارير المعلمين (للمدير/الوكيل) ══ -->
+<div id="tab-teacher_reports_admin">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+    <h2 class="pt" style="margin:0"><i class="fas fa-file-pdf"></i> تقارير المعلمين</h2>
+    <span id="tra-badge" class="badge br" style="display:none;font-size:13px"></span>
+    <button class="btn bp2 bsm" onclick="loadTeacherReportsAdmin()"><i class="fas fa-sync-alt"></i> تحديث</button>
+  </div>
+  <div class="section">
+    <div class="tw">
+      <table id="tra-table">
+        <thead>
+          <tr>
+            <th>النوع</th>
+            <th>العنوان</th>
+            <th>المعلم</th>
+            <th>التاريخ</th>
+            <th>الحالة</th>
+            <th>إجراء</th>
+          </tr>
+        </thead>
+        <tbody id="tra-tbody">
+          <tr><td colspan="6" style="text-align:center;color:var(--mu)">⏳ جارٍ التحميل...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
 
 
 
@@ -2944,7 +2972,8 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
       </div>
       <div class="bg-btn" style="margin-top:12px">
         <button class="btn bp1" onclick="submitTeacherForm('lesson', false)">تحميل PDF</button>
-        <button class="btn bp4" onclick="submitTeacherForm('lesson', true)">📲 إرسال للمدير</button>
+        <button class="btn bp4" onclick="submitTeacherForm('lesson', true)">📲 واتساب</button>
+        <button class="btn" style="background:#7c3aed;color:#fff" onclick="submitTeacherFormPortal('lesson')">📤 إرسال للإدارة</button>
       </div><div id="tfl-st"></div>
     </div>
   </div>
@@ -2973,7 +3002,8 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
       </div>
       <div class="bg-btn" style="margin-top:12px">
         <button class="btn bp1" onclick="submitTeacherForm('program', false)">تحميل PDF</button>
-        <button class="btn bp4" onclick="submitTeacherForm('program', true)">📲 إرسال للمدير</button>
+        <button class="btn bp4" onclick="submitTeacherForm('program', true)">📲 واتساب</button>
+        <button class="btn" style="background:#7c3aed;color:#fff" onclick="submitTeacherFormPortal('program')">📤 إرسال للإدارة</button>
       </div><div id="tfp-st"></div>
     </div>
   </div>
@@ -3259,7 +3289,7 @@ try{_notes=JSON.parse(localStorage.getItem('darb_notes')||'[]');}catch(e){}
 
 window.onload=function(){
   console.log("🚀 DarbStu Web Dashboard Loaded - Version Update Applied");
-  setDates();loadMe();showTab('dashboard');checkUnreadCirculars();
+  setDates();loadMe();showTab('dashboard');checkUnreadCirculars();setTimeout(checkUnreadTeacherReports,2000);
 };
 
 function setDates(){
@@ -3363,6 +3393,7 @@ function showTab(key){
       if(eL&&!eL.value)eL.value=uname;
       if(eP&&!eP.value)eP.value=uname;
     },
+    'teacher_reports_admin': loadTeacherReportsAdmin,
     'send_absence':function(){},
     'send_tardiness':function(){},
     'parent_visits':pvInit,
@@ -6034,6 +6065,108 @@ async function checkUnreadCirculars(){
   } catch(e) { console.error('checkUnreadCirculars Error:', e); }
 }
 
+/* ── TEACHER REPORTS (Admin) ── */
+async function checkUnreadTeacherReports(){
+  try {
+    if(!_me || !['admin','deputy'].includes(_me.role)) return;
+    var d = await api('/web/api/teacher-reports/unread-count');
+    if(d && d.ok && d.count > 0){
+      var html = '<div style="text-align:center;padding:10px">' +
+                 '<div style="font-size:50px;margin-bottom:15px">📄</div>' +
+                 '<h3 style="color:#7c3aed;margin-bottom:10px">تقارير معلمين جديدة!</h3>' +
+                 '<p style="color:#64748b;margin-bottom:20px;font-size:15px">يوجد <b>('+d.count+')</b> تقرير جديد من المعلمين بانتظار مراجعتك.</p>' +
+                 '<button class="btn" style="background:#7c3aed;color:#fff;width:100%;justify-content:center;padding:12px;font-size:16px" ' +
+                 'onclick="showTab(\'teacher_reports_admin\');document.getElementById(\'co-modal\').remove();">' +
+                 '<i class="fas fa-file-pdf" style="margin-left:8px"></i> عرض التقارير</button>' +
+                 '</div>';
+      showCoModal('تقارير معلمين جديدة', html, '#7c3aed', '#6d28d9');
+    }
+  } catch(e) {}
+}
+
+async function loadTeacherReportsAdmin(){
+  var tb = document.getElementById('tra-tbody');
+  if(!tb) return;
+  tb.innerHTML = '<tr><td colspan="6" style="text-align:center">⏳ جارٍ التحميل...</td></tr>';
+  var d = await api('/web/api/teacher-reports');
+  if(!d || !d.ok){ tb.innerHTML='<tr><td colspan="6" style="color:red;text-align:center">❌ فشل التحميل</td></tr>'; return; }
+  var rows = d.reports || [];
+  var badge = document.getElementById('tra-badge');
+  var unread = rows.filter(function(r){return !r.is_read;}).length;
+  if(badge){ if(unread>0){badge.textContent=unread+' جديد';badge.style.display='inline-block';}else{badge.style.display='none';} }
+  if(!rows.length){ tb.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--mu)">لا توجد تقارير</td></tr>'; return; }
+  tb.innerHTML = rows.map(function(r){
+    var typeLabel = r.form_type==='lesson'?'📘 تحضير درس':'📊 تقرير تنفيذ';
+    var statusBadge = r.is_read
+      ? '<span class="badge bg" style="font-size:11px">مقروء</span>'
+      : '<span class="badge bo" style="font-size:11px">جديد</span>';
+    var date = r.submitted_at ? r.submitted_at.substring(0,16).replace('T',' ') : '-';
+    return '<tr style="'+(r.is_read?'':'background:#f5f3ff')+'">' +
+      '<td>'+typeLabel+'</td>' +
+      '<td style="font-weight:600">'+r.title+'</td>' +
+      '<td>'+r.submitted_name+'</td>' +
+      '<td style="font-size:12px;color:#64748b">'+date+'</td>' +
+      '<td>'+statusBadge+'</td>' +
+      '<td style="display:flex;gap:6px">' +
+        '<button class="btn bp1 bsm" onclick="viewTeacherReport('+r.id+')"><i class="fas fa-eye"></i> عرض</button>' +
+        '<button class="btn bp3 bsm" onclick="deleteTeacherReport('+r.id+')"><i class="fas fa-trash"></i></button>' +
+      '</td></tr>';
+  }).join('');
+}
+
+async function viewTeacherReport(id){
+  await fetch('/web/api/teacher-reports/'+id+'/read', {method:'POST'});
+  window.open('/web/api/teacher-reports/'+id+'/pdf','_blank');
+  setTimeout(loadTeacherReportsAdmin, 800);
+}
+
+async function deleteTeacherReport(id){
+  if(!confirm('هل تريد حذف هذا التقرير نهائياً؟')) return;
+  var r = await fetch('/web/api/teacher-reports/'+id, {method:'DELETE'});
+  var d = await r.json();
+  if(d.ok) loadTeacherReportsAdmin(); else alert('فشل الحذف');
+}
+
+async function submitTeacherFormPortal(formType){
+  var stId = formType==='lesson'?'tfl-st':'tfp-st';
+  ss(stId,'⏳ جارٍ الإرسال...','ai');
+  try {
+    var payload = {form_type: formType};
+    if(formType==='lesson'){
+      payload.strategy = document.getElementById('tfl-strat').value;
+      payload.subject  = document.getElementById('tfl-subj').value;
+      payload.date     = document.getElementById('tfl-date').value;
+      payload.grade    = document.getElementById('tfl-grade').value;
+      payload.class_name    = document.getElementById('tfl-cls').value;
+      payload.student_count = document.getElementById('tfl-count').value;
+      payload.lesson   = document.getElementById('tfl-lesson').value;
+      payload.evidence = document.getElementById('tfl-evidence').value;
+      payload.goals    = document.getElementById('tfl-goals').value.split('\n').filter(Boolean);
+      payload.tools    = Array.from(document.querySelectorAll('#tfl-tools input:checked')).map(function(c){return c.value;});
+      payload.evidence_img_b64 = await toBase64(document.getElementById('tfl-ev-img').files[0]);
+      payload.executor_name  = document.getElementById('tfl-executor').value;
+      payload.principal_name = document.getElementById('tfl-principal').value;
+    } else {
+      payload.date     = document.getElementById('tfp-date').value || new Date().toISOString().split('T')[0];
+      payload.executor = document.getElementById('tfp-exec').value;
+      payload.place    = document.getElementById('tfp-place').value;
+      payload.target   = document.getElementById('tfp-target').value;
+      payload.count    = document.getElementById('tfp-count').value;
+      payload.goals    = document.getElementById('tfp-goals').value.split('\n').filter(Boolean);
+      payload.img1_b64 = await toBase64(document.getElementById('tfp-img1').files[0]);
+      payload.img2_b64 = await toBase64(document.getElementById('tfp-img2').files[0]);
+      payload.executor_name  = document.getElementById('tfp-executor').value;
+      payload.principal_name = document.getElementById('tfp-principal').value;
+    }
+    var r = await fetch('/web/api/teacher-reports/submit', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
+    });
+    var d = await r.json();
+    if(d.ok) ss(stId,'✅ تم الإرسال للإدارة بنجاح','ok');
+    else ss(stId,'❌ '+(d.msg||'فشل الإرسال'),'er');
+  } catch(err){ ss(stId,'❌ خطأ في الإرسال','er'); }
+}
+
 /* ── WEEKLY REWARDS ── */
 async function loadWeeklyReward(){
   var d=await api('/web/api/rewards/settings');
@@ -8323,6 +8456,115 @@ async def web_unread_count(request: Request):
     if not user: return JSONResponse({"error": "غير مصرح"}, status_code=401)
     count = get_unread_circulars_count(user["sub"], user["role"])
     return JSONResponse({"ok": True, "count": count})
+
+# ─── تقارير المعلمين ──────────────────────────────────────────────
+
+@router.post("/web/api/teacher-reports/submit", response_class=JSONResponse)
+async def web_submit_teacher_report(request: Request):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
+    try:
+        from database import save_teacher_report
+        import base64, tempfile
+        data = await request.json()
+        user_full_name = user.get("full_name") or user.get("username", "معلم")
+        if not data.get("executor_name"):
+            data["executor_name"] = user_full_name
+        data["teacher_name"] = data["executor_name"]
+        if not data.get("principal_name"):
+            data["principal_name"] = "حسن محمد عبيري"
+
+        temp_files = []
+        for key_b64, key_path in [("evidence_img_b64","evidence_img"),("img1_b64","img1"),("img2_b64","img2")]:
+            if data.get(key_b64):
+                try:
+                    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+                    tmp.write(base64.b64decode(data[key_b64])); tmp.close()
+                    data[key_path] = tmp.name; temp_files.append(tmp.name)
+                except Exception: pass
+
+        if data.get("form_type") == "lesson":
+            pdf_bytes = generate_lesson_pdf(data)
+            title = f"تحضير درس — {data.get('subject','')} — {data.get('date','')}"
+        else:
+            pdf_bytes = generate_program_pdf(data)
+            title = f"تقرير تنفيذ — {data.get('executor','المنفذ')} — {data.get('date','')}"
+
+        for tf in temp_files:
+            try: os.unlink(tf)
+            except Exception: pass
+
+        save_teacher_report(
+            form_type      = data.get("form_type","lesson"),
+            title          = title,
+            submitted_by   = user["sub"],
+            submitted_name = user_full_name,
+            pdf_data       = pdf_bytes
+        )
+        return JSONResponse({"ok": True, "msg": "تم إرسال التقرير للإدارة"})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/teacher-reports", response_class=JSONResponse)
+async def web_get_teacher_reports(request: Request):
+    user = _get_current_user(request)
+    if not user or user["role"] not in ("admin","deputy"):
+        return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
+    try:
+        from database import get_teacher_reports
+        return JSONResponse({"ok": True, "reports": get_teacher_reports()})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/teacher-reports/unread-count", response_class=JSONResponse)
+async def web_teacher_reports_unread(request: Request):
+    user = _get_current_user(request)
+    if not user: return JSONResponse({"ok": False, "count": 0})
+    if user["role"] not in ("admin","deputy"): return JSONResponse({"ok": True, "count": 0})
+    try:
+        from database import get_unread_teacher_reports_count
+        return JSONResponse({"ok": True, "count": get_unread_teacher_reports_count()})
+    except Exception:
+        return JSONResponse({"ok": True, "count": 0})
+
+@router.get("/web/api/teacher-reports/{report_id}/pdf")
+async def web_teacher_report_pdf(report_id: int, request: Request):
+    user = _get_current_user(request)
+    if not user or user["role"] not in ("admin","deputy"):
+        return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
+    try:
+        from database import get_teacher_report_pdf
+        from fastapi.responses import Response
+        pdf = get_teacher_report_pdf(report_id)
+        if not pdf: return JSONResponse({"ok": False, "msg": "لم يُعثر على التقرير"}, status_code=404)
+        return Response(content=pdf, media_type="application/pdf",
+                        headers={"Content-Disposition": f"inline; filename=report_{report_id}.pdf"})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.post("/web/api/teacher-reports/{report_id}/read", response_class=JSONResponse)
+async def web_mark_teacher_report(report_id: int, request: Request):
+    user = _get_current_user(request)
+    if not user or user["role"] not in ("admin","deputy"):
+        return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
+    try:
+        from database import mark_teacher_report_read
+        mark_teacher_report_read(report_id)
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.delete("/web/api/teacher-reports/{report_id}", response_class=JSONResponse)
+async def web_delete_teacher_report(report_id: int, request: Request):
+    user = _get_current_user(request)
+    if not user or user["role"] not in ("admin","deputy"):
+        return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
+    try:
+        from database import delete_teacher_report
+        delete_teacher_report(report_id)
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
 
 @router.post("/web/api/circulars/create", response_class=JSONResponse)
 async def web_create_circular(request: Request, title: str = Form(...), content: str = Form(""), target_role: str = Form("all"), file: UploadFile = File(None)):

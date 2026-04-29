@@ -577,6 +577,19 @@ def init_db():
         UNIQUE(circular_id, username)
     )""")
 
+    # ─── جدول تقارير المعلمين ────────────────────────────────
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS teacher_reports (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        form_type      TEXT NOT NULL,
+        title          TEXT NOT NULL,
+        submitted_by   TEXT NOT NULL,
+        submitted_name TEXT NOT NULL,
+        submitted_at   TEXT NOT NULL,
+        pdf_data       BLOB NOT NULL,
+        is_read        INTEGER DEFAULT 0
+    )""")
+
     # ─── جدول ملاحظات الطالب الإدارية ───────────────────────
     cur.execute("""
     CREATE TABLE IF NOT EXISTS student_notes (
@@ -3059,6 +3072,63 @@ def get_unread_lab_submissions_count() -> int:
         return count
     except Exception:
         return 0
+
+
+# ─── تقارير المعلمين ──────────────────────────────────────────
+
+def save_teacher_report(form_type: str, title: str, submitted_by: str,
+                        submitted_name: str, pdf_data: bytes) -> int:
+    con = get_db(); cur = con.cursor()
+    now = datetime.datetime.now().isoformat()
+    cur.execute("""
+        INSERT INTO teacher_reports (form_type, title, submitted_by, submitted_name, submitted_at, pdf_data, is_read)
+        VALUES (?, ?, ?, ?, ?, ?, 0)
+    """, (form_type, title, submitted_by, submitted_name, now, pdf_data))
+    report_id = cur.lastrowid
+    con.commit(); con.close()
+    return report_id
+
+def get_teacher_reports() -> list:
+    try:
+        con = get_db(); cur = con.cursor()
+        cur.execute("""
+            SELECT id, form_type, title, submitted_by, submitted_name, submitted_at, is_read
+            FROM teacher_reports ORDER BY submitted_at DESC
+        """)
+        rows = [{"id": r[0], "form_type": r[1], "title": r[2],
+                 "submitted_by": r[3], "submitted_name": r[4],
+                 "submitted_at": r[5], "is_read": r[6]} for r in cur.fetchall()]
+        con.close()
+        return rows
+    except Exception:
+        return []
+
+def get_teacher_report_pdf(report_id: int) -> bytes:
+    con = get_db(); cur = con.cursor()
+    cur.execute("SELECT pdf_data FROM teacher_reports WHERE id = ?", (report_id,))
+    row = cur.fetchone()
+    con.close()
+    return bytes(row[0]) if row else b""
+
+def mark_teacher_report_read(report_id: int):
+    con = get_db(); cur = con.cursor()
+    cur.execute("UPDATE teacher_reports SET is_read = 1 WHERE id = ?", (report_id,))
+    con.commit(); con.close()
+
+def get_unread_teacher_reports_count() -> int:
+    try:
+        con = get_db(); cur = con.cursor()
+        cur.execute("SELECT COUNT(*) FROM teacher_reports WHERE is_read = 0")
+        count = cur.fetchone()[0]
+        con.close()
+        return count
+    except Exception:
+        return 0
+
+def delete_teacher_report(report_id: int):
+    con = get_db(); cur = con.cursor()
+    cur.execute("DELETE FROM teacher_reports WHERE id = ?", (report_id,))
+    con.commit(); con.close()
 
 
 # ─── زيارات أولياء الأمور ─────────────────────────────────────
