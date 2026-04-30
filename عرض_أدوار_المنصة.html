@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>أدوار المستخدمين في البوابة الإلكترونية لمدرسة الدرب الثانوية</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif;
+    background: #f0f4f8;
+    color: #1a202c;
+    padding: 30px 20px;
+    direction: rtl;
+  }
+
+  .page {
+    max-width: 900px;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+    overflow: hidden;
+  }
+
+  /* ===== HEADER ===== */
+  .header {
+    background: linear-gradient(135deg, #1e3a5f 0%, #2d6a9f 100%);
+    color: white;
+    padding: 18px 40px 14px;
+    text-align: center;
+    position: relative;
+  }
+  .header::after {
+    content: '';
+    display: block;
+    height: 3px;
+    background: linear-gradient(90deg, #f6c90e, #f97316, #f6c90e);
+    margin-top: 14px;
+    border-radius: 2px;
+  }
+  .header h1 {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: 1px;
+  }
+  .header p {
+    font-size: 13px;
+    opacity: 0.85;
+    margin-top: 4px;
+  }
+
+  /* ===== INTRO ===== */
+  .intro {
+    background: #eef6ff;
+    border-right: 5px solid #2d6a9f;
+    margin: 28px 32px 8px;
+    padding: 16px 20px;
+    border-radius: 8px;
+    font-size: 14.5px;
+    line-height: 1.9;
+    color: #2c3e50;
+  }
+
+  /* ===== SECTION TITLE ===== */
+  .section-title {
+    text-align: center;
+    font-size: 20px;
+    font-weight: 800;
+    color: #1e3a5f;
+    margin: 28px 32px 16px;
+    padding-bottom: 8px;
+    border-bottom: 3px solid #f6c90e;
+  }
+
+  /* ===== CARDS GRID ===== */
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    padding: 0 32px 32px;
+  }
+
+  .card {
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    border: 1px solid #e2e8f0;
+  }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    color: white;
+  }
+  .card-header .icon {
+    font-size: 28px;
+    min-width: 36px;
+    text-align: center;
+  }
+  .card-header .title {
+    font-size: 17px;
+    font-weight: 800;
+  }
+  .card-header .subtitle {
+    font-size: 12px;
+    opacity: 0.85;
+  }
+
+  .card-body {
+    padding: 14px 18px;
+    background: #fff;
+  }
+  .card-body ul {
+    list-style: none;
+    padding: 0;
+  }
+  .card-body ul li {
+    font-size: 13.5px;
+    line-height: 1.7;
+    padding: 4px 0;
+    border-bottom: 1px dashed #e8ecf0;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    color: #344155;
+  }
+  .card-body ul li:last-child { border-bottom: none; }
+  .card-body ul li::before {
+    content: '◈';
+    color: inherit;
+    opacity: 0.5;
+    font-size: 11px;
+    margin-top: 4px;
+    flex-shrink: 0;
+  }
+
+  /* Card Colors */
+  .card.admin .card-header  { background: linear-gradient(135deg, #1e3a5f, #2d6a9f); }
+  .card.deputy .card-header { background: linear-gradient(135deg, #7b2d8b, #a855f7); }
+  .card.staff .card-header  { background: linear-gradient(135deg, #065f46, #10b981); }
+  .card.teacher .card-header{ background: linear-gradient(135deg, #92400e, #f59e0b); }
+  .card.lab .card-header    { background: linear-gradient(135deg, #1e40af, #3b82f6); }
+  .card.guard .card-header  { background: linear-gradient(135deg, #881337, #e11d48); }
+  .card.parent .card-header { background: linear-gradient(135deg, #134e4a, #0d9488); }
+  .card.student .card-header{ background: linear-gradient(135deg, #4a1d96, #8b5cf6); }
+
+  /* ===== SUMMARY TABLE ===== */
+  .summary {
+    margin: 0 32px 32px;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+  }
+  .summary table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .summary thead {
+    background: #1e3a5f;
+    color: white;
+  }
+  .summary thead th {
+    padding: 12px 16px;
+    font-size: 14px;
+    font-weight: 700;
+    text-align: right;
+  }
+  .summary tbody tr:nth-child(odd)  { background: #f8fafc; }
+  .summary tbody tr:nth-child(even) { background: #ffffff; }
+  .summary tbody td {
+    padding: 10px 16px;
+    font-size: 13px;
+    border-bottom: 1px solid #e9ecef;
+    color: #2d3748;
+  }
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    color: white;
+  }
+  .b-admin   { background: #2d6a9f; }
+  .b-deputy  { background: #a855f7; }
+  .b-staff   { background: #10b981; }
+  .b-teacher { background: #f59e0b; }
+  .b-lab     { background: #3b82f6; }
+  .b-guard   { background: #e11d48; }
+
+  /* ===== FOOTER ===== */
+  .footer {
+    background: #1e3a5f;
+    color: rgba(255,255,255,0.75);
+    text-align: center;
+    padding: 16px;
+    font-size: 13px;
+  }
+  .footer strong { color: #f6c90e; }
+
+  /* Print */
+  @media print {
+    body { background: white; padding: 0; }
+    .page { box-shadow: none; border-radius: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HEADER -->
+  <div class="header">
+    <h1>البوابة الإلكترونية لمدرسة الدرب الثانوية</h1>
+    <p>أدوار ومهام كل فرد في المنصة · الإصدار 3.4.7</p>
+  </div>
+
+  <!-- INTRO -->
+  <div class="intro">
+    <strong>البوابة الإلكترونية لمدرسة الدرب الثانوية</strong> هي منصة مدرسية متكاملة تُتيح لكل فئة من المستخدمين أداء مهامها بدقة وسهولة،
+    من تسجيل الغياب والتأخر، إلى التواصل مع أولياء الأمور، وإدارة التعاميم والتحويلات والإرشاد.
+    يتميز النظام بالعمل عبر <strong>تطبيق المكتب</strong> و<strong>واجهة الويب</strong> بصلاحيات مخصصة لكل دور.
+  </div>
+
+  <!-- ROLES SECTION -->
+  <div class="section-title">أدوار المستخدمين الداخليين</div>
+
+  <div class="grid">
+
+    <!-- ADMIN -->
+    <div class="card admin">
+      <div class="card-header">
+        <div class="icon">👑</div>
+        <div>
+          <div class="title">مدير المدرسة</div>
+          <div class="subtitle">صلاحية كاملة بلا قيود</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <ul>
+          <li>الإشراف الكامل على جميع وظائف النظام</li>
+          <li>إضافة وتعديل وحذف المستخدمين وصلاحياتهم</li>
+          <li>استعراض جميع تقارير الغياب والتأخر والإرشاد</li>
+          <li>إرسال التعاميم الرسمية لجميع الأدوار</li>
+          <li>إدارة نقاط المعلمين وتعديل حدودها</li>
+          <li>النسخ الاحتياطي واستعادة البيانات من الويب</li>
+          <li>الوصول لسجل زيارات أولياء الأمور</li>
+          <li>إدارة إعدادات الواتساب والإشعارات</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- DEPUTY -->
+    <div class="card deputy">
+      <div class="card-header">
+        <div class="icon">🛡️</div>
+        <div>
+          <div class="title">الوكيل</div>
+          <div class="subtitle">إدارة الانضباط والتواصل</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <ul>
+          <li>متابعة ومراجعة سجلات الغياب والتأخر اليومية</li>
+          <li>إدارة الأعذار وتعديل سجلات الطلاب</li>
+          <li>إرسال رسائل الواتساب لأولياء الأمور</li>
+          <li>اعتماد وإرسال التعاميم للمعلمين والإداريين</li>
+          <li>استقبال طلبات تحويل الطلاب ومراجعتها</li>
+          <li>الاطلاع على تقارير التأخر والمراقبة المباشرة</li>
+          <li>ربط واتساب البوابة عبر المتصفح</li>
+          <li>الوصول لسجل زيارات أولياء الأمور</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- STAFF -->
+    <div class="card staff">
+      <div class="card-header">
+        <div class="icon">📋</div>
+        <div>
+          <div class="title">الإداري</div>
+          <div class="subtitle">المتابعة والتوثيق</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <ul>
+          <li>تسجيل غياب الطلاب وحفظ السجلات</li>
+          <li>إدخال أعذار الطلاب الغائبين</li>
+          <li>استعراض التقارير الإدارية والإحصائيات</li>
+          <li>إدارة بيانات الطلاب وتحديثها</li>
+          <li>قراءة التعاميم الرسمية الموجهة للإداريين</li>
+          <li>تصفح لوحة المراقبة الحية</li>
+          <li>تسجيل وعرض زيارات أولياء الأمور</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- TEACHER -->
+    <div class="card teacher">
+      <div class="card-header">
+        <div class="icon">📚</div>
+        <div>
+          <div class="title">المعلم</div>
+          <div class="subtitle">التدريس والمتابعة الأكاديمية</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <ul>
+          <li>رفع نماذج تحضير الدرس إلكترونياً</li>
+          <li>تحويل الطلاب (إرشاد / انضباط) عبر البوابة</li>
+          <li>استعراض نتائج طلابه وتحليلها</li>
+          <li>إرسال خطابات الاستفسار للإدارة</li>
+          <li>قراءة التعاميم الموجهة للمعلمين</li>
+          <li>مراقبة رصيد نقاطه في لوحة الصدارة</li>
+          <li>تصفح لوحة المراقبة لمتابعة وضع الفصول</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- LAB -->
+    <div class="card lab">
+      <div class="card-header">
+        <div class="icon">🔬</div>
+        <div>
+          <div class="title">المحضر</div>
+          <div class="subtitle">نماذج التحضير والتعاميم</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <ul>
+          <li>رفع نماذج تحضير الدرس إلكترونياً</li>
+          <li>قراءة التعاميم والنشرات الرسمية</li>
+          <li>تصفح لوحة المراقبة العامة</li>
+          <li>متابعة الجدول الدراسي عبر النظام</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- PARENT -->
+    <div class="card parent">
+      <div class="card-header">
+        <div class="icon">👨‍👩‍👦</div>
+        <div>
+          <div class="title">ولي الأمر</div>
+          <div class="subtitle">المتابعة عبر الواتساب</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <ul>
+          <li>استقبال إشعارات غياب ابنه فور تسجيله</li>
+          <li>استقبال إشعارات التأخر مع تفاصيل الوقت</li>
+          <li>الرد على رسائل المدرسة عبر الواتساب</li>
+          <li>تلقي التعاميم الرسمية من الإدارة</li>
+          <li>زيارة المدرسة وتسجيل الزيارة في النظام</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- STUDENT -->
+    <div class="card student">
+      <div class="card-header">
+        <div class="icon">🎒</div>
+        <div>
+          <div class="title">الطالب</div>
+          <div class="subtitle">المستفيد المحوري من النظام</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <ul>
+          <li>تسجيل حضوره وغيابه يومياً بدقة</li>
+          <li>حفظ سجله الانضباطي والأكاديمي</li>
+          <li>إمكانية تقديم العذر عبر ولي أمره</li>
+          <li>التحويل لمرشد الطلاب عند الحاجة</li>
+          <li>نقاطه وإنجازاته تُعرض في لوحة الصدارة</li>
+        </ul>
+      </div>
+    </div>
+
+  </div><!-- /grid -->
+
+  <!-- SUMMARY TABLE -->
+  <div class="section-title">ملخص الصلاحيات</div>
+  <div class="summary">
+    <table>
+      <thead>
+        <tr>
+          <th>الدور</th>
+          <th>الغياب</th>
+          <th>التأخر</th>
+          <th>الواتساب</th>
+          <th>التعاميم</th>
+          <th>التقارير</th>
+          <th>إدارة المستخدمين</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="badge b-admin">مدير</span></td>
+          <td>✅ كامل</td>
+          <td>✅ كامل</td>
+          <td>✅ كامل</td>
+          <td>✅ إرسال واستقبال</td>
+          <td>✅ كامل</td>
+          <td>✅ كامل</td>
+        </tr>
+        <tr>
+          <td><span class="badge b-deputy">وكيل</span></td>
+          <td>✅ قراءة وتعديل</td>
+          <td>✅ تسجيل وتعديل</td>
+          <td>✅ إرسال</td>
+          <td>✅ إرسال واستقبال</td>
+          <td>✅ جزئي</td>
+          <td>❌</td>
+        </tr>
+        <tr>
+          <td><span class="badge b-staff">إداري</span></td>
+          <td>✅ تسجيل</td>
+          <td>❌</td>
+          <td>❌</td>
+          <td>📖 استقبال</td>
+          <td>✅ جزئي</td>
+          <td>❌</td>
+        </tr>
+        <tr>
+          <td><span class="badge b-teacher">معلم</span></td>
+          <td>👁️ عرض فقط</td>
+          <td>❌</td>
+          <td>❌</td>
+          <td>📖 استقبال</td>
+          <td>📊 نتائج فقط</td>
+          <td>❌</td>
+        </tr>
+        <tr>
+          <td><span class="badge b-lab">محضر</span></td>
+          <td>👁️ عرض فقط</td>
+          <td>❌</td>
+          <td>❌</td>
+          <td>📖 استقبال</td>
+          <td>❌</td>
+          <td>❌</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <strong>البوابة الإلكترونية لمدرسة الدرب الثانوية</strong> &nbsp;|&nbsp; الإصدار <strong>3.4.7</strong> &nbsp;|&nbsp; 2026
+  </div>
+
+</div><!-- /page -->
+</body>
+</html>
