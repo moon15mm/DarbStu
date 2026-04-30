@@ -4805,6 +4805,7 @@ async function addRecipient(){
 }
 
 /* ── PARTIAL ABSENCE ── */
+var _paRows=[], _paDate='';
 async function loadPartialAbsences(){
   var date=document.getElementById('pa-date').value;
   var minP=document.getElementById('pa-min-period').value;
@@ -4812,62 +4813,59 @@ async function loadPartialAbsences(){
   ss('pa-st','⏳ جارٍ البحث...','ai');
   var d=await api('/web/api/partial-absences?date='+date+'&min_period='+minP);
   if(!d||!d.ok){ss('pa-st','❌ '+(d&&d.msg||'خطأ'),'er');return;}
-  var rows=d.rows||[];
-  if(!rows.length){ss('pa-st','✅ لا يوجد طلاب في هذه الحالة ليوم '+date,'ok');document.getElementById('pa-list').innerHTML='';return;}
-  ss('pa-st',rows.length+' طالب بحاجة تصنيف','ai');
+  _paRows=d.rows||[]; _paDate=date;
+  if(!_paRows.length){ss('pa-st','✅ لا يوجد طلاب في هذه الحالة ليوم '+date,'ok');document.getElementById('pa-list').innerHTML='';return;}
+  ss('pa-st',_paRows.length+' طالب بحاجة تصنيف','ai');
   var statusColors={'هارب':'#dc2626','مستأذن':'#2563eb','غير محدد':'#94a3b8'};
   var html='<div class="tw"><table><thead><tr><th>#</th><th>الطالب</th><th>الفصل</th><th>حصص الغياب</th><th>الحالة</th><th>تصنيف</th></tr></thead><tbody>';
-  rows.forEach(function(r,i){
+  _paRows.forEach(function(r,i){
     var sid=String(r.student_id);
-    var nm=r.student_name||'';
-    var cls=r.class_name||'';
     var periods=(r.absent_periods||'').split(',').map(function(p){return 'ح'+p;}).join('، ');
     var sc=statusColors[r.status]||'#94a3b8';
     var classified=r.status!=='غير محدد';
     var rowBg=r.status==='هارب'?'background:#FEF2F2':r.status==='مستأذن'?'background:#EFF6FF':'';
-    html+='<tr id="pa-row-'+sid+'" style="'+rowBg+'">';
-    html+='<td>'+(i+1)+'</td>';
-    html+='<td>'+nm+'</td>';
-    html+='<td>'+cls+'</td>';
+    html+='<tr style="'+rowBg+'">';
+    html+='<td>'+(i+1)+'</td><td>'+r.student_name+'</td><td>'+r.class_name+'</td>';
     html+='<td>'+periods+'</td>';
     html+='<td><span style="color:'+sc+';font-weight:700">'+r.status+'</span></td>';
     html+='<td style="white-space:nowrap;display:flex;gap:4px">';
-    if(!classified||r.status==='هارب'){
-      html+='<button class="btn bsm" style="background:#dc2626;color:#fff" onclick="paMarkEscaped(this,\''+sid+'\','+JSON.stringify(nm)+','+JSON.stringify(cls)+',\''+date+'\',\''+r.absent_periods+'\')">🏃 هارب</button>';
-    }
-    if(!classified||r.status==='مستأذن'){
-      html+='<button class="btn bsm" style="background:#2563eb;color:#fff" onclick="paMarkPermitted(this,\''+sid+'\','+JSON.stringify(nm)+','+JSON.stringify(cls)+',\''+date+'\',\''+r.absent_periods+'\')">📋 مستأذن</button>';
-    }
-    if(classified){
-      html+='<button class="btn bp2 bsm" onclick="paReset(\''+sid+'\',\''+date+'\')">↩</button>';
-    }
+    if(!classified||r.status==='هارب')
+      html+='<button class="btn bsm" style="background:#dc2626;color:#fff" onclick="paMarkEscaped(this,'+i+')">🏃 هارب</button>';
+    if(!classified||r.status==='مستأذن')
+      html+='<button class="btn bsm" style="background:#2563eb;color:#fff" onclick="paMarkPermitted(this,'+i+')">📋 مستأذن</button>';
+    if(classified)
+      html+='<button class="btn bp2 bsm" onclick="paReset(\''+sid+'\')">↩</button>';
     html+='</td></tr>';
   });
   html+='</tbody></table></div>';
   document.getElementById('pa-list').innerHTML=html;
 }
-async function paMarkEscaped(btn, sid, nm, cls, date, periods){
+async function paMarkEscaped(btn, idx){
+  var row=_paRows[idx]; if(!row)return;
   btn.disabled=true; btn.textContent='⏳';
   var r=await fetch('/web/api/partial-absences/mark-escaped',{method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({student_id:sid,student_name:nm,class_name:cls,date:date,absent_periods:periods})});
+    body:JSON.stringify({student_id:row.student_id,student_name:row.student_name,
+      class_name:row.class_name,date:_paDate,absent_periods:row.absent_periods})});
   var d=await r.json();
   if(d&&d.ok){loadPartialAbsences();loadEscapedReport();}
   else{btn.disabled=false;btn.textContent='🏃 هارب';alert('❌ '+(d&&d.msg||'خطأ'));}
 }
-async function paMarkPermitted(btn, sid, nm, cls, date, periods){
+async function paMarkPermitted(btn, idx){
+  var row=_paRows[idx]; if(!row)return;
   btn.disabled=true; btn.textContent='⏳';
   var r=await fetch('/web/api/partial-absences/mark-permitted',{method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({student_id:sid,student_name:nm,class_name:cls,date:date,absent_periods:periods})});
+    body:JSON.stringify({student_id:row.student_id,student_name:row.student_name,
+      class_name:row.class_name,date:_paDate,absent_periods:row.absent_periods})});
   var d=await r.json();
   if(d&&d.ok){loadPartialAbsences();}
   else{btn.disabled=false;btn.textContent='📋 مستأذن';alert('❌ '+(d&&d.msg||'خطأ'));}
 }
-async function paReset(sid, date){
+async function paReset(sid){
   var r=await fetch('/web/api/partial-absences/status',{method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({student_id:sid,status:'غير محدد',date:date})});
+    body:JSON.stringify({student_id:sid,status:'غير محدد',date:_paDate})});
   var d=await r.json();
   if(d&&d.ok) loadPartialAbsences();
 }
