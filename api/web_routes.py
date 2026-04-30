@@ -2351,9 +2351,14 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
       <button class="btn bp2 bsm" onclick="loadAlertsEscaped()">🔄 تحديث</button>
       <button class="btn bp3 bsm" onclick="printSec('al-esc-tbl')">🖨️ طباعة</button>
     </div>
+    <div class="bg-btn" style="margin-bottom:10px">
+      <button class="btn bp2 bsm" onclick="alSelAll('al-esc-tbody',true)">✓ تحديد الكل</button>
+      <button class="btn bp2 bsm" onclick="alSelAll('al-esc-tbody',false)">✗ إلغاء الكل</button>
+      <button class="btn bp1" onclick="referEscapedToCounselor()">🧠 تحويل المحدد للموجّه الطلابي</button>
+    </div>
     <div id="al-esc-st" style="margin-bottom:8px"></div>
     <div class="section" id="al-esc-tbl"><div class="tw"><table>
-      <thead><tr><th>#</th><th>التاريخ</th><th>الطالب</th><th>الفصل</th><th>الحصص الغائبة</th><th>حالة الإحالة</th></tr></thead>
+      <thead><tr><th style="width:32px">☐</th><th>#</th><th>التاريخ</th><th>الطالب</th><th>الفصل</th><th>الحصص الغائبة</th><th>حالة الإحالة</th></tr></thead>
       <tbody id="al-esc-tbody"></tbody></table></div></div>
   </div>
 </div>
@@ -4404,6 +4409,7 @@ async function loadAlertsTard(){
 function alSelAll(tblId,checked){
   document.querySelectorAll('#'+tblId+' input[type=checkbox]:not(:disabled)').forEach(function(c){c.checked=checked;});
 }
+var _escRows=[];
 async function loadAlertsEscaped(){
   var monthEl=document.getElementById('al-esc-month');
   if(!monthEl.value) monthEl.value=today.substring(0,7);
@@ -4412,20 +4418,43 @@ async function loadAlertsEscaped(){
   var tbody=document.getElementById('al-esc-tbody');
   var st=document.getElementById('al-esc-st');
   if(!d||!d.ok){st.textContent='❌ خطأ في التحميل';tbody.innerHTML='';return;}
-  var rows=d.rows||[];
-  st.textContent=rows.length?rows.length+' طالب مسجَّل هارب هذا الشهر':'';
-  if(!rows.length){tbody.innerHTML='<tr><td colspan="6" style="color:#9CA3AF;text-align:center">لا يوجد هاربون هذا الشهر</td></tr>';return;}
-  tbody.innerHTML=rows.map(function(r,i){
+  _escRows=d.rows||[];
+  st.textContent=_escRows.length?_escRows.length+' طالب مسجَّل هارب هذا الشهر':'';
+  if(!_escRows.length){tbody.innerHTML='<tr><td colspan="7" style="color:#9CA3AF;text-align:center">لا يوجد هاربون هذا الشهر</td></tr>';return;}
+  tbody.innerHTML=_escRows.map(function(r,i){
     var notesShort=(r.notes||'').replace('هروب من المدرسة — الحصص الغائبة: ','');
-    return '<tr style="background:#FEF2F2">'+
+    var referred=r.status==='مُحال';
+    return '<tr style="background:#FEF2F2" data-idx="'+i+'" data-sid="'+r.student_id+'" data-name="'+r.student_name+'" data-cls="'+r.class_name+'">'+
+      '<td><input type="checkbox" class="al-esc-chk" value="'+i+'"'+(referred?' disabled':'')+'></td>'+
       '<td style="color:#dc2626;font-weight:700">'+(i+1)+'</td>'+
       '<td>'+r.date+'</td>'+
       '<td style="color:#dc2626;font-weight:700">🏃 '+r.student_name+'</td>'+
       '<td>'+r.class_name+'</td>'+
       '<td style="font-size:12px">'+notesShort+'</td>'+
-      '<td><span style="color:'+(r.status==='مُحال'?'#16a34a':'#dc2626')+';font-weight:700">'+r.status+'</span></td>'+
+      '<td><span style="color:'+(referred?'#16a34a':'#dc2626')+';font-weight:700">'+(referred?'✅ مُحال للموجّه':'جديد')+'</span></td>'+
       '</tr>';
   }).join('');
+}
+async function referEscapedToCounselor(){
+  var checked=[...document.querySelectorAll('.al-esc-chk:checked')];
+  if(!checked.length){ss('al-esc-st','اختر طالباً على الأقل','er');return;}
+  var students=checked.map(function(chk){
+    var idx=parseInt(chk.value);
+    var r=_escRows[idx];
+    return {student_id:r.student_id,student_name:r.student_name,class_name:r.class_name,
+            absence_count:0,referral_type:'هروب'};
+  });
+  ss('al-esc-st','⏳ جارٍ التحويل...','ai');
+  var r=await fetch('/web/api/refer-to-counselor',{method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({students:students,date:today,ref_type:'هروب'})});
+  var d=await r.json();
+  if(d&&d.ok){
+    ss('al-esc-st','✅ تم التحويل: '+d.added+' طالب','ok');
+    loadAlertsEscaped();
+  } else {
+    ss('al-esc-st','❌ '+(d&&d.msg||'خطأ'),'er');
+  }
 }
 async function referToCounselor(type){
   var tblId=type==='غياب'?'alerts-table':'alerts-tard-table';
@@ -7994,9 +8023,9 @@ async def web_refer_to_counselor(request: Request):
         return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
     try:
         data = await request.json()
-        ref_type = (data.get("type") or "غياب").strip()
+        ref_type = (data.get("type") or data.get("ref_type") or "غياب").strip()
         students = data.get("students") or []
-        if ref_type not in ("غياب", "تأخر"):
+        if ref_type not in ("غياب", "تأخر", "هروب"):
             return JSONResponse({"ok": False, "msg": "نوع التحويل غير صحيح"})
         if not students:
             return JSONResponse({"ok": False, "msg": "لا يوجد طلاب محددون"})
@@ -8013,6 +8042,16 @@ async def web_refer_to_counselor(request: Request):
             sclass = (s.get("class_name") or s.get("class") or "").strip()
             cnt    = int(s.get("count") or s.get("absence_count") or 0)
             if not sid or not sname:
+                continue
+
+            if ref_type == "هروب":
+                # الهارب موجود مسبقاً — نحدّث حالته إلى "مُحال"
+                cur.execute("""UPDATE counselor_referrals SET status='مُحال'
+                               WHERE student_id=? AND referral_type='هروب'""", (sid,))
+                if cur.rowcount:
+                    count_new += 1
+                else:
+                    skipped += 1
                 continue
 
             # تجنّب التكرار: نفس الطالب + نفس النوع + نفس الشهر
