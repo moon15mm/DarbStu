@@ -3641,7 +3641,7 @@ function showTab(key){
     'tardiness':loadTardiness,'excuses':loadExcuses,'permissions':loadPermissions,
     'logs':function(){fillSel('lg-cls');},
     'absence_mgmt':function(){fillSel('am-cls');fillSel('am-bc');},
-    'partial_absence':function(){document.getElementById('pa-date').value=todayStr();},
+    'partial_absence':function(){document.getElementById('pa-date').value=today;},
     'reports_print':function(){loadReports();fillSel('rp-cls');fillSel('rp-sc');},
     'admin_report':generateAdminReport,
     'student_analysis':function(){fillSel('an-class');},

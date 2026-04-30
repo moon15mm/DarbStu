@@ -770,33 +770,48 @@ def add_transferred_student(student_id: str, student_name: str = ""):
 
 def get_partial_absences(date_str: str, min_period: int = 2) -> List[Dict]:
     """
-    يُرجع الطلاب الذين غابوا في حصص لاحقة فقط (حضروا الحصص الأولى).
-    الشرط: أقل حصة غياب للطالب > min_period (أي لا غياب في الحصة الأولى أو الثانية).
+    يُرجع الطلاب الذين:
+      1. ليس لديهم غياب في الحصص الأولى (period <= min_period)
+      2. لديهم غياب في حصص لاحقة (period > min_period)
+      3. فصلهم سُجِّل فيه غياب في الحصص الأولى (أي المعلم أخذ الحضور فعلاً)
+    الشرط 3 يمنع ظهور طلاب لم يأخذ معلمهم الحضور أصلاً.
     """
     con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
     cur.execute("""
+        WITH late_abs AS (
+            -- الطلاب الغائبون فقط في الحصص اللاحقة
+            SELECT student_id, student_name, class_id, class_name, period
+            FROM absences
+            WHERE date = ?
+              AND period IS NOT NULL
+              AND student_id NOT IN (
+                  SELECT student_id FROM absences
+                  WHERE date = ? AND period IS NOT NULL AND period <= ?
+              )
+        ),
+        classes_checked_early AS (
+            -- الفصول التي أُخذ فيها الحضور في الحصص الأولى (وُجد غياب مسجَّل)
+            SELECT DISTINCT class_id
+            FROM absences
+            WHERE date = ? AND period IS NOT NULL AND period <= ?
+        )
         SELECT
-            a.student_id,
-            MAX(a.student_name)  AS student_name,
-            MAX(a.class_name)    AS class_name,
-            MIN(a.period)        AS first_absent_period,
-            MAX(a.period)        AS last_absent_period,
-            GROUP_CONCAT(a.period ORDER BY a.period) AS absent_periods,
-            COUNT(*)             AS absence_count,
+            la.student_id,
+            MAX(la.student_name)  AS student_name,
+            MAX(la.class_name)    AS class_name,
+            MIN(la.period)        AS first_absent_period,
+            MAX(la.period)        AS last_absent_period,
+            GROUP_CONCAT(la.period ORDER BY la.period) AS absent_periods,
+            COUNT(*)              AS absence_count,
             COALESCE(p.status, 'غير محدد') AS status,
             COALESCE(p.notes, '')           AS notes
-        FROM absences a
+        FROM late_abs la
+        JOIN classes_checked_early cce ON cce.class_id = la.class_id
         LEFT JOIN partial_absence_status p
-               ON p.date = a.date AND p.student_id = a.student_id
-        WHERE a.date = ?
-          AND a.period IS NOT NULL
-          AND a.student_id NOT IN (
-              SELECT student_id FROM absences
-              WHERE date = ? AND period IS NOT NULL AND period <= ?
-          )
-        GROUP BY a.student_id
-        ORDER BY a.class_name, student_name
-    """, (date_str, date_str, min_period))
+               ON p.date = ? AND p.student_id = la.student_id
+        GROUP BY la.student_id
+        ORDER BY MAX(la.class_name), MAX(la.student_name)
+    """, (date_str, date_str, min_period, date_str, min_period, date_str))
     rows = [dict(r) for r in cur.fetchall()]
     con.close()
     return rows
