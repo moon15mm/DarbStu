@@ -477,4 +477,189 @@ if(d.telegram_backup_chat)  document.getElementById('ss-tg-chat').value  = d.tel
 # للمدير فقط
 ```
 
+---
+
+## [2026-04-30] سحب رقم جوال المعلم تلقائياً في نافذة "إرسال البيانات"
+
+### المشكلة
+حقل رقم الجوال كان فارغاً عند فتح نافذة إرسال البيانات للمعلمين.
+
+### التعديل في `api/web_routes.py` — endpoint `web_get_users`
+بعد `get_all_users()` اقرأ `teachers.json` وأكمل الحقل الفارغ بمطابقة `username == رقم الهوية`:
+```python
+try:
+    import json as _json
+    with open(TEACHERS_JSON, encoding='utf-8') as _tf:
+        _teachers = _json.load(_tf).get('teachers', [])
+    _tid_map = {str(t.get('رقم الهوية','')).strip(): str(t.get('رقم الجوال','')).strip()
+                for t in _teachers if t.get('رقم الجوال')}
+    for u in users:
+        if not u.get('phone') and _tid_map.get(str(u.get('username','')).strip()):
+            u['phone'] = _tid_map[str(u['username']).strip()]
+except Exception:
+    pass
+```
+
+---
+
+## [2026-04-30] إصلاح زر "تقرير الفصل"
+
+### المشكلة
+الزر كان يعرض `alert("تقرير الفصل — يحتاج API")` بدلاً من التقرير الحقيقي.
+
+### التعديلات في `api/web_routes.py`
+1. أضف `<div id="tr-st"></div>` فوق منطقة عرض التقرير
+2. أصلح onclick الزر ليستدعي `loadClassReport()`
+3. أضف دالة `loadClassReport()` في JavaScript تستدعي `/web/api/class-report`
+4. عدّل endpoint `web_class_report` ليقبل parameter `semester` وقيمة `'all'`
+
+---
+
+## [2026-04-30] إزالة الفصل الدراسي الثالث
+
+### المشكلة
+المنهج السعودي فصلين فقط، والفصل الثالث تم إلغاؤه.
+
+### التعديل في `api/web_routes.py`
+احذف `<option value="3">الفصل الثالث</option>` من كل select يخص الفصول الدراسية داخل تقرير الفصل.
+
+---
+
+## [2026-04-30] إخفاء الطلاب المنقولين من جميع التقارير
+
+### المشكلة
+الطلاب المحذوفون (المنقولون) كانوا لا يزالون يظهرون في تقارير "أكثر الطلاب غياباً" وغيرها.
+
+### التعديلات
+
+#### 1. `database.py` — جدول جديد في `init_db`
+```python
+cur.execute("""CREATE TABLE IF NOT EXISTS transferred_students (
+    student_id   TEXT PRIMARY KEY,
+    student_name TEXT,
+    transferred_at TEXT
+)""")
+```
+
+#### 2. `database.py` — دالة جديدة
+```python
+def add_transferred_student(student_id: str, student_name: str):
+    with get_conn() as conn:
+        conn.execute("""INSERT OR IGNORE INTO transferred_students(student_id,student_name,transferred_at)
+                        VALUES(?,?,?)""", (student_id, student_name, datetime.datetime.now().isoformat()))
+```
+
+#### 3. `api/web_routes.py` — endpoint حذف الطالب
+عند حذف الطالب من students.json استدعِ `add_transferred_student(student_id, student_name)`.
+
+#### 4. `alerts_service.py` — `get_top_absent_students`
+أضف في الاستعلام:
+```sql
+AND student_id NOT IN (SELECT student_id FROM transferred_students)
+```
+
+#### 5. باقي الاستعلامات
+أضف نفس الشرط في كل استعلام يُظهر تقارير الغياب والتأخر (سجل الغياب، سجل التأخر، إلخ).
+
+---
+
+## [2026-04-30] نقل قسم "طلب حفظ رقم المدرسة" إلى إعدادات المدرسة
+
+### المشكلة
+كان القسم في تبويب "إرسال رسائل الغياب"، والمكان المناسب هو إعدادات المدرسة → واتساب.
+
+### التعديل في `api/web_routes.py`
+- احذف قسم `طلب حفظ رقم المدرسة` من `tab-send_absence`
+- أضفه داخل `div#ss-wa` في تبويب إعدادات المدرسة
+- في تهيئة التبويب غيّر: `'send_absence':function(){snLoadPreview();fillSel('sn-cls');}` → `'send_absence':function(){}`
+- في تهيئة `school_settings` أضف: `snLoadPreview(); fillSel('sn-cls');`
+
+---
+
+## [2026-04-30] إضافة تبويب "هروب واستئذان"
+
+### الوصف
+تبويب جديد يرصد الطلاب الذين سُجّل حضورهم في حصص مبكرة ثم غابوا في حصص لاحقة (هروب محتمل أو استئذان غير مسجل).
+
+### التعديلات
+
+#### 1. `constants.py` — ROLE_TABS
+أضف `'هروب واستئذان'` إلى قائمتي `deputy` و `staff`.
+
+#### 2. `database.py` — جدول جديد
+```python
+cur.execute("""CREATE TABLE IF NOT EXISTS partial_absence_status (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    date       TEXT NOT NULL,
+    student_id TEXT NOT NULL,
+    status     TEXT NOT NULL DEFAULT 'غير محدد',
+    notes      TEXT NOT NULL DEFAULT '',
+    updated_at TEXT,
+    UNIQUE(date, student_id)
+)""")
+```
+
+#### 3. `database.py` — دالة `get_partial_absences`
+```python
+def get_partial_absences(date_str: str, min_period: int = 2) -> list:
+    # CTE يجلب الطلاب الغائبين في حصص > min_period
+    # مع شرط أن فصلهم قد سُجّل فيه حضور في حصص <= min_period
+    # يربط بـ partial_absence_status للحالة الحالية
+```
+*(انسخ الكود الكامل من `DarbStu/database.py`)*
+
+#### 4. `database.py` — دالة `set_partial_absence_status`
+```python
+def set_partial_absence_status(date_str, student_id, status, notes=""):
+    # INSERT OR REPLACE مع ON CONFLICT DO UPDATE
+```
+
+#### 5. `api/web_routes.py` — HTML
+أضف `<div id="tab-partial_absence">` يحتوي:
+- منتقي تاريخ + حد الحصص الدراسية + زر بحث
+- جدول النتائج (الطالب، الفصل، الحصص الغائب فيها، الحالة، أزرار: مستأذن / هارب)
+- قسم تقرير الهاربين
+
+#### 6. `api/web_routes.py` — JavaScript
+```javascript
+var _paRows = [], _paDate = '';
+var _escRows = [];
+async function loadPartialAbsences() { ... }
+function paMarkEscaped(btn, idx) { ... }   // يسجّل في partial_absence_status + counselor_referrals
+function paMarkPermitted(btn, idx) { ... } // يسجّل في permissions table
+function paReset(sid) { ... }
+async function loadEscapedReport() { ... }
+async function loadAlertsEscaped() { ... }  // يحمّل الهاربين في تبويب الإشعارات الذكية
+async function referEscapedToCounselor() { ... } // يحوّل المحددين للموجّه
+```
+
+#### 7. `api/web_routes.py` — endpoints
+```python
+GET  /web/api/partial-absences           # يستدعي get_partial_absences
+POST /web/api/partial-absences/status    # يستدعي set_partial_absence_status
+POST /web/api/partial-absences/mark-escaped   # يحدّث الحالة + يسجّل في counselor_referrals
+POST /web/api/partial-absences/mark-permitted # يسجّل في permissions table
+GET  /web/api/escaped-report             # يجلب من counselor_referrals WHERE referral_type='هروب'
+POST /web/api/students/mark-transferred  # يسجّل الطالب في transferred_students
+```
+
+#### 8. `api/web_routes.py` — endpoint `refer-to-counselor`
+- أضف `'هروب'` لقائمة الأنواع المقبولة
+- اقبل مفتاح `ref_type` إضافةً إلى `type`
+- لنوع `هروب`: نفّذ UPDATE status='مُحال' بدلاً من INSERT لتفادي التكرار
+
+#### 9. `api/web_routes.py` — تبويب الإشعارات الذكية
+أضف subtab "🚨 الهاربون" يعرض قائمة الهاربين مع checkbox للتحديد وزر تحويل جماعي للموجّه.
+
+#### 10. `api/web_routes.py` — `renderCounselorList`
+أضف شارة السبب بجانب اسم الطالب:
+```javascript
+var typeBadge = '';
+if(r.referral_type === 'هروب')
+  typeBadge = ' <span style="background:#7f1d1d;color:#fca5a5;...">🏃 هروب</span>';
+else if(r.referral_type === 'غياب')
+  typeBadge = ' <span style="...">غياب</span>';
+// ... إلخ
+```
+
 <!-- أضف تعديلات جديدة هنا بنفس الصيغة -->

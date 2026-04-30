@@ -5017,9 +5017,15 @@ function renderCounselorList(rows){
         `<button class="btn bp5 bsm" onclick="delCounselorStudent('${sid}','${sn}')" title="حذف">🗑️</button>`;
     }
     
+    var typeBadge = '';
+    if(r.referral_type === 'هروب') typeBadge = ' <span style="background:#7f1d1d;color:#fca5a5;font-size:11px;padding:2px 7px;border-radius:10px;font-weight:bold">🏃 هروب</span>';
+    else if(r.referral_type === 'غياب') typeBadge = ' <span style="background:#fef2f2;color:#dc2626;font-size:11px;padding:2px 7px;border-radius:10px;border:1px solid #fca5a5">غياب</span>';
+    else if(r.referral_type === 'تأخر') typeBadge = ' <span style="background:#fff7ed;color:#ea580c;font-size:11px;padding:2px 7px;border-radius:10px;border:1px solid #fed7aa">تأخر</span>';
+    else if(r.referral_type === 'تحويل معلم') typeBadge = ' <span style="background:#ede9fe;color:#7c3aed;font-size:11px;padding:2px 7px;border-radius:10px;border:1px solid #c4b5fd">تحويل معلم</span>';
+    else if(r.referral_type) typeBadge = ' <span style="background:#f3f4f6;color:#374151;font-size:11px;padding:2px 7px;border-radius:10px">'+r.referral_type+'</span>';
     return '<tr style="'+bg+'">'+
       '<td>'+r.student_id+'</td>'+
-      '<td><strong>'+r.student_name+'</strong></td>'+
+      '<td><strong>'+r.student_name+'</strong>'+typeBadge+'</td>'+
       '<td>'+r.class_name+'</td>'+
       '<td><span class="badge br">'+r.absences+'</span></td>'+
       '<td><span class="badge bo">'+r.tardiness+'</span></td>'+
