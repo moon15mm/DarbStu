@@ -2156,9 +2156,10 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
       <div class="fg"><label class="fl">الصف</label><select id="tr-cls"><option value="">الكل</option></select></div>
     </div>
     <div class="bg-btn">
-      <button class="btn bp1" onclick="alert('تقرير الفصل — يحتاج API')">إنشاء</button>
+      <button class="btn bp1" onclick="loadClassReport()">إنشاء</button>
       <button class="btn bp2" onclick="printSec('tr-res')">🖨️ طباعة</button>
     </div>
+    <div id="tr-st" style="margin-top:8px"></div>
     <div id="tr-res" style="margin-top:16px"></div>
   </div>
 </div>
@@ -6167,25 +6168,31 @@ function printGaFrame(){
 /* ── REPORT HELPERS ── */
 async function loadClassReport(){
   var cid=document.getElementById('tr-cls').value;
-  if(!cid){ss('tr-st','اختر فصلاً','er');return;}
+  var sem=document.getElementById('tr-sem').value;
   var box=document.getElementById('tr-res');
+  ss('tr-st','⏳ جارٍ التحميل...','ai');
   if(box)box.innerHTML='<div class="loading">⏳</div>';
   try{
-    var d=await api('/web/api/class-report?class_id='+encodeURIComponent(cid));
-    if(!d||!d.ok){if(box)box.innerHTML='<div class="ab ae">❌ '+((d&&d.msg)||'فشل')+'</div>';return;}
-    var html='<div class="stat-cards">'+
+    var url='/web/api/class-report?semester='+encodeURIComponent(sem);
+    if(cid) url+='&class_id='+encodeURIComponent(cid);
+    var d=await api(url);
+    if(!d||!d.ok){ss('tr-st','❌ '+((d&&d.msg)||'فشل'),'er');if(box)box.innerHTML='';return;}
+    ss('tr-st','','');
+    var title=cid?(d.class_name||cid):'جميع الفصول';
+    var html='<div class="section"><div class="st">الفصل الدراسي '+(sem==='1'?'الأول':sem==='2'?'الثاني':'الثالث')+' — '+title+'</div></div>'+
+      '<div class="stat-cards">'+
       crd(d.students||0,'#1565C0','عدد الطلاب','👨‍🎓')+
       crd(d.total_absences||0,'#C62828','إجمالي الغياب','🔴')+
       crd(d.total_tardiness||0,'#E65100','إجمالي التأخر','⏰')+
       crd((d.avg_absent_per_student||0).toFixed(1),'#7c3aed','متوسط الغياب/طالب','📊')+
       '</div>';
-    html+='<div class="section"><div class="st">الطلاب مرتبون حسب الغياب</div><div class="tw"><table><thead><tr><th>#</th><th>الطالب</th><th>أيام الغياب</th><th>التأخر</th></tr></thead><tbody>';
+    html+='<div class="section"><div class="st">الطلاب مرتبون حسب الغياب</div><div class="tw"><table><thead><tr><th>#</th><th>الطالب</th><th>الفصل</th><th>أيام الغياب</th><th>التأخر</th></tr></thead><tbody>';
     (d.rows||[]).forEach(function(r,i){
-      html+='<tr><td>'+(i+1)+'</td><td>'+r.name+'</td><td>'+r.absences+'</td><td>'+r.tardiness+'</td></tr>';
+      html+='<tr><td>'+(i+1)+'</td><td>'+r.name+'</td><td>'+(r.class_name||'')+'</td><td>'+r.absences+'</td><td>'+r.tardiness+'</td></tr>';
     });
     html+='</tbody></table></div></div>';
-    if(box)box.innerHTML=html;else alert('✅ تم التحميل');
-  }catch(e){if(box)box.innerHTML='<div class="ab ae">❌ خطأ</div>';}
+    if(box)box.innerHTML=html;
+  }catch(e){ss('tr-st','❌ خطأ في الاتصال','er');if(box)box.innerHTML='';}
 }
 async function loadStuReport(){
   var sid=document.getElementById('rp-ss').value;
@@ -8179,53 +8186,66 @@ async def web_save_noor_config(request: Request):
 
 
 @router.get("/web/api/class-report", response_class=JSONResponse)
-async def web_class_report(request: Request, class_id: str = ""):
+async def web_class_report(request: Request, class_id: str = "", semester: str = ""):
     user = _get_current_user(request)
     if not user:
         return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
     try:
-        if not class_id:
-            return JSONResponse({"ok": False, "msg": "class_id مطلوب"})
+        import datetime as _dt
+        # نطاق تاريخ الفصل الدراسي
+        today = _dt.date.today()
+        yr = today.year
+        # السنة الدراسية: إذا الشهر >= 9 → العام الحالي، وإلا العام السابق
+        acad_yr = yr if today.month >= 9 else yr - 1
+        sem_ranges = {
+            "1": (f"{acad_yr}-09-01",    f"{acad_yr+1}-01-31"),
+            "2": (f"{acad_yr+1}-02-01",  f"{acad_yr+1}-06-30"),
+            "3": (f"{acad_yr+1}-05-01",  f"{acad_yr+1}-08-31"),
+        }
+        date_from, date_to = sem_ranges.get(semester, ("1900-01-01", "2999-12-31"))
 
         store = load_students(force_reload=False)
-        target = None
-        for c in store.get("list", []):
-            if c.get("id") == class_id or c.get("name") == class_id:
-                target = c; break
-        if not target:
-            return JSONResponse({"ok": False, "msg": "الفصل غير موجود"})
+        all_classes = store.get("list", [])
 
-        students = target.get("students", [])
-        cid_actual = target.get("id") or class_id
+        # فلترة الفصل إذا طُلب
+        if class_id:
+            target_classes = [c for c in all_classes if c.get("id") == class_id or c.get("name") == class_id]
+            if not target_classes:
+                return JSONResponse({"ok": False, "msg": "الفصل غير موجود"})
+        else:
+            target_classes = all_classes
 
-        # حساب الغياب والتأخر لكل طالب
-        con = get_db(); cur = con.cursor()
+        # حساب الغياب والتأخر لكل طالب من قاعدة البيانات
+        con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
         abs_rows = cur.execute(
-            "SELECT student_id, COUNT(DISTINCT date) as cnt FROM absences WHERE class_id=? GROUP BY student_id",
-            (cid_actual,)
+            "SELECT student_id, COUNT(DISTINCT date) as cnt FROM absences WHERE date BETWEEN ? AND ? GROUP BY student_id",
+            (date_from, date_to)
         ).fetchall()
         tard_rows = cur.execute(
-            "SELECT student_id, COUNT(*) as cnt FROM tardiness WHERE class_id=? GROUP BY student_id",
-            (cid_actual,)
+            "SELECT student_id, COUNT(*) as cnt FROM tardiness WHERE date BETWEEN ? AND ? GROUP BY student_id",
+            (date_from, date_to)
         ).fetchall()
+        con.close()
         abs_map  = {str(r["student_id"]): r["cnt"] for r in abs_rows}
         tard_map = {str(r["student_id"]): r["cnt"] for r in tard_rows}
 
         rows = []
-        total_abs = 0; total_tard = 0
-        for s in students:
-            sid = str(s.get("id"))
-            a = abs_map.get(sid, 0)
-            t = tard_map.get(sid, 0)
-            total_abs += a; total_tard += t
-            rows.append({"id": sid, "name": s.get("name",""), "absences": a, "tardiness": t})
+        total_abs = 0; total_tard = 0; total_stu = 0
+        for cls in target_classes:
+            cls_name = cls.get("name", "")
+            for s in cls.get("students", []):
+                sid = str(s.get("id"))
+                a = abs_map.get(sid, 0)
+                t = tard_map.get(sid, 0)
+                total_abs += a; total_tard += t; total_stu += 1
+                rows.append({"id": sid, "name": s.get("name",""), "class_name": cls_name, "absences": a, "tardiness": t})
         rows.sort(key=lambda r: -r["absences"])
 
-        n = max(len(students), 1)
+        n = max(total_stu, 1)
         return JSONResponse({
             "ok": True,
-            "class_name": target.get("name",""),
-            "students": len(students),
+            "class_name": target_classes[0].get("name","") if len(target_classes) == 1 else "جميع الفصول",
+            "students": total_stu,
             "total_absences": total_abs,
             "total_tardiness": total_tard,
             "avg_absent_per_student": round(total_abs / n, 2),
