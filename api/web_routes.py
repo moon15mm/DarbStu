@@ -2317,6 +2317,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
   <div class="it">
     <button class="itb active" onclick="si('alerts','al-abs');loadAlerts();">🔴 الغياب</button>
     <button class="itb" onclick="si('alerts','al-tard');loadAlertsTard();">🟠 التأخر</button>
+    <button class="itb" onclick="si('alerts','al-escaped');loadAlertsEscaped();">🚨 الهاربون</button>
   </div>
   <div id="al-abs" class="ip active">
     <div id="alerts-info" style="margin:8px 0 12px"></div>
@@ -2341,6 +2342,19 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
     <div class="section"><div class="tw"><table>
       <thead><tr><th style="width:32px">☐</th><th>#</th><th>الطالب</th><th>الفصل</th><th>مرات التأخر</th><th>آخر تأخر</th></tr></thead>
       <tbody id="alerts-tard-table"></tbody></table></div></div>
+  </div>
+  <div id="al-escaped" class="ip">
+    <div style="margin:8px 0 12px;font-size:13px;color:#64748B">الطلاب الذين سُجِّلوا هاربين — مرتبون من الأحدث للأقدم</div>
+    <div id="al-escaped-month" style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
+      <label class="fl" style="margin:0">الشهر:</label>
+      <input type="month" id="al-esc-month" style="width:auto">
+      <button class="btn bp2 bsm" onclick="loadAlertsEscaped()">🔄 تحديث</button>
+      <button class="btn bp3 bsm" onclick="printSec('al-esc-tbl')">🖨️ طباعة</button>
+    </div>
+    <div id="al-esc-st" style="margin-bottom:8px"></div>
+    <div class="section" id="al-esc-tbl"><div class="tw"><table>
+      <thead><tr><th>#</th><th>التاريخ</th><th>الطالب</th><th>الفصل</th><th>الحصص الغائبة</th><th>حالة الإحالة</th></tr></thead>
+      <tbody id="al-esc-tbody"></tbody></table></div></div>
   </div>
 </div>
 
@@ -3653,7 +3667,7 @@ function showTab(key){
     'reports_print':function(){loadReports();fillSel('rp-cls');fillSel('rp-sc');},
     'admin_report':generateAdminReport,
     'student_analysis':function(){fillSel('an-class');},
-    'top_absent':loadTopAbsent,'alerts':loadAlerts,
+    'top_absent':loadTopAbsent,'alerts':function(){loadAlerts();},
     'new_permission':function(){loadClasses();loadTodayPerms();},
     'student_mgmt':function(){loadStudents();fillSel('sm-cls');},
     'add_student':function(){fillSel('as-cls');},
@@ -4389,6 +4403,29 @@ async function loadAlertsTard(){
 }
 function alSelAll(tblId,checked){
   document.querySelectorAll('#'+tblId+' input[type=checkbox]:not(:disabled)').forEach(function(c){c.checked=checked;});
+}
+async function loadAlertsEscaped(){
+  var monthEl=document.getElementById('al-esc-month');
+  if(!monthEl.value) monthEl.value=today.substring(0,7);
+  var month=monthEl.value;
+  var d=await api('/web/api/escaped-report?month='+month);
+  var tbody=document.getElementById('al-esc-tbody');
+  var st=document.getElementById('al-esc-st');
+  if(!d||!d.ok){st.textContent='❌ خطأ في التحميل';tbody.innerHTML='';return;}
+  var rows=d.rows||[];
+  st.textContent=rows.length?rows.length+' طالب مسجَّل هارب هذا الشهر':'';
+  if(!rows.length){tbody.innerHTML='<tr><td colspan="6" style="color:#9CA3AF;text-align:center">لا يوجد هاربون هذا الشهر</td></tr>';return;}
+  tbody.innerHTML=rows.map(function(r,i){
+    var notesShort=(r.notes||'').replace('هروب من المدرسة — الحصص الغائبة: ','');
+    return '<tr style="background:#FEF2F2">'+
+      '<td style="color:#dc2626;font-weight:700">'+(i+1)+'</td>'+
+      '<td>'+r.date+'</td>'+
+      '<td style="color:#dc2626;font-weight:700">🏃 '+r.student_name+'</td>'+
+      '<td>'+r.class_name+'</td>'+
+      '<td style="font-size:12px">'+notesShort+'</td>'+
+      '<td><span style="color:'+(r.status==='مُحال'?'#16a34a':'#dc2626')+';font-weight:700">'+r.status+'</span></td>'+
+      '</tr>';
+  }).join('');
 }
 async function referToCounselor(type){
   var tblId=type==='غياب'?'alerts-table':'alerts-tard-table';
