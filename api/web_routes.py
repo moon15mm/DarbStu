@@ -2641,6 +2641,14 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
     <div id="pa-st" style="margin-bottom:10px"></div>
     <div id="pa-list"></div>
   </div>
+
+  <div class="section" style="margin-top:16px;border-right:4px solid #dc2626">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div class="st" style="color:#dc2626;margin:0">🏃 تقرير الهاربين — الشهر الحالي</div>
+      <button class="btn bp3 bsm" onclick="printSec('pa-escaped-report')">🖨️ طباعة</button>
+    </div>
+    <div id="pa-escaped-report"><div class="ab ai" style="font-size:13px">⏳ جارٍ التحميل...</div></div>
+  </div>
 </div>
 
 <div id="tab-counselor">
@@ -3641,7 +3649,7 @@ function showTab(key){
     'tardiness':loadTardiness,'excuses':loadExcuses,'permissions':loadPermissions,
     'logs':function(){fillSel('lg-cls');},
     'absence_mgmt':function(){fillSel('am-cls');fillSel('am-bc');},
-    'partial_absence':function(){document.getElementById('pa-date').value=today;},
+    'partial_absence':function(){document.getElementById('pa-date').value=today;loadEscapedReport();},
     'reports_print':function(){loadReports();fillSel('rp-cls');fillSel('rp-sc');},
     'admin_report':generateAdminReport,
     'student_analysis':function(){fillSel('an-class');},
@@ -4806,34 +4814,74 @@ async function loadPartialAbsences(){
   if(!d||!d.ok){ss('pa-st','❌ '+(d&&d.msg||'خطأ'),'er');return;}
   var rows=d.rows||[];
   if(!rows.length){ss('pa-st','✅ لا يوجد طلاب في هذه الحالة ليوم '+date,'ok');document.getElementById('pa-list').innerHTML='';return;}
-  ss('pa-st',rows.length+' طالب','ai');
-  var statusColors={'هارب':'#dc2626','مستأذن':'#2563eb','غير محدد':'#64748B'};
+  ss('pa-st',rows.length+' طالب بحاجة تصنيف','ai');
+  var statusColors={'هارب':'#dc2626','مستأذن':'#2563eb','غير محدد':'#94a3b8'};
   var html='<div class="tw"><table><thead><tr><th>#</th><th>الطالب</th><th>الفصل</th><th>حصص الغياب</th><th>الحالة</th><th>تصنيف</th></tr></thead><tbody>';
   rows.forEach(function(r,i){
     var sid=String(r.student_id);
+    var nm=r.student_name||'';
+    var cls=r.class_name||'';
     var periods=(r.absent_periods||'').split(',').map(function(p){return 'ح'+p;}).join('، ');
-    var sc=statusColors[r.status]||'#64748B';
-    html+='<tr id="pa-row-'+sid+'">';
+    var sc=statusColors[r.status]||'#94a3b8';
+    var classified=r.status!=='غير محدد';
+    var rowBg=r.status==='هارب'?'background:#FEF2F2':r.status==='مستأذن'?'background:#EFF6FF':'';
+    html+='<tr id="pa-row-'+sid+'" style="'+rowBg+'">';
     html+='<td>'+(i+1)+'</td>';
-    html+='<td>'+r.student_name+'</td>';
-    html+='<td>'+r.class_name+'</td>';
-    html+='<td style="direction:ltr;text-align:right">'+periods+'</td>';
+    html+='<td>'+nm+'</td>';
+    html+='<td>'+cls+'</td>';
+    html+='<td>'+periods+'</td>';
     html+='<td><span style="color:'+sc+';font-weight:700">'+r.status+'</span></td>';
-    html+='<td style="white-space:nowrap">';
-    html+='<button class="btn bsm" style="background:#dc2626;color:#fff;margin-left:4px" onclick="setPaStatus(\''+sid+'\',\'هارب\',\''+date+'\')">🏃 هارب</button>';
-    html+='<button class="btn bsm" style="background:#2563eb;color:#fff;margin-left:4px" onclick="setPaStatus(\''+sid+'\',\'مستأذن\',\''+date+'\')">📋 مستأذن</button>';
-    html+='<button class="btn bp2 bsm" onclick="setPaStatus(\''+sid+'\',\'غير محدد\',\''+date+'\')">↩</button>';
+    html+='<td style="white-space:nowrap;display:flex;gap:4px">';
+    if(!classified||r.status==='هارب'){
+      html+='<button class="btn bsm" style="background:#dc2626;color:#fff" onclick="paMarkEscaped(this,\''+sid+'\','+JSON.stringify(nm)+','+JSON.stringify(cls)+',\''+date+'\',\''+r.absent_periods+'\')">🏃 هارب</button>';
+    }
+    if(!classified||r.status==='مستأذن'){
+      html+='<button class="btn bsm" style="background:#2563eb;color:#fff" onclick="paMarkPermitted(this,\''+sid+'\','+JSON.stringify(nm)+','+JSON.stringify(cls)+',\''+date+'\',\''+r.absent_periods+'\')">📋 مستأذن</button>';
+    }
+    if(classified){
+      html+='<button class="btn bp2 bsm" onclick="paReset(\''+sid+'\',\''+date+'\')">↩</button>';
+    }
     html+='</td></tr>';
   });
   html+='</tbody></table></div>';
   document.getElementById('pa-list').innerHTML=html;
 }
-async function setPaStatus(sid, status, date){
+async function paMarkEscaped(btn, sid, nm, cls, date, periods){
+  btn.disabled=true; btn.textContent='⏳';
+  var r=await fetch('/web/api/partial-absences/mark-escaped',{method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({student_id:sid,student_name:nm,class_name:cls,date:date,absent_periods:periods})});
+  var d=await r.json();
+  if(d&&d.ok){loadPartialAbsences();loadEscapedReport();}
+  else{btn.disabled=false;btn.textContent='🏃 هارب';alert('❌ '+(d&&d.msg||'خطأ'));}
+}
+async function paMarkPermitted(btn, sid, nm, cls, date, periods){
+  btn.disabled=true; btn.textContent='⏳';
+  var r=await fetch('/web/api/partial-absences/mark-permitted',{method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({student_id:sid,student_name:nm,class_name:cls,date:date,absent_periods:periods})});
+  var d=await r.json();
+  if(d&&d.ok){loadPartialAbsences();}
+  else{btn.disabled=false;btn.textContent='📋 مستأذن';alert('❌ '+(d&&d.msg||'خطأ'));}
+}
+async function paReset(sid, date){
   var r=await fetch('/web/api/partial-absences/status',{method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({student_id:sid, status:status, date:date})});
+    body:JSON.stringify({student_id:sid,status:'غير محدد',date:date})});
   var d=await r.json();
   if(d&&d.ok) loadPartialAbsences();
+}
+async function loadEscapedReport(){
+  var month=today.substring(0,7);
+  var d=await api('/web/api/escaped-report?month='+month);
+  var box=document.getElementById('pa-escaped-report');
+  if(!d||!d.ok||!d.rows||!d.rows.length){box.innerHTML='<div class="ab ai" style="font-size:13px">لا يوجد هاربون هذا الشهر</div>';return;}
+  var html='<div class="tw"><table><thead><tr><th>التاريخ</th><th>الطالب</th><th>الفصل</th><th>التفاصيل</th><th>الحالة</th></tr></thead><tbody>';
+  d.rows.forEach(function(r){
+    html+='<tr style="background:#FEF2F2"><td>'+r.date+'</td><td style="color:#dc2626;font-weight:700">'+r.student_name+'</td><td>'+r.class_name+'</td><td style="font-size:12px;color:#64748B">'+r.notes+'</td><td>'+r.status+'</td></tr>';
+  });
+  html+='</tbody></table></div>';
+  box.innerHTML=html;
 }
 
 /* ── COUNSELOR ── */
@@ -4883,6 +4931,7 @@ function renderCounselorList(rows){
     var bg = 'background:#FFF7ED';
     if(r.referral_type === 'غياب') bg = 'background:#FFF0F0';
     else if(r.referral_type === 'تحويل معلم') bg = 'background:#EDE7F6';
+    else if(r.referral_type === 'هروب') bg = 'background:#dc2626;color:#fff';
     var sid=String(r.student_id).replace(/'/g,"\\'");
     var sn=String(r.student_name).replace(/'/g,"\\'");
     var cn=String(r.class_name).replace(/'/g,"\\'");
@@ -10259,6 +10308,129 @@ async def web_set_partial_absence_status(req: Request):
         from database import set_partial_absence_status
         set_partial_absence_status(date, student_id, status, notes)
         return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+
+@router.post("/web/api/partial-absences/mark-permitted", response_class=JSONResponse)
+async def web_mark_permitted(req: Request):
+    """تسجيل الطالب كمستأذن في جدول الاستئذان."""
+    user = _get_current_user(req)
+    if not user or user.get("role") not in ("admin", "deputy", "staff"):
+        return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=403)
+    try:
+        data        = await req.json()
+        student_id  = str(data.get("student_id", "")).strip()
+        student_name= str(data.get("student_name", "")).strip()
+        class_name  = str(data.get("class_name", "")).strip()
+        date        = str(data.get("date", "")).strip()
+        periods     = str(data.get("absent_periods", "")).strip()
+        if not student_id or not date:
+            return JSONResponse({"ok": False, "msg": "بيانات ناقصة"})
+
+        # جلب class_id و parent_phone من قاعدة البيانات
+        con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
+        row = cur.execute(
+            "SELECT class_id FROM absences WHERE student_id=? AND date=? LIMIT 1",
+            (student_id, date)
+        ).fetchone()
+        class_id = row["class_id"] if row else ""
+
+        # جلب جوال ولي الأمر من students.json إن وُجد
+        parent_phone = ""
+        try:
+            store = load_students(force_reload=False)
+            for cls in store.get("list", []):
+                for s in cls.get("students", []):
+                    if str(s.get("id")) == student_id:
+                        parent_phone = s.get("phone", "") or s.get("parent_phone", "")
+                        break
+        except Exception:
+            pass
+
+        # التحقق من عدم وجود استئذان مسبق لنفس الطالب في نفس اليوم
+        existing = cur.execute(
+            "SELECT id FROM permissions WHERE student_id=? AND date=?",
+            (student_id, date)
+        ).fetchone()
+        con.close()
+        if existing:
+            # تحديث الحالة في partial_absence_status فقط
+            from database import set_partial_absence_status
+            set_partial_absence_status(date, student_id, "مستأذن")
+            return JSONResponse({"ok": True, "msg": "مسجَّل مسبقاً في الاستئذان"})
+
+        reason = f"غياب جزئي — الحصص: {periods}"
+        from alerts_service import insert_permission
+        insert_permission(date, student_id, student_name, class_id, class_name,
+                          parent_phone, reason=reason, approved_by=user.get("sub", "الويب"))
+        from database import set_partial_absence_status
+        set_partial_absence_status(date, student_id, "مستأذن")
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+
+@router.post("/web/api/partial-absences/mark-escaped", response_class=JSONResponse)
+async def web_mark_escaped(req: Request):
+    """تسجيل الطالب كهارب في الإشعارات الذكية (counselor_referrals)."""
+    user = _get_current_user(req)
+    if not user or user.get("role") not in ("admin", "deputy", "staff"):
+        return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=403)
+    try:
+        data         = await req.json()
+        student_id   = str(data.get("student_id", "")).strip()
+        student_name = str(data.get("student_name", "")).strip()
+        class_name   = str(data.get("class_name", "")).strip()
+        date         = str(data.get("date", "")).strip()
+        periods      = str(data.get("absent_periods", "")).strip()
+        if not student_id or not date:
+            return JSONResponse({"ok": False, "msg": "بيانات ناقصة"})
+
+        now_str = datetime.datetime.utcnow().isoformat()
+        con = get_db(); cur = con.cursor()
+        # تجنب التكرار
+        existing = cur.execute(
+            "SELECT id FROM counselor_referrals WHERE student_id=? AND date=? AND referral_type='هروب'",
+            (student_id, date)
+        ).fetchone()
+        if not existing:
+            cur.execute("""
+                INSERT INTO counselor_referrals
+                    (date, student_id, student_name, class_name, referral_type,
+                     absence_count, notes, referred_by, status, created_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?)
+            """, (date, student_id, student_name, class_name, "هروب",
+                  0, f"هروب من المدرسة — الحصص الغائبة: {periods}",
+                  user.get("sub", "الويب"), "جديد", now_str))
+            con.commit()
+        con.close()
+        from database import set_partial_absence_status
+        set_partial_absence_status(date, student_id, "هارب")
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+
+@router.get("/web/api/escaped-report", response_class=JSONResponse)
+async def web_escaped_report(request: Request, month: str = ""):
+    """تقرير الطلاب الهاربين من الحصول على الكاش."""
+    user = _get_current_user(request)
+    if not user or user.get("role") not in ("admin", "deputy", "staff", "counselor"):
+        return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=403)
+    try:
+        import datetime as _dt
+        if not month:
+            month = _dt.datetime.now().strftime("%Y-%m")
+        con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
+        rows = cur.execute("""
+            SELECT date, student_id, student_name, class_name, notes, status, created_at
+            FROM counselor_referrals
+            WHERE referral_type = 'هروب' AND date LIKE ?
+            ORDER BY date DESC, class_name, student_name
+        """, (month + "%",)).fetchall()
+        con.close()
+        return JSONResponse({"ok": True, "rows": [dict(r) for r in rows], "month": month})
     except Exception as e:
         return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
 
