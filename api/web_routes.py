@@ -2307,7 +2307,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 <div id="tab-top_absent">
   <h2 class="pt"><i class="fas fa-award"></i> أكثر الطلاب غياباً</h2>
   <div class="section"><div class="tw"><table>
-    <thead><tr><th>#</th><th>الطالب</th><th>الفصل</th><th>أيام الغياب</th><th>آخر غياب</th><th></th></tr></thead>
+    <thead><tr><th>#</th><th>الطالب</th><th>الفصل</th><th>أيام الغياب</th><th>آخر غياب</th></tr></thead>
     <tbody id="top-table"></tbody></table></div></div>
 </div>
 
@@ -4325,20 +4325,9 @@ async function loadReports(){
 async function loadTopAbsent(){
   var d=await api('/web/api/top-absent');if(!d||!d.ok)return;
   document.getElementById('top-table').innerHTML=d.rows.map(function(r,i){
-    var sid=String(r.student_id);
-    var nm=r.student_name||r.name||'';
-    return '<tr><td>'+(i+1)+'</td><td>'+nm+'</td><td>'+r.class_name+'</td>'+
-           '<td><span class="badge br">'+(r.days||r.count)+'</span></td><td>'+(r.last_date||'-')+'</td>'+
-           '<td><button class="btn bp3 bsm" title="تسجيل كطالب منقول وإخفاؤه من التقارير" onclick="markTransferred(\''+sid+'\',\''+nm.replace(/'/g,"\\'")+'\')" style="font-size:11px">🚌 نُقل</button></td></tr>';
-  }).join('')||'<tr><td colspan="6" style="color:#9CA3AF">لا يوجد</td></tr>';
-}
-async function markTransferred(sid, name){
-  if(!confirm('تسجيل الطالب "'+name+'" كمنقول؟ سيُخفى من جميع التقارير.'))return;
-  var r=await fetch('/web/api/students/mark-transferred',{method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({student_id:sid,student_name:name})});
-  var d=await r.json();
-  if(d&&d.ok){loadTopAbsent();}else alert('❌ '+(d&&d.msg||'خطأ'));
+    return '<tr><td>'+(i+1)+'</td><td>'+(r.student_name||r.name)+'</td><td>'+r.class_name+'</td>'+
+           '<td><span class="badge br">'+(r.days||r.count)+'</span></td><td>'+(r.last_date||'-')+'</td></tr>';
+  }).join('')||'<tr><td colspan="5" style="color:#9CA3AF">لا يوجد</td></tr>';
 }
 async function loadAlerts(){
   var d=await api('/web/api/alerts-students');if(!d||!d.ok)return;
