@@ -1,6 +1,6 @@
 {
-  "version": "3.5.1",
-  "notes": "إصلاح النسخ الاحتياطي التلقائي إلى Telegram",
+  "version": "3.5.2",
+  "notes": "فلتر المادة في تحليل النتائج + إرسال بيانات المستخدمين",
   "download_url": "https://github.com/moon15mm/DarbStu/archive/refs/heads/main.zip",
   "release_date": "2026-04-30"
 }

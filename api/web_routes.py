@@ -2176,7 +2176,17 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
     <div id="ga-st" style="margin-top:10px"></div>
   </div>
   <div id="ga-summary" style="margin-top:14px"></div>
-  <div id="ga-res" style="margin-top:14px">
+  <div id="ga-filter" style="display:none;margin-top:10px">
+    <div class="section" style="padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <label class="fl" style="margin:0;white-space:nowrap">🔍 فلتر المادة:</label>
+      <select id="ga-subject-sel" onchange="gaFilterSubject()" style="min-width:200px;font-size:14px">
+        <option value="الكل">📚 جميع المواد</option>
+      </select>
+      <span id="ga-filter-info" style="font-size:12px;color:#64748B"></span>
+      <button class="btn bp4 bsm" style="margin-right:auto" onclick="printGaFrame()">🖨️ طباعة</button>
+    </div>
+  </div>
+  <div id="ga-res" style="margin-top:10px">
     <div class="ab ai">📌 ارفع ملفاً وانقر «تحليل» لعرض التقرير الكامل</div>
   </div>
 </div>
@@ -6093,6 +6103,7 @@ async function analyzeGrades(){
   ss('ga-st','⏳ جارٍ تحليل الملف بنفس محرّك التطبيق المكتبي...','ai');
   document.getElementById('ga-res').innerHTML='<div class="loading">⏳ جارٍ التحليل...</div>';
   document.getElementById('ga-summary').innerHTML='';
+  document.getElementById('ga-filter').style.display='none';
   var fd=new FormData();fd.append('file',f);
   try{
     var r=await fetch('/web/api/grade-analysis-upload',{method:'POST',body:fd});
@@ -6108,28 +6119,49 @@ async function analyzeGrades(){
       crd(d.average+'%','#2471A3','متوسط التحصيل','📊')+
       crd(d.pass_rate+'%',d.pass_rate>=70?'#27AE60':'#E67E22','نسبة النجاح','✅')+
       '</div>';
+    // بناء قائمة المواد في الفلتر
+    var sel=document.getElementById('ga-subject-sel');
+    sel.innerHTML='<option value="الكل">📚 جميع المواد</option>';
+    (d.subjects||[]).forEach(function(s){
+      sel.innerHTML+='<option value="'+s+'">'+s+'</option>';
+    });
+    document.getElementById('ga-filter').style.display='';
+    document.getElementById('ga-filter-info').textContent=(d.subjects||[]).length+' مادة';
     renderGaHtml(d.html);
   }catch(e){
     ss('ga-st','❌ خطأ في الاتصال','er');
     document.getElementById('ga-res').innerHTML='<div class="ab ae">❌ خطأ في الاتصال</div>';
   }
 }
-function renderGaHtml(html){
-  // عرض HTML في iframe لعزل الأنماط ومنع تعارضها مع الصفحة
+async function gaFilterSubject(){
+  var sub=document.getElementById('ga-subject-sel').value;
+  var info=document.getElementById('ga-filter-info');
+  info.textContent='⏳ جارٍ التحديث...';
+  try{
+    var r=await fetch('/web/api/grade-analysis-view?subject='+encodeURIComponent(sub));
+    var html=await r.text();
+    renderGaHtml(html, true);
+    info.textContent=sub==='الكل'?'جميع المواد':'مادة: '+sub;
+  }catch(e){
+    info.textContent='❌ خطأ';
+  }
+}
+function renderGaHtml(html, isFullPage){
   var box=document.getElementById('ga-res');
-  box.innerHTML='<iframe id="ga-frame" style="width:100%;height:800px;border:1px solid var(--bd);border-radius:var(--rd);background:#fff" sandbox="allow-same-origin allow-modals allow-scripts allow-forms"></iframe>'+
-    '<div style="margin-top:8px;text-align:left"><button class="btn bp4 bsm" onclick="printGaFrame()">🖨️ طباعة التقرير</button></div>';
+  box.innerHTML='<iframe id="ga-frame" style="width:100%;height:800px;border:1px solid var(--bd);border-radius:var(--rd);background:#fff" sandbox="allow-same-origin allow-modals allow-scripts allow-forms"></iframe>';
   var iframe=document.getElementById('ga-frame');
   var doc=iframe.contentDocument||iframe.contentWindow.document;
   doc.open();
-  doc.write('<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><style>body{margin:0;font-family:Tahoma,Arial,sans-serif;direction:rtl}</style></head><body>'+html+'</body></html>');
+  if(isFullPage){
+    doc.write(html);
+  }else{
+    doc.write('<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><style>body{margin:0;font-family:Tahoma,Arial,sans-serif;direction:rtl}</style></head><body>'+html+'</body></html>');
+  }
   doc.close();
 }
 function printGaFrame(){
-  // بدلاً من طباعة لوحة التحكم التفاعلية، نفتح رابط الطباعة المهيأ لـ A4 في نافذة جديدة
-  var sub = "الكل";
-  // يمكننا محاولة جلب الفلتر المختار مستقبلاً إذا أضفنا اختيار مادة في الويب
-  window.open('/web/api/grade-analysis-print?subject=' + encodeURIComponent(sub), '_blank');
+  var sub=document.getElementById('ga-subject-sel')?document.getElementById('ga-subject-sel').value:'الكل';
+  window.open('/web/api/grade-analysis-print?subject='+encodeURIComponent(sub),'_blank');
 }
 
 /* ── REPORT HELPERS ── */
@@ -8258,12 +8290,20 @@ async def web_grade_analysis_upload(request: Request):
             with open(os.path.join(cache_dir, "last_analysis.json"), "w", encoding="utf-8") as f:
                 json.dump(students, f, ensure_ascii=False, indent=2)
 
+            subjects = sorted(set(
+                sub.get("subject", sub.get("name", ""))
+                for s in students
+                for sub in s.get("subjects", [])
+                if sub.get("subject", sub.get("name", ""))
+            ))
+
             return JSONResponse({
                 "ok": True,
                 "html": html,
                 "students": total_students,
                 "average": avg,
-                "pass_rate": pass_rate
+                "pass_rate": pass_rate,
+                "subjects": subjects
             })
         except Exception as e:
             import traceback
@@ -8274,6 +8314,24 @@ async def web_grade_analysis_upload(request: Request):
     except Exception as e:
         import traceback
         return JSONResponse({"ok": False, "msg": str(e), "trace": traceback.format_exc()[:500]}, status_code=500)
+
+
+@router.get("/web/api/grade-analysis-view")
+async def web_grade_analysis_view(request: Request, subject: str = "الكل"):
+    """يعيد توليد HTML التفاعلي مفلتراً حسب المادة من الكاش."""
+    user = _get_current_user(request)
+    if not user:
+        return HTMLResponse("<html><body><h3>غير مصرح</h3></body></html>", status_code=401)
+    try:
+        cache_file = os.path.join(DATA_DIR, "grade_analysis", "last_analysis.json")
+        if not os.path.exists(cache_file):
+            return HTMLResponse("<html><body><h3>لم يتم إجراء أي تحليل بعد</h3></body></html>")
+        with open(cache_file, "r", encoding="utf-8") as f:
+            students = json.load(f)
+        html = _ga_build_html(students, sel_subject=subject)
+        return HTMLResponse(html)
+    except Exception as e:
+        return HTMLResponse(f"<html><body><h3>خطأ: {str(e)}</h3></body></html>")
 
 
 @router.get("/web/api/grade-analysis-print")
