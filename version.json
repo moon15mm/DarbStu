@@ -1,6 +1,6 @@
 {
-  "version": "3.5.2",
-  "notes": "فلتر المادة في تحليل النتائج + إرسال بيانات المستخدمين",
+  "version": "3.5.3",
+  "notes": "إخفاء الطلاب المنقولين + إصلاح تقرير الفصل + سحب رقم الجوال تلقائياً",
   "download_url": "https://github.com/moon15mm/DarbStu/archive/refs/heads/main.zip",
   "release_date": "2026-04-30"
 }
