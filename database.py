@@ -616,6 +616,14 @@ def init_db():
         created_at   TEXT NOT NULL
     )""")
 
+    # ─── جدول الطلاب المنقولين (لإخفائهم من التقارير) ──────────────
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS transferred_students (
+        student_id    TEXT PRIMARY KEY,
+        student_name  TEXT,
+        transferred_at TEXT NOT NULL
+    )""")
+
     # ─── جدول نقاط التميز (جديد) ──────────────────────────────────
     cur.execute("""CREATE TABLE IF NOT EXISTS student_points (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -739,6 +747,14 @@ def get_exempted_students() -> List[Dict]:
     rows = [dict(r) for r in cur.fetchall()]
     con.close()
     return rows
+
+def add_transferred_student(student_id: str, student_name: str = ""):
+    """يُسجّل الطالب المنقول لإخفائه من التقارير."""
+    con = get_db(); cur = con.cursor()
+    cur.execute("""INSERT OR REPLACE INTO transferred_students (student_id, student_name, transferred_at)
+                   VALUES (?, ?, ?)""",
+                (str(student_id), student_name, datetime.datetime.now().isoformat()))
+    con.commit(); con.close()
 
 # --- Inbox Messages ---
 def send_inbox_message(from_user: str, to_user: str, subject: str, body: str,

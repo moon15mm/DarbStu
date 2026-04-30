@@ -42,6 +42,7 @@ from database import (get_db, load_students, load_teachers,
                       get_behavioral_contracts, delete_behavioral_contract,
                       delete_absence, delete_excuse, save_user_phone,
                       get_exempted_students, add_exempted_student, remove_exempted_student,
+                      add_transferred_student,
                       update_user_password,
                       send_inbox_message, get_inbox_messages, get_sent_messages,
                       get_inbox_unread_count, mark_inbox_message_read, delete_inbox_message,
@@ -796,6 +797,19 @@ async def web_top_absent(request: Request):
     month = _dt.datetime.now().strftime("%Y-%m")
     rows  = get_top_absent_students(month=month, limit=20)
     return JSONResponse({"ok": True, "rows": rows})
+
+@router.post("/web/api/students/mark-transferred", response_class=JSONResponse)
+async def web_mark_transferred(req: Request):
+    user = _get_current_user(req)
+    if not user or user.get("role") not in ("admin", "deputy"):
+        return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=403)
+    data = await req.json()
+    sid  = str(data.get("student_id", "")).strip()
+    name = str(data.get("student_name", "")).strip()
+    if not sid:
+        return JSONResponse({"ok": False, "msg": "student_id مطلوب"})
+    add_transferred_student(sid, name)
+    return JSONResponse({"ok": True})
 
 @router.get("/web/api/permissions", response_class=JSONResponse)
 async def web_permissions(request: Request, date: str = None):
@@ -2293,7 +2307,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 <div id="tab-top_absent">
   <h2 class="pt"><i class="fas fa-award"></i> أكثر الطلاب غياباً</h2>
   <div class="section"><div class="tw"><table>
-    <thead><tr><th>#</th><th>الطالب</th><th>الفصل</th><th>أيام الغياب</th><th>آخر غياب</th></tr></thead>
+    <thead><tr><th>#</th><th>الطالب</th><th>الفصل</th><th>أيام الغياب</th><th>آخر غياب</th><th></th></tr></thead>
     <tbody id="top-table"></tbody></table></div></div>
 </div>
 
@@ -4311,9 +4325,20 @@ async function loadReports(){
 async function loadTopAbsent(){
   var d=await api('/web/api/top-absent');if(!d||!d.ok)return;
   document.getElementById('top-table').innerHTML=d.rows.map(function(r,i){
-    return '<tr><td>'+(i+1)+'</td><td>'+(r.student_name||r.name)+'</td><td>'+r.class_name+'</td>'+
-           '<td><span class="badge br">'+(r.days||r.count)+'</span></td><td>'+(r.last_date||'-')+'</td></tr>';
-  }).join('')||'<tr><td colspan="5" style="color:#9CA3AF">لا يوجد</td></tr>';
+    var sid=String(r.student_id);
+    var nm=r.student_name||r.name||'';
+    return '<tr><td>'+(i+1)+'</td><td>'+nm+'</td><td>'+r.class_name+'</td>'+
+           '<td><span class="badge br">'+(r.days||r.count)+'</span></td><td>'+(r.last_date||'-')+'</td>'+
+           '<td><button class="btn bp3 bsm" title="تسجيل كطالب منقول وإخفاؤه من التقارير" onclick="markTransferred(\''+sid+'\',\''+nm.replace(/'/g,"\\'")+'\')" style="font-size:11px">🚌 نُقل</button></td></tr>';
+  }).join('')||'<tr><td colspan="6" style="color:#9CA3AF">لا يوجد</td></tr>';
+}
+async function markTransferred(sid, name){
+  if(!confirm('تسجيل الطالب "'+name+'" كمنقول؟ سيُخفى من جميع التقارير.'))return;
+  var r=await fetch('/web/api/students/mark-transferred',{method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({student_id:sid,student_name:name})});
+  var d=await r.json();
+  if(d&&d.ok){loadTopAbsent();}else alert('❌ '+(d&&d.msg||'خطأ'));
 }
 async function loadAlerts(){
   var d=await api('/web/api/alerts-students');if(!d||!d.ok)return;
@@ -7232,9 +7257,11 @@ async def web_delete_student(student_id: str, req: Request):
     try:
         store = load_students(force_reload=True)
         found = False
+        deleted_name = ""
         for cls in store["list"]:
             for i, s in enumerate(cls["students"]):
                 if str(s["id"]) == str(student_id):
+                    deleted_name = s.get("name", "")
                     del cls["students"][i]
                     found = True
                     break
@@ -7249,6 +7276,7 @@ async def web_delete_student(student_id: str, req: Request):
             json.dump({"classes": store["list"]}, f, ensure_ascii=False, indent=2)
         _os.replace(_tmp, STUDENTS_JSON)
         load_students(force_reload=True)
+        add_transferred_student(student_id, deleted_name)
         return JSONResponse({"ok": True})
     except Exception as e:
         return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
@@ -8218,11 +8246,11 @@ async def web_class_report(request: Request, class_id: str = "", semester: str =
         # حساب الغياب والتأخر لكل طالب من قاعدة البيانات
         con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
         abs_rows = cur.execute(
-            "SELECT student_id, COUNT(DISTINCT date) as cnt FROM absences WHERE date BETWEEN ? AND ? GROUP BY student_id",
+            "SELECT student_id, COUNT(DISTINCT date) as cnt FROM absences WHERE date BETWEEN ? AND ? AND student_id NOT IN (SELECT student_id FROM transferred_students) GROUP BY student_id",
             (date_from, date_to)
         ).fetchall()
         tard_rows = cur.execute(
-            "SELECT student_id, COUNT(*) as cnt FROM tardiness WHERE date BETWEEN ? AND ? GROUP BY student_id",
+            "SELECT student_id, COUNT(*) as cnt FROM tardiness WHERE date BETWEEN ? AND ? AND student_id NOT IN (SELECT student_id FROM transferred_students) GROUP BY student_id",
             (date_from, date_to)
         ).fetchall()
         con.close()

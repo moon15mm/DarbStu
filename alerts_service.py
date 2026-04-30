@@ -230,9 +230,10 @@ def get_top_absent_students(month: str = None, limit: int = 10) -> List[Dict]:
                MAX(class_name) as class_name,
                COUNT(DISTINCT date) as days,
                MAX(date) as last_date
-        FROM absences 
-        WHERE date LIKE ? 
+        FROM absences
+        WHERE date LIKE ?
         AND student_id NOT IN (SELECT student_id FROM exempted_students)
+        AND student_id NOT IN (SELECT student_id FROM transferred_students)
         GROUP BY student_id
         ORDER BY days DESC LIMIT ?
     """, (month + "%", limit))
