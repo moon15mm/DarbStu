@@ -624,6 +624,18 @@ def init_db():
         transferred_at TEXT NOT NULL
     )""")
 
+    # ─── جدول تصنيف الغياب الجزئي (هارب/مستأذن) ─────────────────
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS partial_absence_status (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        date        TEXT NOT NULL,
+        student_id  TEXT NOT NULL,
+        status      TEXT NOT NULL DEFAULT 'غير محدد',
+        notes       TEXT DEFAULT '',
+        updated_at  TEXT NOT NULL,
+        UNIQUE(date, student_id)
+    )""")
+
     # ─── جدول نقاط التميز (جديد) ──────────────────────────────────
     cur.execute("""CREATE TABLE IF NOT EXISTS student_points (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -754,6 +766,51 @@ def add_transferred_student(student_id: str, student_name: str = ""):
     cur.execute("""INSERT OR REPLACE INTO transferred_students (student_id, student_name, transferred_at)
                    VALUES (?, ?, ?)""",
                 (str(student_id), student_name, datetime.datetime.now().isoformat()))
+    con.commit(); con.close()
+
+def get_partial_absences(date_str: str, min_period: int = 2) -> List[Dict]:
+    """
+    يُرجع الطلاب الذين غابوا في حصص لاحقة فقط (حضروا الحصص الأولى).
+    الشرط: أقل حصة غياب للطالب > min_period (أي لا غياب في الحصة الأولى أو الثانية).
+    """
+    con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
+    cur.execute("""
+        SELECT
+            a.student_id,
+            MAX(a.student_name)  AS student_name,
+            MAX(a.class_name)    AS class_name,
+            MIN(a.period)        AS first_absent_period,
+            MAX(a.period)        AS last_absent_period,
+            GROUP_CONCAT(a.period ORDER BY a.period) AS absent_periods,
+            COUNT(*)             AS absence_count,
+            COALESCE(p.status, 'غير محدد') AS status,
+            COALESCE(p.notes, '')           AS notes
+        FROM absences a
+        LEFT JOIN partial_absence_status p
+               ON p.date = a.date AND p.student_id = a.student_id
+        WHERE a.date = ?
+          AND a.period IS NOT NULL
+          AND a.student_id NOT IN (
+              SELECT student_id FROM absences
+              WHERE date = ? AND period IS NOT NULL AND period <= ?
+          )
+        GROUP BY a.student_id
+        ORDER BY a.class_name, student_name
+    """, (date_str, date_str, min_period))
+    rows = [dict(r) for r in cur.fetchall()]
+    con.close()
+    return rows
+
+def set_partial_absence_status(date_str: str, student_id: str, status: str, notes: str = "") -> None:
+    """يحفظ أو يُحدّث تصنيف الغياب الجزئي."""
+    con = get_db(); cur = con.cursor()
+    cur.execute("""INSERT INTO partial_absence_status (date, student_id, status, notes, updated_at)
+                   VALUES (?, ?, ?, ?, ?)
+                   ON CONFLICT(date, student_id) DO UPDATE SET
+                       status = excluded.status,
+                       notes  = excluded.notes,
+                       updated_at = excluded.updated_at""",
+                (date_str, str(student_id), status, notes, datetime.datetime.now().isoformat()))
     con.commit(); con.close()
 
 # --- Inbox Messages ---

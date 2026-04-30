@@ -1679,6 +1679,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
             ("الأعذار",                 "excuses",              "fas fa-file-medical"),
             ("الاستئذان",               "permissions",          "fas fa-door-open"),
             ("إدارة الغياب",            "absence_mgmt",         "fas fa-users-cog"),
+            ("هروب واستئذان",           "partial_absence",      "fas fa-running"),
             ("الموجّه الطلابي",         "counselor",            "fas fa-brain"),
             ("استلام تحويلات",          "referral_deputy",      "fas fa-inbox"),
             ("زيارات أولياء الأمور",   "parent_visits",        "fas fa-users"),
@@ -2616,6 +2617,29 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
         <thead><tr><th>رقم الهوية</th><th>الطالب</th><th>الصف</th><th>العام</th><th>المعدل</th><th>عرض</th></tr></thead>
         <tbody id="res-table"></tbody></table></div>
     </div>
+  </div>
+</div>
+
+<div id="tab-partial_absence">
+  <h2 class="pt"><i class="fas fa-running"></i> هروب واستئذان</h2>
+  <div class="section">
+    <p style="font-size:13px;color:#64748B;margin:0 0 14px">
+      يعرض الطلاب الذين حضروا الحصص الأولى ثم غابوا في حصص لاحقة — قد يكونون هاربين أو مستأذنين.
+    </p>
+    <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px">
+      <div class="fg"><label class="fl">التاريخ</label><input type="date" id="pa-date" style="width:auto"></div>
+      <div class="fg">
+        <label class="fl">اعتبر غائباً من الحصة</label>
+        <select id="pa-min-period" style="width:auto">
+          <option value="2">الثالثة فأكثر (حضر 1 و 2)</option>
+          <option value="3">الرابعة فأكثر (حضر 1 و 2 و 3)</option>
+          <option value="1">الثانية فأكثر (حضر 1 فقط)</option>
+        </select>
+      </div>
+      <button class="btn bp1" onclick="loadPartialAbsences()">🔍 بحث</button>
+    </div>
+    <div id="pa-st" style="margin-bottom:10px"></div>
+    <div id="pa-list"></div>
   </div>
 </div>
 
@@ -3617,6 +3641,7 @@ function showTab(key){
     'tardiness':loadTardiness,'excuses':loadExcuses,'permissions':loadPermissions,
     'logs':function(){fillSel('lg-cls');},
     'absence_mgmt':function(){fillSel('am-cls');fillSel('am-bc');},
+    'partial_absence':function(){document.getElementById('pa-date').value=todayStr();},
     'reports_print':function(){loadReports();fillSel('rp-cls');fillSel('rp-sc');},
     'admin_report':generateAdminReport,
     'student_analysis':function(){fillSel('an-class');},
@@ -4452,7 +4477,8 @@ var _US_ALL_TABS = [
   'تعزيز الحضور الأسبوعي','لوحة الصدارة (النقاط)','إدارة الطلاب','إضافة طالب',
   'إدارة الفصول','إدارة الجوالات','الطلاب المستثنون','نشر النتائج','تصدير نور',
   'زيارات أولياء الأمور','تحويل طالب','نماذج المعلم','تحليل النتائج',
-  'إعدادات المدرسة','المستخدمون','النسخ الاحتياطية','شواهد الأداء','الرسائل الداخلية'
+  'إعدادات المدرسة','المستخدمون','النسخ الاحتياطية','شواهد الأداء','الرسائل الداخلية',
+  'هروب واستئذان'
 ];
 var _US_ROLE_DEFAULTS = {
   deputy:['لوحة المراقبة','المراقبة الحية','روابط الفصول','تسجيل الغياب','تسجيل التأخر',
@@ -4462,11 +4488,11 @@ var _US_ROLE_DEFAULTS = {
           'إرسال رسائل التأخر','روابط بوابة أولياء الأمور','التعاميم والنشرات','قصص المدرسة',
           'تعزيز الحضور الأسبوعي','لوحة الصدارة (النقاط)','إدارة الطلاب','إضافة طالب',
           'إدارة الفصول','إدارة الجوالات','الطلاب المستثنون','نشر النتائج','تصدير نور',
-          'زيارات أولياء الأمور','الرسائل الداخلية'],
+          'زيارات أولياء الأمور','الرسائل الداخلية','هروب واستئذان'],
   staff:['لوحة المراقبة','المراقبة الحية','روابط الفصول','تسجيل الغياب','تسجيل التأخر',
          'طلب استئذان','سجل الغياب','سجل التأخر','الأعذار','الاستئذان','التعاميم والنشرات',
          'إدارة الطلاب','إضافة طالب','إدارة الجوالات','الطلاب المستثنون','قصص المدرسة',
-         'لوحة الصدارة (النقاط)','تحليل طالب','زيارات أولياء الأمور','الرسائل الداخلية'],
+         'لوحة الصدارة (النقاط)','تحليل طالب','زيارات أولياء الأمور','الرسائل الداخلية','هروب واستئذان'],
   counselor:['لوحة المراقبة','المراقبة الحية','روابط الفصول','سجل الغياب','سجل التأخر',
              'الأعذار','الموجّه الطلابي','تحليل طالب','أكثر الطلاب غياباً','الإشعارات الذكية',
              'التعاميم والنشرات','قصص المدرسة','تعزيز الحضور الأسبوعي','لوحة الصدارة (النقاط)',
@@ -4768,6 +4794,46 @@ async function addRecipient(){
   var role=document.getElementById('rec-role').value;if(!name||!phone){ss('rec-st','اكمل الاسم والجوال','er');return;}
   var r=await fetch('/web/api/add-tardiness-recipient',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,phone:phone,role:role})});
   var d=await r.json();ss('rec-st',d.ok?'✅ تمت الإضافة':'❌ '+(d.msg||'خطأ'),d.ok?'ok':'er');if(d.ok)loadRecipients();
+}
+
+/* ── PARTIAL ABSENCE ── */
+async function loadPartialAbsences(){
+  var date=document.getElementById('pa-date').value;
+  var minP=document.getElementById('pa-min-period').value;
+  if(!date){ss('pa-st','اختر تاريخاً','er');return;}
+  ss('pa-st','⏳ جارٍ البحث...','ai');
+  var d=await api('/web/api/partial-absences?date='+date+'&min_period='+minP);
+  if(!d||!d.ok){ss('pa-st','❌ '+(d&&d.msg||'خطأ'),'er');return;}
+  var rows=d.rows||[];
+  if(!rows.length){ss('pa-st','✅ لا يوجد طلاب في هذه الحالة ليوم '+date,'ok');document.getElementById('pa-list').innerHTML='';return;}
+  ss('pa-st',rows.length+' طالب','ai');
+  var statusColors={'هارب':'#dc2626','مستأذن':'#2563eb','غير محدد':'#64748B'};
+  var html='<div class="tw"><table><thead><tr><th>#</th><th>الطالب</th><th>الفصل</th><th>حصص الغياب</th><th>الحالة</th><th>تصنيف</th></tr></thead><tbody>';
+  rows.forEach(function(r,i){
+    var sid=String(r.student_id);
+    var periods=(r.absent_periods||'').split(',').map(function(p){return 'ح'+p;}).join('، ');
+    var sc=statusColors[r.status]||'#64748B';
+    html+='<tr id="pa-row-'+sid+'">';
+    html+='<td>'+(i+1)+'</td>';
+    html+='<td>'+r.student_name+'</td>';
+    html+='<td>'+r.class_name+'</td>';
+    html+='<td style="direction:ltr;text-align:right">'+periods+'</td>';
+    html+='<td><span style="color:'+sc+';font-weight:700">'+r.status+'</span></td>';
+    html+='<td style="white-space:nowrap">';
+    html+='<button class="btn bsm" style="background:#dc2626;color:#fff;margin-left:4px" onclick="setPaStatus(\''+sid+'\',\'هارب\',\''+date+'\')">🏃 هارب</button>';
+    html+='<button class="btn bsm" style="background:#2563eb;color:#fff;margin-left:4px" onclick="setPaStatus(\''+sid+'\',\'مستأذن\',\''+date+'\')">📋 مستأذن</button>';
+    html+='<button class="btn bp2 bsm" onclick="setPaStatus(\''+sid+'\',\'غير محدد\',\''+date+'\')">↩</button>';
+    html+='</td></tr>';
+  });
+  html+='</tbody></table></div>';
+  document.getElementById('pa-list').innerHTML=html;
+}
+async function setPaStatus(sid, status, date){
+  var r=await fetch('/web/api/partial-absences/status',{method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({student_id:sid, status:status, date:date})});
+  var d=await r.json();
+  if(d&&d.ok) loadPartialAbsences();
 }
 
 /* ── COUNSELOR ── */
@@ -10154,6 +10220,47 @@ poll();
         "Content-Security-Policy":
             "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;"
     })
+
+
+# ── Partial Absence ──────────────────────────────────────────────────────────
+
+@router.get("/web/api/partial-absences", response_class=JSONResponse)
+async def web_partial_absences(request: Request, date: str = "", min_period: int = 2):
+    user = _get_current_user(request)
+    if not user:
+        return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
+    if user.get("role") not in ("admin", "deputy", "staff", "counselor"):
+        return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=403)
+    if not date:
+        date = now_riyadh_date()
+    try:
+        from database import get_partial_absences
+        rows = get_partial_absences(date, min_period)
+        return JSONResponse({"ok": True, "rows": rows, "date": date})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+
+@router.post("/web/api/partial-absences/status", response_class=JSONResponse)
+async def web_set_partial_absence_status(req: Request):
+    user = _get_current_user(req)
+    if not user:
+        return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=401)
+    if user.get("role") not in ("admin", "deputy", "staff", "counselor"):
+        return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=403)
+    try:
+        data       = await req.json()
+        student_id = str(data.get("student_id", "")).strip()
+        status     = str(data.get("status", "غير محدد")).strip()
+        date       = str(data.get("date", "")).strip()
+        notes      = str(data.get("notes", "")).strip()
+        if not student_id or not date:
+            return JSONResponse({"ok": False, "msg": "student_id و date مطلوبان"})
+        from database import set_partial_absence_status
+        set_partial_absence_status(date, student_id, status, notes)
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
 
 
 # ===================== main =====================
