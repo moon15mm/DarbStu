@@ -2362,23 +2362,6 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
     </div>
   </div>
 
-  <div class="section" style="margin-top:16px;border:2px dashed #3B82F6;background:#EFF6FF">
-    <div class="st" style="color:#1D4ED8;margin-bottom:10px"><i class="fas fa-save"></i> طلب حفظ رقم المدرسة</div>
-    <div style="font-size:13px;color:#334155;margin-bottom:14px">
-      أرسل رسالة مهذبة لأولياء الأمور تطلب منهم حفظ رقم المدرسة — هذا يقلل احتمال تقييد الحساب بشكل كبير.
-    </div>
-    <div class="fg2" style="margin-bottom:14px">
-      <div class="fg"><label class="fl">الفصل</label>
-        <select id="sn-cls"><option value="">جميع الفصول</option></select>
-      </div>
-    </div>
-    <div style="background:white;border:1px solid #BFDBFE;border-radius:8px;padding:14px;font-size:13px;color:#1E293B;white-space:pre-wrap;line-height:2;margin-bottom:14px" id="sn-preview">⏳ جارٍ تحميل المعاينة...</div>
-    <div class="bg-btn">
-      <button class="btn bp1" onclick="sendSaveNumber()" id="sn-btn">📲 إرسال</button>
-    </div>
-    <div id="sn-progress" style="margin-top:10px;font-size:13px;color:var(--mu)"></div>
-    <div id="sn-st" style="margin-top:8px"></div>
-  </div>
 </div>
 
 <div id="tab-send_tardiness">
@@ -2777,6 +2760,23 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
         <a id="sn-vcard-dl" href="#" class="btn bp1 bsm" download>⬇️ تجربة</a>
       </div>
       <div id="sn-vcard-st" style="margin-top:6px;font-size:12px"></div>
+    </div>
+    <div class="section" style="margin-top:12px;border:2px dashed #3B82F6;background:#EFF6FF">
+      <div class="st" style="color:#1D4ED8;margin-bottom:10px"><i class="fas fa-save"></i> طلب حفظ رقم المدرسة</div>
+      <div style="font-size:13px;color:#334155;margin-bottom:14px">
+        أرسل رسالة مهذبة لأولياء الأمور تطلب منهم حفظ رقم المدرسة — هذا يقلل احتمال تقييد الحساب بشكل كبير.
+      </div>
+      <div class="fg2" style="margin-bottom:14px">
+        <div class="fg"><label class="fl">الفصل</label>
+          <select id="sn-cls"><option value="">جميع الفصول</option></select>
+        </div>
+      </div>
+      <div style="background:white;border:1px solid #BFDBFE;border-radius:8px;padding:14px;font-size:13px;color:#1E293B;white-space:pre-wrap;line-height:2;margin-bottom:14px" id="sn-preview">⏳ جارٍ تحميل المعاينة...</div>
+      <div class="bg-btn">
+        <button class="btn bp1" onclick="sendSaveNumber()" id="sn-btn">📲 إرسال</button>
+      </div>
+      <div id="sn-progress" style="margin-top:10px;font-size:13px;color:var(--mu)"></div>
+      <div id="sn-st" style="margin-top:8px"></div>
     </div>
   </div>
   <div id="ss-adv" class="ip">
@@ -3630,7 +3630,7 @@ function showTab(key){
     'results':function(){},
     'counselor':function(){fillSel('co-cls');fillSel('coa-cls');loadCoSessions();loadCounselorList();},
     'circulars': loadCirculars,
-    'school_settings':loadSettings,
+    'school_settings':function(){loadSettings();fillSel('sn-cls');snLoadPreview();},
     'users':loadUsers,'backup':loadBackups,
     'quick_notes':function(){inboxSwitch('inbox');},
     'schedule_links':function(){fillSel('sch-cls');loadSchedule();},
@@ -3651,7 +3651,7 @@ function showTab(key){
       if(eP&&!eP.value)eP.value=uname;
     },
     'teacher_reports_admin': loadTeacherReportsAdmin,
-    'send_absence':function(){snLoadPreview();fillSel('sn-cls');},
+    'send_absence':function(){},
     'send_tardiness':function(){},
     'parent_visits':pvInit,
   };
