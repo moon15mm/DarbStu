@@ -6945,6 +6945,20 @@ async def web_get_users(request: Request):
         return JSONResponse({"ok": False, "msg": "المدير فقط"}, status_code=403)
     try:
         users = get_all_users()
+        # إذا كان حقل الجوال فارغاً، نحاول سحبه من teachers.json (مطابقة رقم الهوية = username)
+        try:
+            if os.path.exists(TEACHERS_JSON):
+                with open(TEACHERS_JSON, "r", encoding="utf-8") as _tf:
+                    _teachers = json.load(_tf)
+                _phone_map = {
+                    str(t.get("رقم الهوية", "")).strip(): str(t.get("رقم الجوال", "")).strip()
+                    for t in _teachers if t.get("رقم الهوية") and t.get("رقم الجوال")
+                }
+                for u in users:
+                    if not u.get("phone"):
+                        u["phone"] = _phone_map.get(str(u.get("username", "")).strip(), "")
+        except Exception:
+            pass
         return JSONResponse({"ok": True, "users": users})
     except Exception as e:
         return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
