@@ -2152,7 +2152,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
   <h2 class="pt"><i class="fas fa-file-alt"></i> تقرير الفصل الدراسي</h2>
   <div class="section">
     <div class="fg2">
-      <div class="fg"><label class="fl">الفصل الدراسي</label><select id="tr-sem"><option value="1">الأول</option><option value="2">الثاني</option><option value="3">الثالث</option></select></div>
+      <div class="fg"><label class="fl">الفصل الدراسي</label><select id="tr-sem"><option value="1">الأول</option><option value="2">الثاني</option></select></div>
       <div class="fg"><label class="fl">الصف</label><select id="tr-cls"><option value="">الكل</option></select></div>
     </div>
     <div class="bg-btn">
