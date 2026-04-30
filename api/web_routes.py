@@ -2808,6 +2808,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
         <button class="btn bp2 bsm" onclick="usToggle()">🔄 تفعيل/تعطيل</button>
         <button class="btn bp2 bsm" onclick="usChangePw()">🔑 كلمة المرور</button>
         <button class="btn bp3 bsm" onclick="usDelete()">🗑 حذف</button>
+        <button class="btn bsm" style="background:#0f6e56;color:white" onclick="usSendCreds()">📤 إرسال البيانات</button>
       </div>
       <div class="tw">
         <table id="us-tbl" style="width:100%;font-size:12px">
@@ -2859,6 +2860,31 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
         <button class="btn bp2" onclick="document.getElementById('us-add-modal').style.display='none'">إلغاء</button>
       </div>
       <div id="us-add-st" style="margin-top:8px;font-size:13px"></div>
+    </div>
+  </div>
+
+  <!-- مودال إرسال بيانات الدخول -->
+  <div id="us-creds-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center">
+    <div style="background:white;border-radius:14px;padding:28px;width:400px;max-width:95vw;direction:rtl">
+      <div style="font-size:16px;font-weight:700;margin-bottom:6px;color:#0f6e56">📤 إرسال بيانات الدخول</div>
+      <p style="font-size:13px;color:#64748B;margin:0 0 16px">سيتم إنشاء كلمة مرور جديدة وإرسالها للمستخدم عبر واتساب</p>
+      <div class="fg" style="margin-bottom:10px">
+        <label class="fl">الاسم الكامل</label>
+        <input type="text" id="uc-name" readonly style="width:100%;background:#f8fafc;color:#334155">
+      </div>
+      <div class="fg" style="margin-bottom:10px">
+        <label class="fl">اسم المستخدم</label>
+        <input type="text" id="uc-uname" readonly style="width:100%;background:#f8fafc;color:#334155;direction:ltr">
+      </div>
+      <div class="fg" style="margin-bottom:16px">
+        <label class="fl">رقم الجوال <span style="color:#dc2626">*</span></label>
+        <input type="tel" id="uc-phone" placeholder="9665XXXXXXXX" dir="ltr" style="width:100%">
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn" style="background:#0f6e56;color:white" onclick="usSendCredsConfirm()">📤 إرسال</button>
+        <button class="btn bp2" onclick="document.getElementById('us-creds-modal').style.display='none'">إلغاء</button>
+      </div>
+      <div id="uc-st" style="margin-top:10px;font-size:13px"></div>
     </div>
   </div>
 </div>
@@ -4507,6 +4533,30 @@ async function usDelete(){
   var d=await r.json();
   if(d.ok){_usSelected=null;ss('us-st','✅ تم الحذف','ok');loadUsers();}
   else ss('us-st','❌ '+(d.msg||'خطأ'),'er');
+}
+function usSendCreds(){
+  if(!_usSelected){ss('us-st','اختر مستخدماً أولاً','er');return;}
+  document.getElementById('uc-name').value  = _usSelected.full_name || _usSelected.username;
+  document.getElementById('uc-uname').value = _usSelected.username;
+  document.getElementById('uc-phone').value = _usSelected.phone || '';
+  document.getElementById('uc-st').textContent = '';
+  document.getElementById('us-creds-modal').style.display = 'flex';
+}
+async function usSendCredsConfirm(){
+  var phone = document.getElementById('uc-phone').value.trim();
+  var st    = document.getElementById('uc-st');
+  if(!phone){st.textContent='❌ أدخل رقم الجوال';st.style.color='#dc2626';return;}
+  st.textContent='⏳ جارٍ الإرسال...';st.style.color='#1565C0';
+  var r = await fetch('/web/api/users/send-creds',{method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({user_id:_usSelected.id, phone:phone})});
+  var d = await r.json();
+  if(d.ok){
+    st.textContent='✅ تم الإرسال بنجاح';st.style.color='#16a34a';
+    setTimeout(function(){document.getElementById('us-creds-modal').style.display='none';loadUsers();},1500);
+  } else {
+    st.textContent='❌ '+(d.msg||'فشل الإرسال');st.style.color='#dc2626';
+  }
 }
 function usOpenAdd(){document.getElementById('us-add-modal').style.display='flex';}
 async function usAddConfirm(){
@@ -6880,6 +6930,56 @@ async def web_add_user(req: Request):
             data["username"], data["password"],
             data.get("role", "teacher"), data.get("full_name", ""))
         return JSONResponse({"ok": ok, "msg": msg})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+
+@router.post("/web/api/users/send-creds", response_class=JSONResponse)
+async def web_send_user_creds(req: Request):
+    user = _get_current_user(req)
+    if not user: return JSONResponse({"error": "غير مصرح"}, status_code=401)
+    if user.get("role") != "admin":
+        return JSONResponse({"ok": False, "msg": "المدير فقط"}, status_code=403)
+    try:
+        import random
+        from whatsapp_service import send_whatsapp_message
+        data    = await req.json()
+        user_id = data.get("user_id")
+        phone   = str(data.get("phone", "")).strip()
+        if not user_id or not phone:
+            return JSONResponse({"ok": False, "msg": "بيانات ناقصة"})
+
+        users    = get_all_users()
+        target   = next((u for u in users if str(u["id"]) == str(user_id)), None)
+        if not target:
+            return JSONResponse({"ok": False, "msg": "المستخدم غير موجود"})
+
+        username = target["username"]
+        name     = target.get("full_name") or username
+
+        # حفظ الرقم إن لم يكن محفوظاً
+        if not target.get("phone"):
+            save_user_phone(username, phone)
+
+        cfg        = load_config()
+        public_url = cfg.get("cloud_url_internal", "") or cfg.get("cloud_url", "") or cfg.get("public_url", "")
+        if not public_url:
+            return JSONResponse({"ok": False, "msg": "لم يُعثر على الرابط العام — أضفه في الإعدادات"})
+
+        password = str(random.randint(100000, 999999))
+        update_user_password(username, password)
+
+        msg = (f"مرحباً {name}\n\n"
+               f"بيانات دخولك للنظام:\n\n"
+               f"🔗 الرابط: {public_url}/web/login\n"
+               f"👤 اسم المستخدم: {username}\n"
+               f"🔑 كلمة المرور: {password}\n\n"
+               f"مع تحيات إدارة المدرسة")
+
+        ok = send_whatsapp_message(phone, msg)
+        if ok:
+            return JSONResponse({"ok": True})
+        return JSONResponse({"ok": False, "msg": "فشل إرسال الرسالة — تأكد من اتصال الواتساب"})
     except Exception as e:
         return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
 
