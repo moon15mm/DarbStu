@@ -1,6 +1,6 @@
 {
-  "version": "3.5.0",
-  "notes": "نظام الرسائل الداخلية مع المرفقات + نسخ احتياطي تلقائي إلى Telegram + إصلاح إرفاق الصور في شواهد الأداء + حذف الطلاب + طلب حفظ رقم المدرسة",
+  "version": "3.5.1",
+  "notes": "إصلاح النسخ الاحتياطي التلقائي إلى Telegram",
   "download_url": "https://github.com/moon15mm/DarbStu/archive/refs/heads/main.zip",
   "release_date": "2026-04-30"
 }
