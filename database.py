@@ -695,6 +695,27 @@ def init_db():
         created_at TEXT NOT NULL
     )""")
 
+    cur.execute("""CREATE TABLE IF NOT EXISTS inbox_messages (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        from_user        TEXT NOT NULL,
+        to_user          TEXT NOT NULL,
+        subject          TEXT NOT NULL DEFAULT '',
+        body             TEXT NOT NULL,
+        created_at       TEXT NOT NULL,
+        is_read          INTEGER NOT NULL DEFAULT 0,
+        read_at          TEXT,
+        deleted_by_sender   INTEGER NOT NULL DEFAULT 0,
+        deleted_by_receiver INTEGER NOT NULL DEFAULT 0,
+        attachment_path  TEXT,
+        attachment_name  TEXT,
+        attachment_size  INTEGER
+    )""")
+    # ترقية: أضف أعمدة المرفقات إذا لم تكن موجودة
+    _ib_cols = {r[1] for r in cur.execute("PRAGMA table_info(inbox_messages)")}
+    for _col, _def in [("attachment_path","TEXT"), ("attachment_name","TEXT"), ("attachment_size","INTEGER")]:
+        if _col not in _ib_cols:
+            cur.execute(f"ALTER TABLE inbox_messages ADD COLUMN {_col} {_def}")
+
     con.commit(); con.close()
 
 # --- Helper functions for Exempted Students ---
@@ -718,6 +739,62 @@ def get_exempted_students() -> List[Dict]:
     rows = [dict(r) for r in cur.fetchall()]
     con.close()
     return rows
+
+# --- Inbox Messages ---
+def send_inbox_message(from_user: str, to_user: str, subject: str, body: str,
+                       attachment_path=None, attachment_name=None, attachment_size=None) -> int:
+    con = get_db(); cur = con.cursor()
+    now = datetime.datetime.now().isoformat()
+    cur.execute(
+        "INSERT INTO inbox_messages (from_user, to_user, subject, body, created_at, attachment_path, attachment_name, attachment_size) VALUES (?,?,?,?,?,?,?,?)",
+        (from_user, to_user, subject, body, now, attachment_path, attachment_name, attachment_size))
+    msg_id = cur.lastrowid
+    con.commit(); con.close()
+    return msg_id
+
+def get_inbox_messages(username: str) -> List[Dict]:
+    con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
+    cur.execute("""SELECT * FROM inbox_messages
+                   WHERE to_user=? AND deleted_by_receiver=0
+                   ORDER BY created_at DESC""", (username,))
+    rows = [dict(r) for r in cur.fetchall()]
+    con.close()
+    return rows
+
+def get_sent_messages(username: str) -> List[Dict]:
+    con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
+    cur.execute("""SELECT * FROM inbox_messages
+                   WHERE from_user=? AND deleted_by_sender=0
+                   ORDER BY created_at DESC""", (username,))
+    rows = [dict(r) for r in cur.fetchall()]
+    con.close()
+    return rows
+
+def get_inbox_unread_count(username: str) -> int:
+    con = get_db(); cur = con.cursor()
+    cur.execute("SELECT COUNT(*) FROM inbox_messages WHERE to_user=? AND is_read=0 AND deleted_by_receiver=0", (username,))
+    count = cur.fetchone()[0]
+    con.close()
+    return count
+
+def mark_inbox_message_read(msg_id: int, username: str):
+    con = get_db(); cur = con.cursor()
+    now = datetime.datetime.now().isoformat()
+    cur.execute("UPDATE inbox_messages SET is_read=1, read_at=? WHERE id=? AND to_user=?",
+                (now, msg_id, username))
+    con.commit(); con.close()
+
+def delete_inbox_message(msg_id: int, username: str):
+    con = get_db(); cur = con.cursor()
+    cur.execute("SELECT from_user, to_user FROM inbox_messages WHERE id=?", (msg_id,))
+    row = cur.fetchone()
+    if not row:
+        con.close(); return
+    if row[0] == username:
+        cur.execute("UPDATE inbox_messages SET deleted_by_sender=1 WHERE id=?", (msg_id,))
+    if row[1] == username:
+        cur.execute("UPDATE inbox_messages SET deleted_by_receiver=1 WHERE id=?", (msg_id,))
+    con.commit(); con.close()
 
 # --- Student Points & Rewards ---
 def add_student_points(student_id, points, reason="", date=None, author_id=None, author_name=None):
@@ -1794,7 +1871,9 @@ def create_user(username, password, role, full_name="", phone=""):
 def update_user_password(username, new_password):
     client = get_cloud_client()
     if client.is_active():
-        client.post("/web/api/users/update-password", {"username": username, "password": new_password})
+        res = client.post("/web/api/users/update-password", {"username": username, "password": new_password})
+        if not res.get("ok"):
+            raise Exception(res.get("msg", "فشل تغيير كلمة المرور على السيرفر"))
         return
 
     con = get_db(); cur = con.cursor()
@@ -2016,15 +2095,51 @@ def get_backup_list():
     cur.execute("SELECT * FROM backup_log ORDER BY created_at DESC LIMIT 50")
     rows = [dict(r) for r in cur.fetchall()]; con.close(); return rows
 
+def upload_backup_telegram(zip_path: str) -> bool:
+    """يرفع ملف النسخة الاحتياطية إلى Telegram — يقرأ الإعدادات من config.json."""
+    try:
+        import requests as _req
+        cfg = get_config()
+        token   = cfg.get("telegram_backup_token", "").strip()
+        chat_id = cfg.get("telegram_backup_chat", "").strip()
+        if not token or not chat_id:
+            return False
+        url  = f"https://api.telegram.org/bot{token}/sendDocument"
+        date_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        caption  = f"🗄️ نسخة احتياطية تلقائية\n📅 {date_str}\n📦 {os.path.basename(zip_path)}"
+        with open(zip_path, "rb") as f:
+            r = _req.post(
+                url,
+                data={"chat_id": chat_id, "caption": caption},
+                files={"document": (os.path.basename(zip_path), f, "application/zip")},
+                timeout=120
+            )
+        if r.status_code == 200:
+            print(f"[BACKUP-TG] ✅ تم الرفع إلى Telegram")
+            return True
+        print(f"[BACKUP-TG] ❌ فشل: {r.text[:200]}")
+        return False
+    except Exception as e:
+        print(f"[BACKUP-TG] ❌ خطأ: {e}")
+        return False
+
+
 def schedule_auto_backup(root_widget, interval_hours=24):
-    """يجدول نسخ احتياطي تلقائي كل X ساعة."""
+    """يجدول نسخ احتياطي تلقائي كل X ساعة مع رفع خارجي إلى Telegram."""
     def do_backup():
         ok, path, size = create_backup()
         if ok:
             print(f"[BACKUP] ✅ نسخة احتياطية: {os.path.basename(path)} ({size} KB)")
+            # رفع خارجي في خيط منفصل حتى لا يعطّل الواجهة
+            import threading
+            threading.Thread(
+                target=upload_backup_telegram,
+                args=(path,),
+                daemon=True,
+                name="backup-upload"
+            ).start()
         else:
             print(f"[BACKUP] ❌ فشل: {path}")
-        # جدول المرة القادمة
         ms = interval_hours * 3600 * 1000
         root_widget.after(ms, do_backup)
     # أول نسخة بعد 5 دقائق من التشغيل

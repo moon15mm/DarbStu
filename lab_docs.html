@@ -1771,31 +1771,31 @@ function debounce(fn, delay) {
 
 // Override toggleChk to also save
 const _origToggleChk = toggleChk;
-function toggleChk(el) {
+toggleChk = function(el) {
   _origToggleChk(el);
   debounce(saveAllData, 300)();
-}
+};
 
 // Override selScore to also save
 const _origSelScore = selScore;
-function selScore(row, score) {
+selScore = function(row, score) {
   _origSelScore(row, score);
   debounce(saveAllData, 300)();
-}
+};
 
 // Save after photo changes too
 const _origAddPhotos = addPhotos;
-function addPhotos(uid, files) {
+addPhotos = function(uid, files) {
   _origAddPhotos(uid, files);
   // photos are saved after FileReader async, so delay a bit
   setTimeout(saveAllData, 800);
-}
+};
 
 const _origDeletePhoto = deletePhoto;
-function deletePhoto(uid, idx) {
+deletePhoto = function(uid, idx) {
   _origDeletePhoto(uid, idx);
   saveAllData();
-}
+};
 
 // ===== زر مسح البيانات =====
 function clearAllData() {

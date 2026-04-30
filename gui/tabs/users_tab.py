@@ -486,8 +486,11 @@ class UsersTabMixin:
         if not new_pw: return
         if len(new_pw) < 6:
             messagebox.showwarning("تنبيه","كلمة المرور يجب أن تكون 6 أحرف على الأقل"); return
-        update_user_password(username, new_pw)
-        messagebox.showinfo("تم","تم تغيير كلمة المرور بنجاح")
+        try:
+            update_user_password(username, new_pw)
+            messagebox.showinfo("تم","تم تغيير كلمة المرور بنجاح")
+        except Exception as e:
+            messagebox.showerror("خطأ", f"فشل تغيير كلمة المرور:\n{e}")
 
     def _user_toggle(self):
         sel = self.tree_users.selection()
@@ -658,15 +661,18 @@ class UsersTabMixin:
             messagebox.showwarning("تنبيه", "لم يتم العثور على الرابط العام للبرنامج."); return
 
         password = str(random.randint(100000, 999999))
-        update_user_password(username, password)
-        
+        try:
+            update_user_password(username, password)
+        except Exception as e:
+            messagebox.showerror("خطأ", f"فشل تغيير كلمة المرور:\n{e}"); return
+
         msg = (f"مرحباً أستاذ {name}\n\n"
                f"بيانات دخولك للنظام:\n\n"
                f"الرابط: {public_url}/web/login\n"
                f"اسم المستخدم: {username}\n"
                f"كلمة المرور: {password}\n\n"
                f"مع تحيات إدارة المدرسة")
-        
+
         self.root.config(cursor="wait")
         try:
             ok = send_whatsapp_message(phone, msg)

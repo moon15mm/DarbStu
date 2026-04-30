@@ -56,7 +56,7 @@ MY_STATIC_DOMAIN  = 'darbte.uk'
 ngrok = None
 
 APP_TITLE           = 'تسجيل غياب الطلاب'
-APP_VERSION         = '3.4.9'
+APP_VERSION         = '3.5.0'
 UPDATE_URL          = 'https://raw.githubusercontent.com/moon15mm/DarbStu/main/version.json'
 UPDATE_DOWNLOAD_URL = 'https://github.com/moon15mm/DarbStu/archive/refs/heads/main.zip'
 DB_PATH             = os.path.join(BASE_DIR, 'absences.db')
@@ -65,6 +65,7 @@ STUDENTS_JSON       = os.path.join(DATA_DIR, 'students.json')
 USERS_JSON          = os.path.join(DATA_DIR, 'users.json')
 TARDINESS_JSON      = os.path.join(DATA_DIR, 'tardiness.db')
 BACKUP_DIR          = os.path.join(DATA_DIR, 'backups')
+INBOX_ATTACHMENTS_DIR = os.path.join(DATA_DIR, 'inbox_attachments')
 TEACHERS_JSON       = os.path.join(DATA_DIR, 'teachers.json')
 CONFIG_JSON         = os.path.join(DATA_DIR, 'config.json')
 HOST                = '127.0.0.1'

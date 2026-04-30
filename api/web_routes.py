@@ -11,7 +11,7 @@ from constants import (DB_PATH, DATA_DIR, HOST, PORT, TZ_OFFSET,
                        STATIC_DOMAIN, BASE_DIR, BACKUP_DIR,
                        STUDENTS_JSON, TEACHERS_JSON, CONFIG_JSON,
                        now_riyadh_date, CURRENT_USER, ROLES, ROLE_TABS,
-                       APP_VERSION)
+                       APP_VERSION, INBOX_ATTACHMENTS_DIR)
 from config_manager import (load_config, save_config, get_terms,
                              logo_img_tag_from_config, render_message,
                              invalidate_config_cache)
@@ -41,7 +41,11 @@ from database import (get_db, load_students, load_teachers,
                       get_counselor_alerts, insert_behavioral_contract,
                       get_behavioral_contracts, delete_behavioral_contract,
                       delete_absence, delete_excuse, save_user_phone,
-                      get_exempted_students, add_exempted_student, remove_exempted_student)
+                      get_exempted_students, add_exempted_student, remove_exempted_student,
+                      update_user_password,
+                      send_inbox_message, get_inbox_messages, get_sent_messages,
+                      get_inbox_unread_count, mark_inbox_message_read, delete_inbox_message,
+                      upload_backup_telegram)
 from whatsapp_service import (send_whatsapp_message, send_whatsapp_pdf,
                                check_whatsapp_server_status)
 from alerts_service import (log_message_status, run_smart_alerts,
@@ -432,6 +436,106 @@ async def web_send_absence_messages(req: Request):
         return JSONResponse({"ok": True, "sent": sent, "failed": failed})
     except Exception as e:
         return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+
+@router.post("/web/api/send-save-number", response_class=JSONResponse)
+async def web_send_save_number(req: Request):
+    user = _get_current_user(req)
+    if not user or user["role"] not in ("admin", "deputy"):
+        return JSONResponse({"ok": False, "msg": "للمدير والوكيل فقط"}, status_code=403)
+    try:
+        data     = await req.json()
+        class_id = data.get("class_id", "")
+        cfg      = load_config()
+        school   = cfg.get("school_name", "المدرسة")
+        store    = load_students()
+
+        import random, asyncio
+        sent = failed = skipped = 0
+        seen_phones = set()
+
+        public_url = cfg.get("public_url", cfg.get("cloud_url", "")).rstrip("/")
+        vcard_link = f"{public_url}/web/save-contact" if public_url else ""
+        vcard_line = f"\n📲 أو اضغط هنا لحفظ الرقم مباشرةً:\n{vcard_link}" if vcard_link else ""
+
+        msg_template = (
+            "السلام عليكم ورحمة الله وبركاته\n\n"
+            "ولي الأمر الكريم،\n\n"
+            "تهديكم إدارة {school} أطيب التحيات وأزكاها.\n\n"
+            "يسعدنا إعلامكم بأن هذا الرقم هو الرقم الرسمي للمدرسة المخصص للتواصل مع أولياء الأمور، "
+            "وسيُستخدم لإبلاغكم بكل ما يخص أبنائكم من غياب أو تأخر أو أخبار مهمة.\n\n"
+            "🔖 نرجو منكم حفظ هذا الرقم باسم:\n"
+            "({school})"
+            "{vcard_line}\n\n"
+            "وذلك لضمان وصول الرسائل إليكم دون انقطاع.\n\n"
+            "شاكرين تعاونكم وحرصكم،\n"
+            "إدارة {school}"
+        )
+
+        for cls in store["list"]:
+            if class_id and cls.get("id") != class_id:
+                continue
+            for s in cls["students"]:
+                phone = s.get("phone", "").strip()
+                if not phone or phone in seen_phones:
+                    skipped += 1; continue
+                seen_phones.add(phone)
+                if sent > 0:
+                    await asyncio.sleep(random.uniform(8, 18))
+                msg = msg_template.format(school=school, vcard_line=vcard_line)
+                ok, _ = send_whatsapp_message(phone, msg)
+                if ok: sent += 1
+                else:  failed += 1
+
+        return JSONResponse({"ok": True, "sent": sent, "failed": failed, "skipped": skipped})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+
+@router.get("/web/save-contact")
+async def web_save_contact():
+    cfg    = load_config()
+    school = cfg.get("school_name", "المدرسة")
+    phone  = cfg.get("wa_phone", "").strip()
+    if not phone:
+        return Response("رقم المدرسة غير مُعيَّن في الإعدادات", media_type="text/plain; charset=utf-8", status_code=404)
+    vcard = (
+        "BEGIN:VCARD\r\n"
+        "VERSION:3.0\r\n"
+        f"FN:{school}\r\n"
+        f"ORG:{school}\r\n"
+        f"TEL;TYPE=CELL:{phone}\r\n"
+        "END:VCARD\r\n"
+    )
+    return Response(
+        content=vcard.encode("utf-8"),
+        media_type="text/vcard; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="school.vcf"'}
+    )
+
+
+@router.get("/web/api/save-number-preview", response_class=JSONResponse)
+async def web_save_number_preview(req: Request):
+    user = _get_current_user(req)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    cfg        = load_config()
+    school     = cfg.get("school_name", "المدرسة")
+    public_url = cfg.get("public_url", cfg.get("cloud_url", "")).rstrip("/")
+    vcard_line = f"\n📲 أو اضغط هنا لحفظ الرقم مباشرةً:\n{public_url}/web/save-contact" if public_url else ""
+    msg = (
+        "السلام عليكم ورحمة الله وبركاته\n\n"
+        "ولي الأمر الكريم،\n\n"
+        f"تهديكم إدارة {school} أطيب التحيات وأزكاها.\n\n"
+        "يسعدنا إعلامكم بأن هذا الرقم هو الرقم الرسمي للمدرسة المخصص للتواصل مع أولياء الأمور، "
+        "وسيُستخدم لإبلاغكم بكل ما يخص أبنائكم من غياب أو تأخر أو أخبار مهمة.\n\n"
+        "🔖 نرجو منكم حفظ هذا الرقم باسم:\n"
+        f"({school})"
+        f"{vcard_line}\n\n"
+        "وذلك لضمان وصول الرسائل إليكم دون انقطاع.\n\n"
+        "شاكرين تعاونكم وحرصكم،\n"
+        f"إدارة {school}"
+    )
+    return JSONResponse({"ok": True, "msg": msg})
 
 
 @router.post("/web/api/send-tardiness-messages", response_class=JSONResponse)
@@ -1541,6 +1645,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
         unread_referrals = get_unread_referrals_count()
     unread_circs = get_unread_circulars_count(username, role)
     unread_lab_submissions = get_unread_lab_submissions_count() if role == "admin" else 0
+    unread_inbox = get_inbox_unread_count(username)
 
     # ── قائمة التبويبات مع مجموعاتها ──────────────────────────
     SIDEBAR_GROUPS = [
@@ -1601,7 +1706,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
             ("إعدادات المدرسة",     "school_settings",      "fas fa-university"),
             ("المستخدمون",          "users",                "fas fa-user-shield"),
             ("النسخ الاحتياطية",    "backup",               "fas fa-hdd"),
-            ("ملاحظات سريعة",       "quick_notes",          "fas fa-sticky-note"),
+            ("الرسائل الداخلية",     "quick_notes",          "fas fa-envelope"),
             ("شواهد الأداء",        "lab_submissions",      "fas fa-clipboard-check"),
         ]),
     ]
@@ -1610,7 +1715,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
     sidebar_html = ""
     for grp_title, grp_items in SIDEBAR_GROUPS:
         visible = [(n, k, i) for n, k, i in grp_items
-                   if allowed_tabs is None or n in allowed_tabs]
+                   if allowed_tabs is None or n in allowed_tabs or n == 'الرسائل الداخلية']
         if not visible:
             continue
         sidebar_html += '<div class="sb-group">' + grp_title + '</div>'
@@ -1619,6 +1724,11 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
             if key == 'lab_submissions' and unread_lab_submissions > 0:
                 badge = (f'<span style="background:#ef4444;color:white;border-radius:20px;'
                          f'padding:1px 7px;font-size:11px;margin-right:6px">{unread_lab_submissions}</span>')
+            if key == 'quick_notes' and unread_inbox > 0:
+                badge = (f'<span id="inbox-sidebar-badge" style="background:#ef4444;color:white;border-radius:20px;'
+                         f'padding:1px 7px;font-size:11px;margin-right:6px">{unread_inbox}</span>')
+            elif key == 'quick_notes':
+                badge = '<span id="inbox-sidebar-badge" style="display:none;background:#ef4444;color:white;border-radius:20px;padding:1px 7px;font-size:11px;margin-right:6px"></span>'
             sidebar_html += (
                 '<button class="tab-btn" data-key="' + key + '" onclick="showTab(\'' + key + '\')">'
                 '<i class="ti ' + icon + '"></i>' + name + badge + '</button>'
@@ -2226,6 +2336,24 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
       <span id="sa-progress" style="display:block;margin-top:8px;font-size:13px;color:var(--mu)"></span>
     </div>
   </div>
+
+  <div class="section" style="margin-top:16px;border:2px dashed #3B82F6;background:#EFF6FF">
+    <div class="st" style="color:#1D4ED8;margin-bottom:10px"><i class="fas fa-save"></i> طلب حفظ رقم المدرسة</div>
+    <div style="font-size:13px;color:#334155;margin-bottom:14px">
+      أرسل رسالة مهذبة لأولياء الأمور تطلب منهم حفظ رقم المدرسة — هذا يقلل احتمال تقييد الحساب بشكل كبير.
+    </div>
+    <div class="fg2" style="margin-bottom:14px">
+      <div class="fg"><label class="fl">الفصل</label>
+        <select id="sn-cls"><option value="">جميع الفصول</option></select>
+      </div>
+    </div>
+    <div style="background:white;border:1px solid #BFDBFE;border-radius:8px;padding:14px;font-size:13px;color:#1E293B;white-space:pre-wrap;line-height:2;margin-bottom:14px" id="sn-preview">⏳ جارٍ تحميل المعاينة...</div>
+    <div class="bg-btn">
+      <button class="btn bp1" onclick="sendSaveNumber()" id="sn-btn">📲 إرسال</button>
+    </div>
+    <div id="sn-progress" style="margin-top:10px;font-size:13px;color:var(--mu)"></div>
+    <div id="sn-st" style="margin-top:8px"></div>
+  </div>
 </div>
 
 <div id="tab-send_tardiness">
@@ -2372,7 +2500,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
     </div>
     <div id="sm-sum" style="margin-bottom:10px"></div>
     <div class="tw"><table>
-      <thead><tr><th>رقم الهوية</th><th>الاسم</th><th>الصف</th><th>الفصل</th><th>الجوال</th><th>تعديل</th></tr></thead>
+      <thead><tr><th>رقم الهوية</th><th>الاسم</th><th>الصف</th><th>الفصل</th><th>الجوال</th><th>تعديل</th><th>حذف</th></tr></thead>
       <tbody id="sm-table"></tbody></table></div>
   </div>
 </div>
@@ -2603,11 +2731,27 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
     <div class="section">
       <div class="st">إعدادات خادم واتساب</div>
       <div id="wa-ind" class="ab ai">🔄 جارٍ الفحص...</div>
-      <div class="fg2"><div class="fg"><label class="fl">المنفذ (Port)</label><input type="number" id="wa-port" value="3000"></div></div>
+      <div class="fg2">
+        <div class="fg"><label class="fl">المنفذ (Port)</label><input type="number" id="wa-port" value="3000"></div>
+        <div class="fg"><label class="fl">رقم واتساب المدرسة</label><input type="tel" id="ss-wa-phone" placeholder="9665XXXXXXXX" dir="ltr"></div>
+      </div>
       <div class="bg-btn">
         <button class="btn bp1" onclick="checkWA()">🔍 فحص</button>
         <button class="btn bp4" onclick="alert('تشغيل الخادم — يعمل محلياً فقط')">▶️ تشغيل</button>
+        <button class="btn bp2" onclick="saveWaSettings()">💾 حفظ الرقم</button>
       </div>
+      <div id="ss-wa-st" style="margin-top:10px"></div>
+    </div>
+    <div class="section" style="margin-top:12px">
+      <div class="st">رابط حفظ جهة الاتصال (vCard)</div>
+      <div style="font-size:13px;color:#64748B;margin-bottom:10px">أرسل هذا الرابط لأولياء الأمور — عند الضغط عليه يفتح الجوال نافذة "حفظ جهة الاتصال" مباشرةً</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input type="text" id="sn-vcard-link" readonly dir="ltr"
+               style="flex:1;min-width:200px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:6px;padding:8px 10px;font-size:13px;color:#334155">
+        <button class="btn bp2 bsm" onclick="snCopyVcard()">📋 نسخ</button>
+        <a id="sn-vcard-dl" href="#" class="btn bp1 bsm" download>⬇️ تجربة</a>
+      </div>
+      <div id="sn-vcard-st" style="margin-top:6px;font-size:12px"></div>
     </div>
   </div>
   <div id="ss-adv" class="ip">
@@ -2618,6 +2762,28 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
         <div class="fg"><label class="fl">وقت إرسال التقرير</label><input type="time" id="ss-rpt-time" value="14:00"></div>
       </div>
       <button class="btn bp1" onclick="saveAdvSettings()">💾 حفظ</button>
+    </div>
+    <div class="section" style="margin-top:12px">
+      <div class="st">🗄️ النسخ الاحتياطي التلقائي — Telegram</div>
+      <p style="color:#64748B;font-size:13px;margin:6px 0 14px">
+        أنشئ بوتاً عبر <b>@BotFather</b> في Telegram، أضفه لقناة خاصة كـ Admin،
+        ثم ضع التوكن ومعرّف القناة هنا — سيُرسَل ملف النسخة الاحتياطية تلقائياً كل 24 ساعة.
+      </p>
+      <div class="fg2">
+        <div class="fg">
+          <label class="fl">Bot Token</label>
+          <input type="text" id="ss-tg-token" placeholder="123456789:AAF..." dir="ltr" style="font-family:monospace;font-size:12px">
+        </div>
+        <div class="fg">
+          <label class="fl">Chat ID / Channel ID</label>
+          <input type="text" id="ss-tg-chat" placeholder="-1001234567890" dir="ltr" style="font-family:monospace;font-size:12px">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <button class="btn bp1" onclick="saveTelegramBackup()">💾 حفظ</button>
+        <button class="btn bp2" onclick="testTelegramBackup()">🧪 اختبار الآن</button>
+      </div>
+      <div id="tg-backup-st" style="margin-top:8px;font-size:13px"></div>
     </div>
     <div class="section" style="border:2px solid #dc2626;border-radius:10px;margin-top:16px">
       <div class="st" style="color:#dc2626">تحديث طارئ فوري</div>
@@ -2726,14 +2892,55 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
 </div>
 
 <div id="tab-quick_notes">
-  <h2 class="pt"><i class="fas fa-sticky-note"></i> ملاحظات سريعة</h2>
-  <div class="section">
-    <textarea id="qn-text" rows="3" placeholder="اكتب ملاحظتك هنا..." style="width:100%;margin-bottom:8px"></textarea>
-    <div class="bg-btn" style="margin-bottom:16px">
-      <select id="qn-type"><option value="info">ℹ️ معلومة</option><option value="warning">⚠️ تنبيه</option><option value="task">✅ مهمة</option></select>
-      <button class="btn bp1" onclick="addNote()">+ إضافة</button>
+  <h2 class="pt"><i class="fas fa-envelope"></i> الرسائل الداخلية</h2>
+  <div class="it">
+    <button class="itb active" id="inbox-tab-in"  onclick="inboxSwitch('inbox')">📥 الوارد <span id="inbox-unread-badge" style="background:#ef4444;color:white;border-radius:20px;padding:1px 7px;font-size:11px;display:none"></span></button>
+    <button class="itb"        id="inbox-tab-out" onclick="inboxSwitch('sent')">📤 المرسل</button>
+    <button class="itb"        id="inbox-tab-new" onclick="inboxSwitch('compose')">✉️ رسالة جديدة</button>
+  </div>
+
+  <!-- صندوق الوارد -->
+  <div id="inbox-pane-inbox" class="ip active">
+    <div class="section">
+      <div id="inbox-list" style="display:flex;flex-direction:column;gap:8px"><div class="loading">⏳</div></div>
     </div>
-    <div id="qn-list"></div>
+  </div>
+
+  <!-- المرسل -->
+  <div id="inbox-pane-sent" class="ip">
+    <div class="section">
+      <div id="inbox-sent-list" style="display:flex;flex-direction:column;gap:8px"><div class="loading">⏳</div></div>
+    </div>
+  </div>
+
+  <!-- إنشاء رسالة -->
+  <div id="inbox-pane-compose" class="ip">
+    <div class="section">
+      <div class="fg2">
+        <div class="fg"><label class="fl">إلى</label><select id="inbox-to" style="width:100%"><option value="">اختر المستلم...</option></select></div>
+        <div class="fg"><label class="fl">الموضوع</label><input type="text" id="inbox-subject" placeholder="موضوع الرسالة"></div>
+        <div class="fg" style="grid-column:1/-1"><label class="fl">نص الرسالة</label><textarea id="inbox-body" rows="5" placeholder="اكتب رسالتك هنا..."></textarea></div>
+      <div class="fg" style="grid-column:1/-1">
+        <label class="fl">مرفق (صورة أو ملف — حد أقصى 20 ميغابايت)</label>
+        <input type="file" id="inbox-attachment" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip"
+               onchange="inboxAttachmentChanged(this)">
+        <div id="inbox-att-preview" style="margin-top:6px;font-size:12px;color:#64748B"></div>
+      </div>
+      </div>
+      <div class="bg-btn" style="margin-top:10px">
+        <button class="btn bp1" onclick="inboxSend()">📤 إرسال</button>
+        <button class="btn bp2 bsm" onclick="inboxClearAttachment()">🗑️ إزالة المرفق</button>
+      </div>
+      <div id="inbox-compose-st" style="margin-top:8px"></div>
+    </div>
+  </div>
+
+  <!-- عرض رسالة (مخفي افتراضياً) -->
+  <div id="inbox-msg-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center">
+    <div style="background:white;border-radius:12px;padding:24px;max-width:560px;width:90%;max-height:80vh;overflow-y:auto;position:relative">
+      <button onclick="inboxCloseMsg()" style="position:absolute;top:12px;left:12px;background:none;border:none;font-size:20px;cursor:pointer">✕</button>
+      <div id="inbox-msg-content"></div>
+    </div>
   </div>
 </div>
 
@@ -3284,12 +3491,11 @@ window.onerror = function(msg, url, line, col, error) {
     return false;
 };
 var today=new Date().toISOString().split('T')[0];
-var _gender='boys', _me=null, _notes=[];
-try{_notes=JSON.parse(localStorage.getItem('darb_notes')||'[]');}catch(e){}
+var _gender='boys', _me=null;
 
 window.onload=function(){
   console.log("🚀 DarbStu Web Dashboard Loaded - Version Update Applied");
-  setDates();loadMe();showTab('dashboard');checkUnreadCirculars();setTimeout(checkUnreadTeacherReports,2000);
+  setDates();loadMe();showTab('dashboard');checkUnreadCirculars();setTimeout(checkUnreadTeacherReports,2000);setTimeout(inboxUpdateBadge,3000);
 };
 
 function setDates(){
@@ -3375,7 +3581,7 @@ function showTab(key){
     'circulars': loadCirculars,
     'school_settings':loadSettings,
     'users':loadUsers,'backup':loadBackups,
-    'quick_notes':renderNotes,
+    'quick_notes':function(){inboxSwitch('inbox');},
     'schedule_links':function(){fillSel('sch-cls');loadSchedule();},
     'tardiness_recipients':loadRecipients,
     'grade_analysis':function(){fillSel('ga-cls');},
@@ -3394,7 +3600,7 @@ function showTab(key){
       if(eP&&!eP.value)eP.value=uname;
     },
     'teacher_reports_admin': loadTeacherReportsAdmin,
-    'send_absence':function(){},
+    'send_absence':function(){snLoadPreview();fillSel('sn-cls');},
     'send_tardiness':function(){},
     'parent_visits':pvInit,
   };
@@ -3833,6 +4039,27 @@ async function sendTardinessMessages(){
   var d=await r.json();document.getElementById('st-progress').textContent=d.ok?'✅ تم إرسال '+d.sent+' رسالة':'❌ '+d.msg;
 }
 
+/* ── SAVE NUMBER ── */
+async function snLoadPreview(){
+  var d=await api('/web/api/save-number-preview');
+  var el=document.getElementById('sn-preview');
+  if(el)el.textContent=d&&d.msg?d.msg:'تعذر تحميل المعاينة';
+}
+async function sendSaveNumber(){
+  if(!confirm('سيتم إرسال رسالة "حفظ الرقم" لجميع أولياء الأمور في الفصل المحدد.\nهذا قد يستغرق وقتاً بسبب التأخير بين الرسائل.\nهل تريد المتابعة؟'))return;
+  var cls=document.getElementById('sn-cls').value;
+  var btn=document.getElementById('sn-btn');
+  btn.disabled=true;btn.textContent='⏳ جارٍ الإرسال...';
+  document.getElementById('sn-progress').textContent='يُرسل الرسائل بشكل تدريجي لتفادي التقييد...';
+  document.getElementById('sn-st').innerHTML='';
+  var r=await fetch('/web/api/send-save-number',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({class_id:cls})});
+  var d=await r.json();
+  btn.disabled=false;btn.textContent='📲 إرسال';
+  document.getElementById('sn-progress').textContent='';
+  if(d.ok)ss('sn-st','✅ تم الإرسال — أُرسل: '+d.sent+' | فشل: '+d.failed+' | مكرر/بدون رقم: '+d.skipped,'ok');
+  else ss('sn-st','❌ '+(d.msg||'خطأ'),'er');
+}
+
 /* ── PORTAL LINKS ── */
 (function(){
   // تحميل قائمة الفصول عند فتح التبويب
@@ -4135,8 +4362,17 @@ function renderStuTbl(arr){
   var tb=document.getElementById('sm-table');if(!tb)return;
   tb.innerHTML=arr.slice(0,200).map(function(s){
     return '<tr><td>'+s.id+'</td><td>'+s.name+'</td><td>'+(s.level||'-')+'</td><td>'+s.class_name+'</td>'+
-           '<td>'+(s.phone||'—')+'</td><td><button class="btn bp2 bsm" onclick="editPhone(\''+s.id+'\')">✏️ تعديل</button></td></tr>';
-  }).join('')||'<tr><td colspan="6" style="color:#9CA3AF">لا يوجد</td></tr>';
+           '<td>'+(s.phone||'—')+'</td>'+
+           '<td><button class="btn bp2 bsm" onclick="editPhone(\''+s.id+'\')">✏️ تعديل</button></td>'+
+           '<td><button class="btn bp3 bsm" onclick="deleteStudent(\''+s.id+'\',\''+s.name.replace(/'/g,"\\'")+'\')" style="background:#ef4444">🗑️ حذف</button></td></tr>';
+  }).join('')||'<tr><td colspan="7" style="color:#9CA3AF">لا يوجد</td></tr>';
+}
+async function deleteStudent(id,name){
+  if(!confirm('هل أنت متأكد من حذف الطالب:\n'+name+'؟\n\nسيتم حذف جميع بياناته نهائياً.'))return;
+  var r=await fetch('/web/api/students/'+encodeURIComponent(id),{method:'DELETE'});
+  var d=await r.json();
+  if(d.ok){alert('✅ تم حذف الطالب بنجاح');loadStudents();}
+  else alert('❌ '+(d.msg||'خطأ'));
 }
 function renderPhoTbl(arr){
   var tb=document.getElementById('ph-table');if(!tb)return;
@@ -4165,7 +4401,7 @@ var _US_ALL_TABS = [
   'تعزيز الحضور الأسبوعي','لوحة الصدارة (النقاط)','إدارة الطلاب','إضافة طالب',
   'إدارة الفصول','إدارة الجوالات','الطلاب المستثنون','نشر النتائج','تصدير نور',
   'زيارات أولياء الأمور','تحويل طالب','نماذج المعلم','تحليل النتائج',
-  'إعدادات المدرسة','المستخدمون','النسخ الاحتياطية','شواهد الأداء'
+  'إعدادات المدرسة','المستخدمون','النسخ الاحتياطية','شواهد الأداء','الرسائل الداخلية'
 ];
 var _US_ROLE_DEFAULTS = {
   deputy:['لوحة المراقبة','المراقبة الحية','روابط الفصول','تسجيل الغياب','تسجيل التأخر',
@@ -4175,19 +4411,19 @@ var _US_ROLE_DEFAULTS = {
           'إرسال رسائل التأخر','روابط بوابة أولياء الأمور','التعاميم والنشرات','قصص المدرسة',
           'تعزيز الحضور الأسبوعي','لوحة الصدارة (النقاط)','إدارة الطلاب','إضافة طالب',
           'إدارة الفصول','إدارة الجوالات','الطلاب المستثنون','نشر النتائج','تصدير نور',
-          'زيارات أولياء الأمور'],
+          'زيارات أولياء الأمور','الرسائل الداخلية'],
   staff:['لوحة المراقبة','المراقبة الحية','روابط الفصول','تسجيل الغياب','تسجيل التأخر',
          'طلب استئذان','سجل الغياب','سجل التأخر','الأعذار','الاستئذان','التعاميم والنشرات',
          'إدارة الطلاب','إضافة طالب','إدارة الجوالات','الطلاب المستثنون','قصص المدرسة',
-         'لوحة الصدارة (النقاط)','تحليل طالب','زيارات أولياء الأمور'],
+         'لوحة الصدارة (النقاط)','تحليل طالب','زيارات أولياء الأمور','الرسائل الداخلية'],
   counselor:['لوحة المراقبة','المراقبة الحية','روابط الفصول','سجل الغياب','سجل التأخر',
              'الأعذار','الموجّه الطلابي','تحليل طالب','أكثر الطلاب غياباً','الإشعارات الذكية',
              'التعاميم والنشرات','قصص المدرسة','تعزيز الحضور الأسبوعي','لوحة الصدارة (النقاط)',
-             'زيارات أولياء الأمور'],
-  activity_leader:['لوحة المراقبة','التعاميم والنشرات','قصص المدرسة','لوحة الصدارة (النقاط)','تحليل طالب','نماذج المعلم'],
-  teacher:['لوحة المراقبة','تحويل طالب','نماذج المعلم','تحليل النتائج','التعاميم والنشرات','لوحة الصدارة (النقاط)','تحليل طالب'],
-  lab:['لوحة المراقبة','نماذج المعلم','التعاميم والنشرات','لوحة الصدارة (النقاط)','تحليل طالب','شواهد الأداء'],
-  guard:['لوحة المراقبة','تسجيل التأخر','المراقبة الحية','لوحة الصدارة (النقاط)','تحليل طالب']
+             'زيارات أولياء الأمور','الرسائل الداخلية'],
+  activity_leader:['لوحة المراقبة','التعاميم والنشرات','قصص المدرسة','لوحة الصدارة (النقاط)','تحليل طالب','نماذج المعلم','الرسائل الداخلية'],
+  teacher:['لوحة المراقبة','تحويل طالب','نماذج المعلم','تحليل النتائج','التعاميم والنشرات','لوحة الصدارة (النقاط)','تحليل طالب','الرسائل الداخلية'],
+  lab:['لوحة المراقبة','نماذج المعلم','التعاميم والنشرات','لوحة الصدارة (النقاط)','تحليل طالب','شواهد الأداء','الرسائل الداخلية'],
+  guard:['لوحة المراقبة','تسجيل التأخر','المراقبة الحية','لوحة الصدارة (النقاط)','تحليل طالب','الرسائل الداخلية']
 };
 
 async function loadUsers(){
@@ -4342,6 +4578,29 @@ async function loadSettings(){
   if(d.message_template)document.getElementById('ss-abs-tpl').value=d.message_template;
   if(d.tardiness_message_template)document.getElementById('ss-tard-tpl').value=d.tardiness_message_template;
   if(d.admin_report_phone)document.getElementById('ss-rpt-phone').value=d.admin_report_phone;
+  if(d.wa_phone)document.getElementById('ss-wa-phone').value=d.wa_phone;
+  if(d.telegram_backup_token)document.getElementById('ss-tg-token').value=d.telegram_backup_token;
+  if(d.telegram_backup_chat)document.getElementById('ss-tg-chat').value=d.telegram_backup_chat;
+  // تحديث رابط vCard
+  var base=window.location.origin;
+  var link=base+'/web/save-contact';
+  var lnkEl=document.getElementById('sn-vcard-link');
+  var dlEl=document.getElementById('sn-vcard-dl');
+  if(lnkEl)lnkEl.value=link;
+  if(dlEl)dlEl.href=link;
+}
+async function saveWaSettings(){
+  var phone=document.getElementById('ss-wa-phone').value.trim();
+  var r=await fetch('/web/api/save-config',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({wa_phone:phone})});
+  var d=await r.json();
+  ss('ss-wa-st',d.ok?'✅ تم حفظ الرقم':'❌ '+(d.msg||'خطأ'),d.ok?'ok':'er');
+  if(d.ok)snLoadPreview();
+}
+function snCopyVcard(){
+  var el=document.getElementById('sn-vcard-link');
+  if(!el||!el.value){ss('sn-vcard-st','لم يتم تعيين الرابط بعد','er');return;}
+  navigator.clipboard.writeText(el.value).then(function(){ss('sn-vcard-st','✅ تم نسخ الرابط','ok');}).catch(function(){el.select();document.execCommand('copy');ss('sn-vcard-st','✅ تم نسخ الرابط','ok');});
 }
 async function saveSchoolSettings(){
   var r=await fetch('/web/api/save-config',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -4361,6 +4620,27 @@ async function saveAdvSettings(){
     body:JSON.stringify({public_url:document.getElementById('ss-url').value,
       admin_report_phone:document.getElementById('ss-rpt-phone').value})});
   var d=await r.json();alert(d.ok?'✅ تم الحفظ':'❌ '+(d.msg||'خطأ'));
+}
+async function saveTelegramBackup(){
+  var token=document.getElementById('ss-tg-token').value.trim();
+  var chat=document.getElementById('ss-tg-chat').value.trim();
+  var st=document.getElementById('tg-backup-st');
+  if(!token||!chat){st.textContent='⚠️ أدخل التوكن ومعرّف القناة';st.style.color='#d97706';return;}
+  var r=await fetch('/web/api/save-config',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({telegram_backup_token:token,telegram_backup_chat:chat})});
+  var d=await r.json();
+  st.textContent=d.ok?'✅ تم الحفظ':'❌ '+(d.msg||'خطأ');
+  st.style.color=d.ok?'#16a34a':'#dc2626';
+}
+async function testTelegramBackup(){
+  var st=document.getElementById('tg-backup-st');
+  st.textContent='⏳ جارٍ الإرسال...';st.style.color='#1565C0';
+  try{
+    var r=await fetch('/web/api/backup/send-telegram',{method:'POST'});
+    var d=await r.json();
+    st.textContent=d.ok?'✅ تم الإرسال بنجاح! تحقق من قناة Telegram':'❌ '+(d.msg||'فشل الإرسال');
+    st.style.color=d.ok?'#16a34a':'#dc2626';
+  }catch(e){st.textContent='❌ خطأ في الاتصال';st.style.color='#dc2626';}
 }
 async function triggerEmergencyUpdate(){
   var st=document.getElementById('eu-status');
@@ -5887,24 +6167,159 @@ async function importNoor(){
   }catch(e){ss('as-noor-st','❌ خطأ في الاتصال','er');}
 }
 
-/* ── NOTES ── */
-function renderNotes(){
-  var cols={info:'#DBEAFE',warning:'#FEF3C7',task:'#DCFCE7'};var ics={info:'ℹ️',warning:'⚠️',task:'✅'};
-  document.getElementById('qn-list').innerHTML=_notes.length
-    ?_notes.map(function(n,i){return '<div style="display:flex;align-items:start;gap:10px;padding:12px;background:'+(cols[n.type]||'#F8FAFF')+';border-radius:8px;margin-bottom:8px">'+
-        '<span style="font-size:18px">'+(ics[n.type]||'📝')+'</span>'+
-        '<div style="flex:1"><div style="font-size:13px">'+n.text+'</div>'+
-        '<div style="font-size:11px;color:var(--mu);margin-top:4px">'+n.date+'</div></div>'+
-        '<button onclick="delNote('+i+')" style="background:none;border:none;cursor:pointer;color:#94A3B8;font-size:18px">×</button></div>';}).join('')
-    :'<p style="color:#94A3B8;text-align:center;padding:30px">لا توجد ملاحظات</p>';
+/* ── INBOX ── */
+var _inboxMode='inbox';
+function inboxSwitch(mode){
+  _inboxMode=mode;
+  ['inbox','sent','compose'].forEach(function(m){
+    document.getElementById('inbox-pane-'+m).classList.toggle('active',m===mode);
+    document.getElementById('inbox-tab-'+(m==='inbox'?'in':m==='sent'?'out':'new')).classList.toggle('active',m===mode);
+  });
+  if(mode==='inbox')loadInbox();
+  else if(mode==='sent')loadInboxSent();
+  else inboxLoadUsers();
 }
-function addNote(){
-  var text=document.getElementById('qn-text').value.trim();var type=document.getElementById('qn-type').value;
-  if(!text)return;_notes.unshift({text:text,type:type,date:new Date().toLocaleString('ar-SA')});
-  try{localStorage.setItem('darb_notes',JSON.stringify(_notes));}catch(e){}
-  document.getElementById('qn-text').value='';renderNotes();
+async function loadInbox(){
+  var box=document.getElementById('inbox-list');box.innerHTML='<div class="loading">⏳</div>';
+  var d=await api('/web/api/inbox');
+  if(!d||!d.ok){box.innerHTML='<p style="color:#94A3B8;text-align:center;padding:30px">تعذر التحميل</p>';return;}
+  var msgs=d.messages||[];
+  box.innerHTML=msgs.length?msgs.map(function(m){
+    var unread=!m.is_read;
+    return '<div onclick="inboxOpenMsg('+m.id+',\'inbox\')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:'+(unread?'#EFF6FF':'white')+';border:1px solid #E2E8F0;border-radius:10px;cursor:pointer;transition:.2s" onmouseenter="this.style.background=\'#F1F5F9\'" onmouseleave="this.style.background=\''+(unread?'#EFF6FF':'white')+'\'">'
+      +'<div style="flex:1;min-width:0">'
+      +'<div style="font-weight:'+(unread?'700':'500')+';font-size:14px">'+escHtml(m.subject||'(بدون موضوع)')+(m.attachment_path?' 📎':'')+'</div>'
+      +'<div style="font-size:12px;color:#64748B;margin-top:2px">من: '+escHtml(m.from_user)+'</div></div>'
+      +'<div style="text-align:left;flex-shrink:0">'
+      +(unread?'<span style="background:#3B82F6;color:white;border-radius:20px;padding:2px 8px;font-size:11px">جديد</span>':'')
+      +'<div style="font-size:11px;color:#94A3B8;margin-top:4px">'+fmtInboxDate(m.created_at)+'</div></div>'
+      +'<button onclick="event.stopPropagation();inboxDelete('+m.id+',\'inbox\')" style="background:none;border:none;cursor:pointer;color:#CBD5E1;font-size:18px" title="حذف">×</button>'
+      +'</div>';
+  }).join(''):'<p style="color:#94A3B8;text-align:center;padding:30px">📭 لا توجد رسائل</p>';
+  inboxUpdateBadge();
 }
-function delNote(i){_notes.splice(i,1);try{localStorage.setItem('darb_notes',JSON.stringify(_notes));}catch(e){}renderNotes();}
+async function loadInboxSent(){
+  var box=document.getElementById('inbox-sent-list');box.innerHTML='<div class="loading">⏳</div>';
+  var d=await api('/web/api/inbox/sent');
+  if(!d||!d.ok){box.innerHTML='<p style="color:#94A3B8;text-align:center;padding:30px">تعذر التحميل</p>';return;}
+  var msgs=d.messages||[];
+  box.innerHTML=msgs.length?msgs.map(function(m){
+    return '<div onclick="inboxOpenMsg('+m.id+',\'sent\')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:white;border:1px solid #E2E8F0;border-radius:10px;cursor:pointer;transition:.2s" onmouseenter="this.style.background=\'#F1F5F9\'" onmouseleave="this.style.background=\'white\'">'+
+      '<div style="flex:1;min-width:0">'+
+      '<div style="font-weight:500;font-size:14px">'+escHtml(m.subject||'(بدون موضوع)')+(m.attachment_path?' 📎':'')+'</div>'+
+      '<div style="font-size:12px;color:#64748B;margin-top:2px">إلى: '+escHtml(m.to_user)+'</div></div>'+
+      '<div style="text-align:left;flex-shrink:0"><div style="font-size:11px;color:#94A3B8">'+fmtInboxDate(m.created_at)+'</div></div>'+
+      '<button onclick="event.stopPropagation();inboxDelete('+m.id+',\'sent\')" style="background:none;border:none;cursor:pointer;color:#CBD5E1;font-size:18px" title="حذف">×</button>'+
+      '</div>';
+  }).join(''):'<p style="color:#94A3B8;text-align:center;padding:30px">📭 لا توجد رسائل مرسلة</p>';
+}
+async function inboxLoadUsers(){
+  var sel=document.getElementById('inbox-to');
+  if(sel.options.length>1)return;
+  var d=await api('/web/api/inbox/users');
+  if(!d||!d.users)return;
+  d.users.forEach(function(u){
+    var o=document.createElement('option');o.value=u.username;
+    o.textContent=(u.full_name||u.username)+' ('+u.username+')';
+    sel.appendChild(o);
+  });
+}
+async function inboxOpenMsg(id,box){
+  var modal=document.getElementById('inbox-msg-modal');
+  var content=document.getElementById('inbox-msg-content');
+  content.innerHTML='<div class="loading">⏳</div>';
+  modal.style.display='flex';
+  var endpoint=box==='inbox'?'/web/api/inbox':'/web/api/inbox/sent';
+  var d=await api(endpoint);
+  if(!d||!d.messages){content.innerHTML='تعذر التحميل';return;}
+  var msg=d.messages.find(function(m){return m.id===id;});
+  if(!msg){content.innerHTML='الرسالة غير موجودة';return;}
+  if(box==='inbox'&&!msg.is_read){
+    await fetch('/web/api/inbox/'+id+'/read',{method:'POST'});
+    inboxUpdateBadge();loadInbox();
+  }
+  var dir=box==='inbox'?'من: '+escHtml(msg.from_user):'إلى: '+escHtml(msg.to_user);
+  var attHtml='';
+  if(msg.attachment_path){
+    var isImg=/\.(jpg|jpeg|png|gif|webp)$/i.test(msg.attachment_name||'');
+    var attUrl='/web/api/inbox/attachment/'+encodeURIComponent(msg.attachment_path);
+    if(isImg){
+      attHtml='<div style="margin-top:14px"><div style="font-size:12px;color:#64748B;margin-bottom:6px">📎 مرفق:</div>'+
+        '<img src="'+attUrl+'" style="max-width:100%;border-radius:8px;border:1px solid #E2E8F0" alt="'+escHtml(msg.attachment_name||'')+'"></div>';
+    } else {
+      var sizeKb=msg.attachment_size?Math.round(msg.attachment_size/1024)+' KB':'';
+      attHtml='<div style="margin-top:14px"><a href="'+attUrl+'" download="'+escHtml(msg.attachment_name||'file')+'" '+
+        'style="display:inline-flex;align-items:center;gap:8px;padding:10px 14px;background:#F1F5F9;border:1px solid #E2E8F0;border-radius:8px;text-decoration:none;color:#1E293B;font-size:13px">'+
+        '📎 '+escHtml(msg.attachment_name||'مرفق')+(sizeKb?' — '+sizeKb:'')+' ⬇️</a></div>';
+    }
+  }
+  content.innerHTML='<h3 style="margin:0 0 12px;font-size:17px;color:#1E293B">'+escHtml(msg.subject||'(بدون موضوع)')+'</h3>'+
+    '<div style="font-size:12px;color:#64748B;margin-bottom:16px">'+dir+' — '+fmtInboxDate(msg.created_at)+'</div>'+
+    '<div style="white-space:pre-wrap;font-size:14px;line-height:1.7;color:#334155;padding:14px;background:#F8FAFC;border-radius:8px">'+escHtml(msg.body)+'</div>'+
+    attHtml;
+}
+function inboxCloseMsg(){document.getElementById('inbox-msg-modal').style.display='none';}
+async function inboxDelete(id,box){
+  if(!confirm('حذف هذه الرسالة؟'))return;
+  await fetch('/web/api/inbox/'+id,{method:'DELETE'});
+  if(box==='inbox')loadInbox();else loadInboxSent();
+}
+var _inboxAttachment=null;
+function inboxAttachmentChanged(input){
+  var f=input.files[0];
+  if(!f){_inboxAttachment=null;document.getElementById('inbox-att-preview').textContent='';return;}
+  if(f.size>20*1024*1024){ss('inbox-compose-st','❌ الملف أكبر من 20 ميغابايت','er');input.value='';return;}
+  _inboxAttachment=f;
+  var icon=f.type.startsWith('image/')?'🖼️':'📎';
+  document.getElementById('inbox-att-preview').textContent=icon+' '+f.name+' ('+Math.round(f.size/1024)+' KB)';
+}
+function inboxClearAttachment(){
+  _inboxAttachment=null;
+  document.getElementById('inbox-attachment').value='';
+  document.getElementById('inbox-att-preview').textContent='';
+}
+async function inboxSend(){
+  var to=document.getElementById('inbox-to').value;
+  var sub=document.getElementById('inbox-subject').value.trim();
+  var body=document.getElementById('inbox-body').value.trim();
+  if(!to){ss('inbox-compose-st','اختر المستلم','er');return;}
+  if(!body){ss('inbox-compose-st','اكتب نص الرسالة','er');return;}
+  var attId='', attName='', attSize=0;
+  if(_inboxAttachment){
+    ss('inbox-compose-st','⏳ جارٍ رفع المرفق...','ai');
+    var fd=new FormData();fd.append('file',_inboxAttachment);
+    var ur=await fetch('/web/api/inbox/upload-attachment',{method:'POST',body:fd});
+    var ud=await ur.json();
+    if(!ud.ok){ss('inbox-compose-st','❌ فشل رفع المرفق: '+(ud.msg||'خطأ'),'er');return;}
+    attId=ud.file_id;attName=ud.file_name;attSize=ud.file_size;
+  }
+  ss('inbox-compose-st','⏳ جارٍ الإرسال...','ai');
+  var r=await fetch('/web/api/inbox/send',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({to_user:to,subject:sub,body:body,attachment_id:attId,attachment_name:attName,attachment_size:attSize})});
+  var d=await r.json();
+  if(d.ok){
+    ss('inbox-compose-st','✅ تم الإرسال بنجاح','ok');
+    document.getElementById('inbox-subject').value='';
+    document.getElementById('inbox-body').value='';
+    document.getElementById('inbox-to').value='';
+    inboxClearAttachment();
+  } else ss('inbox-compose-st','❌ '+(d.msg||'خطأ'),'er');
+}
+async function inboxUpdateBadge(){
+  var d=await api('/web/api/inbox/unread-count');if(!d||!d.ok)return;
+  var n=d.count||0;
+  var sb=document.getElementById('inbox-sidebar-badge');
+  var ub=document.getElementById('inbox-unread-badge');
+  if(sb){sb.textContent=n;sb.style.display=n?'':'none';}
+  if(ub){ub.textContent=n;ub.style.display=n?'':'none';}
+}
+function fmtInboxDate(iso){
+  if(!iso)return '';
+  try{var d=new Date(iso);return d.toLocaleDateString('ar-SA')+' '+d.toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'});}
+  catch(e){return iso.substring(0,16);}
+}
+function escHtml(s){var d=document.createElement('div');d.appendChild(document.createTextNode(s||''));return d.innerHTML;}
+setInterval(inboxUpdateBadge,60000);
 
 /* ── UTILITIES ── */
 function exportTbl(id,name){
@@ -6506,6 +6921,23 @@ async def web_create_backup(request: Request):
         return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
 
 
+@router.post("/web/api/backup/send-telegram", response_class=JSONResponse)
+async def web_send_backup_telegram(request: Request):
+    user = _get_current_user(request)
+    if not user or user.get("role") != "admin":
+        return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=403)
+    try:
+        ok, path, size = create_backup()
+        if not ok:
+            return JSONResponse({"ok": False, "msg": f"فشل إنشاء النسخة: {path}"})
+        sent = upload_backup_telegram(path)
+        if sent:
+            return JSONResponse({"ok": True})
+        return JSONResponse({"ok": False, "msg": "تأكد من صحة التوكن ومعرّف القناة في الإعدادات"})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+
 @router.get("/web/api/download-backup/{filename:path}", response_class=JSONResponse)
 async def web_download_backup(filename: str, request: Request):
     user = _get_current_user(request)
@@ -6637,6 +7069,139 @@ async def web_update_student_phone(req: Request):
         return JSONResponse({"ok": False, "msg": "الطالب غير موجود"})
     except Exception as e:
         return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+
+@router.delete("/web/api/students/{student_id}", response_class=JSONResponse)
+async def web_delete_student(student_id: str, req: Request):
+    user = _get_current_user(req)
+    if not user or user["role"] not in ("admin", "deputy"):
+        return JSONResponse({"ok": False, "msg": "غير مصرح — للمدير والوكيل فقط"}, status_code=403)
+    try:
+        store = load_students(force_reload=True)
+        found = False
+        for cls in store["list"]:
+            for i, s in enumerate(cls["students"]):
+                if str(s["id"]) == str(student_id):
+                    del cls["students"][i]
+                    found = True
+                    break
+            if found:
+                break
+        if not found:
+            return JSONResponse({"ok": False, "msg": "الطالب غير موجود"})
+        create_backup()
+        import os as _os
+        _tmp = STUDENTS_JSON + ".tmp"
+        with open(_tmp, "w", encoding="utf-8") as f:
+            json.dump({"classes": store["list"]}, f, ensure_ascii=False, indent=2)
+        _os.replace(_tmp, STUDENTS_JSON)
+        load_students(force_reload=True)
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+
+@router.get("/web/api/inbox/users", response_class=JSONResponse)
+async def web_inbox_users(req: Request):
+    user = _get_current_user(req)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    users = get_all_users()
+    result = [{"username": u["username"], "full_name": u.get("full_name") or u["username"]}
+              for u in users if u["username"] != user["username"]]
+    return JSONResponse({"ok": True, "users": result})
+
+
+@router.get("/web/api/inbox", response_class=JSONResponse)
+async def web_inbox_get(req: Request):
+    user = _get_current_user(req)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    msgs = get_inbox_messages(user["username"])
+    return JSONResponse({"ok": True, "messages": msgs})
+
+@router.get("/web/api/inbox/sent", response_class=JSONResponse)
+async def web_inbox_sent(req: Request):
+    user = _get_current_user(req)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    msgs = get_sent_messages(user["username"])
+    return JSONResponse({"ok": True, "messages": msgs})
+
+@router.get("/web/api/inbox/unread-count", response_class=JSONResponse)
+async def web_inbox_unread_count(req: Request):
+    user = _get_current_user(req)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    count = get_inbox_unread_count(user["username"])
+    return JSONResponse({"ok": True, "count": count})
+
+@router.post("/web/api/inbox/send", response_class=JSONResponse)
+async def web_inbox_send(req: Request):
+    user = _get_current_user(req)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    try:
+        data = await req.json()
+        to_user  = data.get("to_user", "").strip()
+        subject  = data.get("subject", "").strip()
+        body     = data.get("body", "").strip()
+        if not to_user or not body:
+            return JSONResponse({"ok": False, "msg": "المستلم والرسالة مطلوبان"})
+        if to_user == user["username"]:
+            return JSONResponse({"ok": False, "msg": "لا يمكن إرسال رسالة لنفسك"})
+        att_id   = data.get("attachment_id", "")
+        att_name = data.get("attachment_name", "")
+        att_size = data.get("attachment_size", 0)
+        msg_id = send_inbox_message(user["username"], to_user, subject, body,
+                                    att_id or None, att_name or None, att_size or None)
+        return JSONResponse({"ok": True, "id": msg_id})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.post("/web/api/inbox/{msg_id}/read", response_class=JSONResponse)
+async def web_inbox_mark_read(msg_id: int, req: Request):
+    user = _get_current_user(req)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    mark_inbox_message_read(msg_id, user["username"])
+    return JSONResponse({"ok": True})
+
+@router.delete("/web/api/inbox/{msg_id}", response_class=JSONResponse)
+async def web_inbox_delete(msg_id: int, req: Request):
+    user = _get_current_user(req)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    delete_inbox_message(msg_id, user["username"])
+    return JSONResponse({"ok": True})
+
+
+@router.post("/web/api/inbox/upload-attachment", response_class=JSONResponse)
+async def web_inbox_upload_attachment(req: Request, file: UploadFile = File(...)):
+    user = _get_current_user(req)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    try:
+        import uuid, os as _os
+        _os.makedirs(INBOX_ATTACHMENTS_DIR, exist_ok=True)
+        ext  = _os.path.splitext(file.filename or "file")[1][:10]
+        fname = uuid.uuid4().hex + ext
+        fpath = _os.path.join(INBOX_ATTACHMENTS_DIR, fname)
+        content = await file.read()
+        if len(content) > 20 * 1024 * 1024:
+            return JSONResponse({"ok": False, "msg": "الحد الأقصى لحجم المرفق 20 ميغابايت"})
+        with open(fpath, "wb") as f:
+            f.write(content)
+        return JSONResponse({"ok": True, "file_id": fname,
+                             "file_name": file.filename, "file_size": len(content)})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+
+@router.get("/web/api/inbox/attachment/{file_id}")
+async def web_inbox_get_attachment(file_id: str, req: Request):
+    user = _get_current_user(req)
+    if not user: return Response("غير مصرح", status_code=401)
+    import os as _os, re
+    if not re.match(r'^[a-f0-9]{32}\.[a-zA-Z0-9]{0,10}$', file_id):
+        return Response("معرف غير صالح", status_code=400)
+    fpath = _os.path.join(INBOX_ATTACHMENTS_DIR, file_id)
+    if not _os.path.exists(fpath):
+        return Response("الملف غير موجود", status_code=404)
+    from fastapi.responses import FileResponse
+    return FileResponse(fpath)
 
 
 @router.get("/web/api/absences-range", response_class=JSONResponse)
