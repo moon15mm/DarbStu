@@ -2099,7 +2099,7 @@ def upload_backup_telegram(zip_path: str) -> bool:
     """يرفع ملف النسخة الاحتياطية إلى Telegram — يقرأ الإعدادات من config.json."""
     try:
         import requests as _req
-        cfg = get_config()
+        cfg = load_config()
         token   = cfg.get("telegram_backup_token", "").strip()
         chat_id = cfg.get("telegram_backup_chat", "").strip()
         if not token or not chat_id:
