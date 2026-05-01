@@ -736,6 +736,19 @@ def init_db():
         if _col not in _ib_cols:
             cur.execute(f"ALTER TABLE inbox_messages ADD COLUMN {_col} {_def}")
 
+    cur.execute("""CREATE TABLE IF NOT EXISTS school_reports (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        category     TEXT NOT NULL,
+        title        TEXT NOT NULL,
+        description  TEXT NOT NULL DEFAULT '',
+        report_date  TEXT NOT NULL DEFAULT '',
+        file_path    TEXT NOT NULL,
+        file_name    TEXT NOT NULL,
+        file_size    INTEGER NOT NULL DEFAULT 0,
+        uploaded_by  TEXT NOT NULL DEFAULT '',
+        uploaded_at  TEXT NOT NULL
+    )""")
+
     con.commit(); con.close()
 
 # --- Helper functions for Exempted Students ---

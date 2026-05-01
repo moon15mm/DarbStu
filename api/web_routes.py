@@ -11,7 +11,7 @@ from constants import (DB_PATH, DATA_DIR, HOST, PORT, TZ_OFFSET,
                        STATIC_DOMAIN, BASE_DIR, BACKUP_DIR,
                        STUDENTS_JSON, TEACHERS_JSON, CONFIG_JSON,
                        now_riyadh_date, CURRENT_USER, ROLES, ROLE_TABS,
-                       APP_VERSION, INBOX_ATTACHMENTS_DIR)
+                       APP_VERSION, INBOX_ATTACHMENTS_DIR, SCHOOL_REPORTS_DIR)
 from config_manager import (load_config, save_config, get_terms,
                              logo_img_tag_from_config, render_message,
                              invalidate_config_cache)
@@ -1692,6 +1692,7 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
             ("أكثر الطلاب غياباً", "top_absent",           "fas fa-award"),
             ("الإشعارات الذكية",    "alerts",               "fas fa-exclamation-triangle"),
             ("تقارير المعلمين",     "teacher_reports_admin","fas fa-file-pdf"),
+            ("تقارير المدرسة",      "school_reports",       "fas fa-folder-open"),
         ]),
         ("الرسائل والتواصل", [
             ("إرسال رسائل الغياب",  "send_absence",         "fas fa-envelope-open-text"),
@@ -2483,6 +2484,63 @@ def _web_dashboard_html(username: str, role: str, allowed_tabs) -> str:
           <tr><td colspan="6" style="text-align:center;color:var(--mu)">⏳ جارٍ التحميل...</td></tr>
         </tbody>
       </table>
+    </div>
+  </div>
+</div>
+
+
+
+<!-- ══ تبويب تقارير المدرسة ══ -->
+<div id="tab-school_reports">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px;flex-wrap:wrap">
+    <h2 class="pt" style="margin:0"><i class="fas fa-folder-open"></i> تقارير المدرسة</h2>
+    <button class="btn bp1 bsm" id="sr-refresh-btn" onclick="loadSchoolReports()"><i class="fas fa-sync-alt"></i> تحديث</button>
+  </div>
+
+  <!-- شبكة المجلدات -->
+  <div id="sr-grid" class="section" style="margin-top:12px">
+    <div id="sr-folders" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:18px;padding:4px"></div>
+  </div>
+
+  <!-- عرض الفئة -->
+  <div id="sr-cat-view" style="display:none">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+      <button class="btn bp1 bsm" onclick="srBack()"><i class="fas fa-arrow-right"></i> رجوع</button>
+      <h2 class="pt" id="sr-cat-title" style="margin:0;font-size:18px"></h2>
+      <span id="sr-cat-badge" style="font-size:12px;padding:3px 12px;border-radius:20px;font-weight:700;color:#fff"></span>
+    </div>
+
+    <!-- نموذج رفع تقرير -->
+    <div id="sr-upload-section" class="section" style="border:2px dashed #93c5fd;background:#eff6ff;display:none">
+      <h4 style="margin:0 0 12px;color:#1d4ed8"><i class="fas fa-cloud-upload-alt"></i> رفع تقرير جديد</h4>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div>
+          <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">عنوان التقرير *</label>
+          <input id="sr-title" class="inp" type="text" placeholder="مثال: تقرير الغياب الشهري">
+        </div>
+        <div>
+          <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">تاريخ التقرير *</label>
+          <input id="sr-rdate" class="inp" type="date">
+        </div>
+      </div>
+      <div style="margin-top:10px">
+        <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">وصف التقرير</label>
+        <textarea id="sr-desc" class="inp" rows="2" placeholder="وصف مختصر للتقرير..."></textarea>
+      </div>
+      <div style="margin-top:10px">
+        <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">الملف *</label>
+        <input id="sr-file" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png">
+        <div style="font-size:11px;color:#64748b;margin-top:3px">PDF, Word, Excel, PowerPoint, صور — الحد الأقصى 20MB</div>
+      </div>
+      <div style="margin-top:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <button class="btn bp2" onclick="srUpload()"><i class="fas fa-upload"></i> رفع التقرير</button>
+        <span id="sr-upload-st" style="font-size:13px"></span>
+      </div>
+    </div>
+
+    <!-- قائمة التقارير -->
+    <div class="section" style="margin-top:14px">
+      <div id="sr-list"><div style="text-align:center;color:var(--mu);padding:40px">جاري التحميل...</div></div>
     </div>
   </div>
 </div>
@@ -3703,6 +3761,7 @@ function showTab(key){
       if(eP&&!eP.value)eP.value=uname;
     },
     'teacher_reports_admin': loadTeacherReportsAdmin,
+    'school_reports': loadSchoolReports,
     'send_absence':function(){},
     'send_tardiness':function(){},
     'parent_visits':pvInit,
@@ -6868,6 +6927,123 @@ async function submitTeacherFormPortal(formType){
     if(d.ok) ss(stId,'✅ تم الإرسال للإدارة بنجاح','ok');
     else ss(stId,'❌ '+(d.msg||'فشل الإرسال'),'er');
   } catch(err){ ss(stId,'❌ خطأ في الإرسال','er'); }
+}
+
+/* ── SCHOOL REPORTS ── */
+var _srCat='', _srCatCanUpload=false;
+var _SR_CATS=[
+  {key:'admin',         label:'تقارير الإدارة',           icon:'👑', color:'#7c3aed', bg:'#f5f3ff', roles:['admin']},
+  {key:'educational',   label:'تقارير الشؤون التعليمية',   icon:'📚', color:'#1d4ed8', bg:'#eff6ff', roles:['admin','deputy']},
+  {key:'school_affairs',label:'تقارير الشؤون المدرسية',    icon:'🏫', color:'#059669', bg:'#f0fdf4', roles:['admin','deputy']},
+  {key:'guidance',      label:'تقارير التوجيه الطلابي',    icon:'💡', color:'#d97706', bg:'#fffbeb', roles:['admin','counselor']},
+  {key:'activity',      label:'تقارير النشاط الطلابي',     icon:'⚽', color:'#dc2626', bg:'#fef2f2', roles:['admin','activity_leader']},
+  {key:'achievement',   label:'تقارير التحصيل الدراسي',    icon:'🏆', color:'#b45309', bg:'#fefce8', roles:['admin','deputy','teacher']},
+];
+async function loadSchoolReports(){
+  document.getElementById('sr-grid').style.display='';
+  document.getElementById('sr-cat-view').style.display='none';
+  _srCat='';
+  var d=await api('/web/api/school-reports/counts');
+  var counts=(d&&d.ok)?d.counts:{};
+  var role=(_me&&_me.role)?_me.role:'';
+  document.getElementById('sr-folders').innerHTML=_SR_CATS.map(function(c){
+    var cnt=counts[c.key]||0;
+    return '<div onclick="srOpenCategory(\''+c.key+'\')" style="cursor:pointer;background:'+c.bg+';border:2px solid '+c.color+'40;border-radius:16px;padding:28px 16px 20px;text-align:center;transition:transform .18s,box-shadow .18s;box-shadow:0 2px 8px rgba(0,0,0,.07)" onmouseover="this.style.transform=\'translateY(-5px)\';this.style.boxShadow=\'0 10px 24px rgba(0,0,0,.13)\'" onmouseout="this.style.transform=\'\';this.style.boxShadow=\'0 2px 8px rgba(0,0,0,.07)\'">'
+      +'<div style="font-size:50px;margin-bottom:10px;line-height:1">'+c.icon+'</div>'
+      +'<div style="font-size:13px;font-weight:700;color:'+c.color+';margin-bottom:10px;line-height:1.3">'+c.label+'</div>'
+      +'<div style="background:'+c.color+';color:#fff;border-radius:20px;padding:3px 14px;font-size:12px;display:inline-block;font-weight:600">'+cnt+' '+(cnt===1?'تقرير':'تقارير')+'</div>'
+      +'</div>';
+  }).join('');
+}
+async function srOpenCategory(cat){
+  _srCat=cat;
+  var c=_SR_CATS.find(function(x){return x.key===cat;})||{label:cat,color:'#333',bg:'#fff',roles:[]};
+  var role=(_me&&_me.role)?_me.role:'';
+  _srCatCanUpload=c.roles.indexOf(role)>=0;
+  document.getElementById('sr-cat-title').textContent=c.label;
+  var badge=document.getElementById('sr-cat-badge');
+  badge.style.background=c.color; badge.textContent=c.label;
+  document.getElementById('sr-upload-section').style.display=_srCatCanUpload?'':'none';
+  document.getElementById('sr-grid').style.display='none';
+  document.getElementById('sr-cat-view').style.display='';
+  var rd=document.getElementById('sr-rdate'); if(rd&&!rd.value)rd.value=today;
+  await srLoadList();
+}
+function srBack(){
+  _srCat='';
+  document.getElementById('sr-cat-view').style.display='none';
+  document.getElementById('sr-grid').style.display='';
+  loadSchoolReports();
+}
+async function srLoadList(){
+  var el=document.getElementById('sr-list');
+  if(!el)return;
+  el.innerHTML='<div style="text-align:center;color:var(--mu);padding:30px">⏳ جاري التحميل...</div>';
+  var d=await api('/web/api/school-reports?category='+encodeURIComponent(_srCat));
+  if(!d||!d.ok){el.innerHTML='<div style="color:#ef4444;padding:16px">❌ خطأ في التحميل</div>';return;}
+  if(!d.rows||!d.rows.length){
+    el.innerHTML='<div style="text-align:center;color:var(--mu);padding:48px"><div style="font-size:48px;opacity:.25;margin-bottom:12px"><i class="fas fa-folder-open"></i></div>لا توجد تقارير مرفوعة بعد</div>';
+    return;
+  }
+  el.innerHTML=d.rows.map(function(r){
+    var extIcon='📄';
+    var fn=(r.file_name||'').toLowerCase();
+    if(fn.endsWith('.pdf'))extIcon='📕';
+    else if(fn.match(/\.(doc|docx)$/))extIcon='📘';
+    else if(fn.match(/\.(xls|xlsx)$/))extIcon='📗';
+    else if(fn.match(/\.(ppt|pptx)$/))extIcon='📙';
+    else if(fn.match(/\.(jpg|jpeg|png)$/))extIcon='🖼️';
+    var sz=r.file_size?'('+Math.round(r.file_size/1024)+' KB)':'';
+    return '<div style="border:1px solid var(--bd);border-radius:12px;padding:16px;margin-bottom:12px;background:var(--card)">'
+      +'<div style="display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap">'
+      +'<div style="font-size:32px;line-height:1;padding-top:2px">'+extIcon+'</div>'
+      +'<div style="flex:1;min-width:180px">'
+      +'<div style="font-size:15px;font-weight:700;margin-bottom:4px">'+r.title+'</div>'
+      +(r.description?'<div style="color:var(--mu);font-size:13px;margin-bottom:6px">'+r.description+'</div>':'')
+      +'<div style="font-size:12px;color:var(--mu)">📅 '+r.report_date+' &nbsp;·&nbsp; 👤 '+r.uploaded_by+' &nbsp;·&nbsp; 📎 '+(r.file_name||'')+' '+sz+'</div>'
+      +'</div>'
+      +'<div style="display:flex;gap:8px;align-items:center;flex-shrink:0">'
+      +'<a href="/web/api/school-reports/file/'+r.id+'" target="_blank" class="btn bp2 bsm"><i class="fas fa-download"></i> تحميل</a>'
+      +(_srCatCanUpload?'<button class="btn bp5 bsm" onclick="srDelete('+r.id+',\''+String(r.title).replace(/'/g,"\\'")+'\')" title="حذف"><i class="fas fa-trash"></i></button>':'')
+      +'</div>'
+      +'</div>'
+      +'</div>';
+  }).join('');
+}
+async function srUpload(){
+  var title=(document.getElementById('sr-title').value||'').trim();
+  var rdate=document.getElementById('sr-rdate').value||'';
+  var desc=(document.getElementById('sr-desc').value||'').trim();
+  var fileEl=document.getElementById('sr-file');
+  var st=document.getElementById('sr-upload-st');
+  if(!title){st.textContent='❌ أدخل عنوان التقرير';st.style.color='#ef4444';return;}
+  if(!rdate){st.textContent='❌ أدخل تاريخ التقرير';st.style.color='#ef4444';return;}
+  if(!fileEl.files||!fileEl.files[0]){st.textContent='❌ اختر ملفاً';st.style.color='#ef4444';return;}
+  st.textContent='⏳ جاري الرفع...';st.style.color='#f59e0b';
+  var fd=new FormData();
+  fd.append('file',fileEl.files[0]);
+  fd.append('category',_srCat);
+  fd.append('title',title);
+  fd.append('report_date',rdate);
+  fd.append('description',desc);
+  try{
+    var r=await fetch('/web/api/school-reports/upload',{method:'POST',body:fd});
+    var d=await r.json();
+    if(d.ok){
+      st.textContent='✅ تم رفع التقرير بنجاح';st.style.color='#22c55e';
+      document.getElementById('sr-title').value='';
+      document.getElementById('sr-desc').value='';
+      fileEl.value='';
+      await srLoadList();
+      loadSchoolReports();
+    }else{st.textContent='❌ '+(d.msg||'خطأ');st.style.color='#ef4444';}
+  }catch(e){st.textContent='❌ خطأ في الاتصال';st.style.color='#ef4444';}
+}
+async function srDelete(id,title){
+  if(!confirm('هل أنت متأكد من حذف التقرير:\n«'+title+'»؟'))return;
+  var d=await api('/web/api/school-reports/'+id,{method:'DELETE'});
+  if(d&&d.ok){await srLoadList();loadSchoolReports();}
+  else alert('❌ '+(d&&d.msg||'خطأ'));
 }
 
 /* ── WEEKLY REWARDS ── */
@@ -10511,6 +10687,121 @@ async def web_escaped_report(request: Request, month: str = ""):
         """, (month + "%",)).fetchall()
         con.close()
         return JSONResponse({"ok": True, "rows": [dict(r) for r in rows], "month": month})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+
+# ─── تقارير المدرسة ──────────────────────────────────────────────────
+
+_SR_CAT_ROLES = {
+    "admin":         ["admin"],
+    "educational":   ["admin", "deputy"],
+    "school_affairs":["admin", "deputy"],
+    "guidance":      ["admin", "counselor"],
+    "activity":      ["admin", "activity_leader"],
+    "achievement":   ["admin", "deputy", "teacher"],
+}
+
+@router.get("/web/api/school-reports/counts", response_class=JSONResponse)
+async def web_sr_counts(req: Request):
+    user = _get_current_user(req)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    try:
+        con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
+        rows = cur.execute("SELECT category, COUNT(*) as cnt FROM school_reports GROUP BY category").fetchall()
+        con.close()
+        return JSONResponse({"ok": True, "counts": {r["category"]: r["cnt"] for r in rows}})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/school-reports", response_class=JSONResponse)
+async def web_sr_list(req: Request, category: str = ""):
+    user = _get_current_user(req)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    try:
+        con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
+        rows = cur.execute(
+            "SELECT * FROM school_reports WHERE category=? ORDER BY uploaded_at DESC", (category,)
+        ).fetchall()
+        con.close()
+        return JSONResponse({"ok": True, "rows": [dict(r) for r in rows]})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.post("/web/api/school-reports/upload", response_class=JSONResponse)
+async def web_sr_upload(req: Request,
+                         file: UploadFile = File(...),
+                         category: str    = Form(...),
+                         title: str       = Form(...),
+                         report_date: str = Form(""),
+                         description: str = Form("")):
+    user = _get_current_user(req)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    allowed_roles = _SR_CAT_ROLES.get(category, ["admin"])
+    if user.get("role") not in allowed_roles:
+        return JSONResponse({"ok": False, "msg": "غير مصرح لرفع تقارير في هذا القسم"}, status_code=403)
+    try:
+        import uuid, os as _os
+        _os.makedirs(SCHOOL_REPORTS_DIR, exist_ok=True)
+        ext   = _os.path.splitext(file.filename or "file")[1][:10]
+        fname = uuid.uuid4().hex + ext
+        fpath = _os.path.join(SCHOOL_REPORTS_DIR, fname)
+        content = await file.read()
+        if len(content) > 20 * 1024 * 1024:
+            return JSONResponse({"ok": False, "msg": "الحد الأقصى لحجم الملف 20 ميغابايت"})
+        with open(fpath, "wb") as f:
+            f.write(content)
+        import datetime as _dt
+        con = get_db(); cur = con.cursor()
+        cur.execute("""INSERT INTO school_reports
+                       (category,title,description,report_date,file_path,file_name,file_size,uploaded_by,uploaded_at)
+                       VALUES(?,?,?,?,?,?,?,?,?)""",
+                    (category, title, description, report_date, fname,
+                     file.filename, len(content),
+                     user.get("username", ""), _dt.datetime.now().isoformat()))
+        con.commit(); con.close()
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
+
+@router.get("/web/api/school-reports/file/{report_id}")
+async def web_sr_file(report_id: int, req: Request):
+    user = _get_current_user(req)
+    if not user: return Response("غير مصرح", status_code=401)
+    import os as _os
+    try:
+        con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
+        row = cur.execute("SELECT * FROM school_reports WHERE id=?", (report_id,)).fetchone()
+        con.close()
+        if not row: return Response("التقرير غير موجود", status_code=404)
+        fpath = _os.path.join(SCHOOL_REPORTS_DIR, row["file_path"])
+        if not _os.path.exists(fpath): return Response("الملف غير موجود على الخادم", status_code=404)
+        from fastapi.responses import FileResponse
+        return FileResponse(fpath, filename=row["file_name"])
+    except Exception as e:
+        return Response(str(e), status_code=500)
+
+@router.delete("/web/api/school-reports/{report_id}", response_class=JSONResponse)
+async def web_sr_delete(report_id: int, req: Request):
+    user = _get_current_user(req)
+    if not user: return JSONResponse({"ok": False}, status_code=401)
+    import os as _os
+    try:
+        con = get_db(); con.row_factory = sqlite3.Row; cur = con.cursor()
+        row = cur.execute("SELECT * FROM school_reports WHERE id=?", (report_id,)).fetchone()
+        if not row:
+            con.close()
+            return JSONResponse({"ok": False, "msg": "التقرير غير موجود"})
+        allowed_roles = _SR_CAT_ROLES.get(row["category"], ["admin"])
+        if user.get("role") not in allowed_roles:
+            con.close()
+            return JSONResponse({"ok": False, "msg": "غير مصرح"}, status_code=403)
+        fpath = _os.path.join(SCHOOL_REPORTS_DIR, row["file_path"])
+        cur.execute("DELETE FROM school_reports WHERE id=?", (report_id,))
+        con.commit(); con.close()
+        try: _os.remove(fpath)
+        except: pass
+        return JSONResponse({"ok": True})
     except Exception as e:
         return JSONResponse({"ok": False, "msg": str(e)}, status_code=500)
 
