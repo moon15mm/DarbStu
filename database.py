@@ -21,6 +21,7 @@ except ImportError:
 from typing import List, Dict, Any, Optional
 from constants import (DB_PATH, DATA_DIR, BACKUP_DIR, STUDENTS_JSON,
                        TEACHERS_JSON, CONFIG_JSON, ROLE_TABS,
+                       INBOX_ATTACHMENTS_DIR, SCHOOL_REPORTS_DIR,
                        ensure_dirs)
 import constants
 from config_manager import load_config
@@ -2170,6 +2171,18 @@ def create_backup(target_dir=None):
             for jf in [STUDENTS_JSON, TEACHERS_JSON, CONFIG_JSON]:
                 if os.path.exists(jf):
                     zf.write(jf, os.path.basename(jf))
+            # مجلد تقارير المدرسة
+            if os.path.isdir(SCHOOL_REPORTS_DIR):
+                for _fn in os.listdir(SCHOOL_REPORTS_DIR):
+                    _fp = os.path.join(SCHOOL_REPORTS_DIR, _fn)
+                    if os.path.isfile(_fp):
+                        zf.write(_fp, os.path.join("school_reports", _fn))
+            # مرفقات الرسائل الداخلية
+            if os.path.isdir(INBOX_ATTACHMENTS_DIR):
+                for _fn in os.listdir(INBOX_ATTACHMENTS_DIR):
+                    _fp = os.path.join(INBOX_ATTACHMENTS_DIR, _fn)
+                    if os.path.isfile(_fp):
+                        zf.write(_fp, os.path.join("inbox_attachments", _fn))
         size_kb = os.path.getsize(filename) // 1024
         # سجّل في قاعدة البيانات
         con = get_db(); cur = con.cursor()

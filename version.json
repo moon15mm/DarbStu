@@ -1,6 +1,6 @@
 {
-  "version": "3.5.5",
-  "notes": "تبويب تقارير المدرسة — مجلدات الإدارة والشؤون والتوجيه والنشاط والتحصيل مع رفع الملفات",
+  "version": "3.5.6",
+  "notes": "تضمين تقارير المدرسة ومرفقات الرسائل في النسخ الاحتياطية",
   "download_url": "https://github.com/moon15mm/DarbStu/archive/refs/heads/main.zip",
   "release_date": "2026-05-01"
 }
